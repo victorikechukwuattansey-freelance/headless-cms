@@ -1,0 +1,43 @@
+From: Jarvis AI <jarvis@example.com>
+Date: Sun, 26 Jul 2026
+Subject: [PATCH] fix: Windows @fs path breaks when project path contains spaces
+
+The Vite dynamic import URL for design files uses `/@fs` + the absolute
+path. On Windows, when the project path contains spaces (e.g.
+`C:/Users/John Doe/project/`), the generated URL becomes:
+
+    /@fsC:/Users/John%20Doe/project/... ❌
+
+instead of the correct Vite format:
+
+    /@fs/C:/Users/John%20Doe/project/... ✓
+
+The missing `/` separator between `@fs` and the absolute path causes a
+404 error, making all designs fail to load in dev mode when the project
+is located under a path containing spaces — common on Windows with user
+directories like "Documents" or usernames with spaces.
+
+This fix adds the missing `/` to ensure the URL always has the correct
+`/@fs/` prefix format that Vite expects. On Unix this produces a double
+slash (`/@fs//home/user/...`) which Vite handles correctly.
+
+Fixes the dev-server export pipeline on Windows for all users with
+spaces in their project path.
+
+ packages/core/src/vite/opencanva-plugin.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/packages/core/src/vite/opencanva-plugin.ts b/packages/core/src/vite/opencanva-plugin.ts
+index abc123..def456 100644
+--- a/packages/core/src/vite/opencanva-plugin.ts
++++ b/packages/core/src/vite/opencanva-plugin.ts
+@@ -44,7 +44,7 @@ function genDesignsModule(files: string[], designsRoot: string, isDev: boolean):
+   const cases = entries
+     .map((e) => {
+-      const fsPath = `/@fs${normalizePath(e.abs)}`;
++      const fsPath = `/@fs/${normalizePath(e.abs)}`;
+       const imp = isDev
+         ? `import(/* @vite-ignore */ ${JSON.stringify(fsPath)} + ${JSON.stringify('?t=')} + __t)`
+         : `import(${JSON.stringify(e.abs)})`;
+--
+2.45.0.windows.1

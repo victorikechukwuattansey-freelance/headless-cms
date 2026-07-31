@@ -1,0 +1,26 @@
+{
+  "name": "@saas/payments",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@saas/config": "workspace:*",
+    "@saas/database": "workspace:*",
+    "@saas/utils": "workspace:*",
+    "stripe": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./stripe": "./src/stripe/index.ts",
+    "./lemon-squeezy": "./src/lemon-squeezy/index.ts",
+    "./adapters/stripe": "./src/adapters/stripe/index.ts",
+    "./adapters/lemon-squeezy": "./src/adapters/lemon-squeezy/index.ts"
+  }
+}

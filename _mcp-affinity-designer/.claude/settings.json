@@ -1,0 +1,113 @@
+{
+  "project": {
+    "name": "MCP Affinity Designer Server",
+    "description": "MCP server for Affinity Designer integration",
+    "language": "bilingual",
+    "primaryLanguages": ["en", "ja"]
+  },
+  "formatting": {
+    "requireBilingualComments": true,
+    "requireBilingualCommits": true,
+    "requireBilingualDocumentation": true,
+    "commentFormat": "// English comment\n// 日本語コメント"
+  },
+  "development": {
+    "codeStyle": "typescript",
+    "testFramework": "jest",
+    "linting": "eslint",
+    "buildTool": "tsc"
+  },
+  "mcp": {
+    "protocol": "stdio",
+    "capabilities": [
+      "document_management",
+      "layer_operations", 
+      "object_manipulation",
+      "export_functionality"
+    ],
+    "platforms": ["windows", "macos"],
+    "primaryPlatform": "windows",
+    "windowsAutomation": ["powershell", "com", "win32api", "dotnet"],
+    "macosStatus": "seeking_contributors"
+  },
+  "git": {
+    "branchStrategy": "feature-branches",
+    "branchNaming": "feature/issue-{number}-{description}",
+    "commitConvention": "conventional-commits",
+    "requireIssueReference": true,
+    "workflowSteps": [
+      "Create feature branch for each issue",
+      "Make incremental logical commits", 
+      "Use conventional commit format with bilingual messages",
+      "Reference issue numbers in commits and PRs",
+      "Clean up branches after merge"
+    ]
+  },
+  "codeQuality": {
+    "mandatoryReview": true,
+    "selfReviewRequired": true,
+    "reviewSteps": [
+      "Check for redundancy and unnecessary code",
+      "Verify readability and clear naming",
+      "Ensure functionality and error handling",
+      "Optimize for maintainability"
+    ],
+    "readabilityStandards": {
+      "maxFunctionLines": 50,
+      "maxNestingLevel": 3,
+      "requireMeaningfulNames": true,
+      "bilingualCommentsForAPIs": true
+    },
+    "qualityChecks": [
+      "No dead code",
+      "No magic numbers",
+      "Proper error handling",
+      "DRY principle followed",
+      "Code is self-documenting"
+    ]
+  },
+  "instructions": {
+    "general": [
+      "Always provide both English and Japanese versions of all text",
+      "全てのテキストに英語版と日本語版の両方を提供する",
+      "Use bilingual format for all documentation and comments",
+      "全てのドキュメントとコメントでバイリンガル形式を使用する",
+      "Follow the established project structure and naming conventions",
+      "確立されたプロジェクト構造と命名規則に従う"
+    ],
+    "code_review": [
+      "MANDATORY: Perform self-review after writing any code",
+      "必須: コード記述後は必ずセルフレビューを実行する",
+      "Fix issues immediately upon identification",
+      "問題を特定したら即座に修正する",
+      "Ensure code is readable and maintainable",
+      "コードが読みやすく保守可能であることを確保する",
+      "Remove redundant code and comments",
+      "冗長なコードとコメントを除去する"
+    ],
+    "git_workflow": [
+      "Always create feature branches for GitHub issues",
+      "GitHub issueに対して必ずfeatureブランチを作成する",
+      "Use conventional commit format: type(scope): description",
+      "従来のコミット形式を使用: type(scope): description",
+      "Make small, logical commits with clear purposes",
+      "明確な目的を持つ小さく論理的なコミットを作成する",
+      "Reference issue numbers in commit messages (Addresses #N, Closes #N)",
+      "コミットメッセージでissue番号を参照する (Addresses #N, Closes #N)"
+    ],
+    "commits": [
+      "Include Japanese translation in all commit messages",
+      "全てのコミットメッセージに日本語訳を含める",
+      "Use conventional commit format with bilingual descriptions",
+      "バイリンガル説明を含む従来のコミット形式を使用する",
+      "Reference GitHub issues appropriately (Part of #N, Addresses #N, Closes #N)",
+      "GitHub issueを適切に参照する (Part of #N, Addresses #N, Closes #N)"
+    ],
+    "documentation": [
+      "All README and documentation files must be bilingual",
+      "全てのREADMEとドキュメントファイルはバイリンガルである必要がある",
+      "API documentation should include examples in both languages",
+      "APIドキュメントは両言語でのサンプルを含む必要がある"
+    ]
+  }
+}

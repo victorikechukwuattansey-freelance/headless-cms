@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restaurant Social Media Kit — All 40 Templates</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f1f5f9; color: #1a1a1a; font-family: 'Inter', sans-serif; padding: 40px 24px; }
+h1 { font-family: 'Playfair Display', serif; font-size: 28px; margin-bottom: 4px; }
+.sub { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+.brand-bar { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; padding: 12px 16px; background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); align-items: center; }
+.brand-item { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.brand-label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+.swatch { width: 18px; height: 18px; border-radius: 50%; display: inline-block; cursor: help; }
+.font-badge { font-size: 12px; padding: 2px 8px; background: #f1f5f9; border-radius: 4px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 32px; }
+.filters button { padding: 6px 16px; border: 1px solid #cbd5e1; border-radius: 20px; background: #fff; cursor: pointer; font-size: 13px; font-family: 'Inter', sans-serif; }
+.filters button.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.section { margin-bottom: 40px; }
+.section-title { font-family: 'Playfair Display', serif; font-size: 20px; color: #c8553d; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e8b84b; display: inline-block; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+/* Template preview frame */
+.frame { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: transform 0.15s; }
+.frame:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+.frame .label { padding: 8px 12px; font-size: 12px; color: #64748b; border-top: 1px solid #f1f5f9; background: #faf6f0; display: flex; justify-content: space-between; }
+.frame .label .num { font-weight: 600; color: #c8553d; }
+.frame .label .name { font-weight: 500; color: #1a1a1a; }
+/* Template artboards */
+.template { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #faf6f0; }
+.template.square { aspect-ratio: 1/1; }
+.template.story { aspect-ratio: 9/16; }
+.template.carousel { aspect-ratio: 4/5; }
+.template .artboard { width: 100%; height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+/* Shared mock styles */
+.mock-header { font-family: 'Playfair Display', serif; font-size: 10px; font-weight: 700; color: #1a1a1a; padding: 6px 10px; background: #fff; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 6px; }
+.mock-header .dot { width: 4px; height: 4px; border-radius: 50%; background: #c8553d; }
+.mock-badge { font-size: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 10px; display: inline-block; }
+.badge-terra { background: #c8553d; color: #fff; }
+.badge-olive { background: #6b8f5e; color: #fff; }
+.badge-gold { background: #e8b84b; color: #1a1a1a; }
+.mock-photo { background: linear-gradient(135deg, #d4c5b0 0%, #e8ddcf 100%); display: flex; align-items: center; justify-content: center; color: #a09080; font-size: 8px; font-weight: 600; }
+.mock-photo span { opacity: 0.6; }
+.mock-overlay { background: linear-gradient(0deg, rgba(0,0,0,0.6) 0%, transparent 50%); position: absolute; bottom: 0; left: 0; right: 0; padding: 12px; }
+
+/* Story mode text sizes */
+.story .mock-header { font-size: 14px; padding: 10px 14px; }
+.story .mock-badge { font-size: 9px; padding: 3px 10px; }
+.story .mock-photo span { font-size: 12px; }
+
+.carousel .mock-header { font-size: 12px; padding: 8px 12px; }
+.carousel .mock-badge { font-size: 7px; padding: 3px 8px; }
+
+@media (max-width: 600px) {
+  body { padding: 16px 12px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  h1 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<h1>Restaurant Social Media Kit</h1>
+<p class="sub">40 Canva templates — Square · Story · Carousel — Warm Restaurant Palette</p>
+
+<div class="brand-bar">
+  <div class="brand-item"><span class="brand-label">Palette</span>
+    <span class="swatch" style="background:#1a1a1a;" title="Charcoal #1a1a1a"></span>
+    <span class="swatch" style="background:#faf6f0;border:1px solid #d0c8c0;" title="Cream #faf6f0"></span>
+    <span class="swatch" style="background:#c8553d;" title="Terracotta #c8553d"></span>
+    <span class="swatch" style="background:#6b8f5e;" title="Olive #6b8f5e"></span>
+    <span class="swatch" style="background:#e8b84b;" title="Gold #e8b84b"></span>
+  </div>
+  <div class="brand-item"><span class="brand-label">Fonts</span>
+    <span class="font-badge" style="font-family:'Playfair Display',serif;font-weight:700;">Playfair Display</span>
+    <span class="font-badge" style="font-family:'Inter',sans-serif;">Inter</span>
+  </div>
+  <div class="brand-item"><span class="brand-label">Licence</span>
+    <span style="font-size:12px;color:#64748b;">Commercial use</span>
+  </div>
+</div>
+
+<div class="filters">
+  <button class="active" onclick="filterTemplates('all')">All (40)</button>
+  <button onclick="filterTemplates('Menu')">Menu & Dishes (10)</button>
+  <button onclick="filterTemplates('Promo')">Promotions (8)</button>
+  <button onclick="filterTemplates('Event')">Events & Seasonal (6)</button>
+  <button onclick="filterTemplates('BTS')">Behind the Scenes (4)</button>
+  <button onclick="filterTemplates('Testimonial')">Testimonials (4)</button>
+  <button onclick="filterTemplates('Info')">Hours & Info (4)</button>
+  <button onclick="filterTemplates('Story')">Story Templates (4)</button>
+</div>
+
+<div id="app"></div>
+
+<script>
+const COLORS = { charcoal: '#1a1a1a', cream: '#faf6f0', terracotta: '#c8553d', olive: '#6b8f5e', gold: '#e8b84b' };
+const T = { terracotta: COLORS.terracotta, olive: COLORS.olive, gold: COLORS.gold, charcoal: COLORS.charcoal, cream: COLORS.cream };
+
+const templates = [
+  // ========== MENU & DISHES ==========
+  { section:'Menu', num:1, name:'Dish Spotlight', fmt:'square',
+    html:`<div style="display:flex;height:100%;">
+      <div class="mock-photo" style="flex:1;"><span>🍽️ Photo</span></div>
+      <div style="flex:1;padding:10px;display:flex;flex-direction:column;justify-content:center;gap:4px;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:9px;">Dish Name</div>
+        <div style="font-size:6px;color:#64748b;line-height:1.3;">Short description of the dish highlighting key ingredients.</div>
+        <div class="mock-badge badge-gold" style="align-self:flex-start;margin-top:4px;">$XX</div>
+      </div>
+    </div>` },
+  { section:'Menu', num:2, name:'Daily Special', fmt:'square',
+    html:`<div style="display:flex;flex-direction:column;height:100%;">
+      <div class="mock-photo" style="flex:1;"><span>🌿 Special Photo</span></div>
+      <div style="padding:8px 10px;background:#fff;">
+        <div class="mock-badge badge-terra" style="margin-bottom:4px;">Today's Special</div>
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;">Grilled Salmon</div>
+        <div style="font-size:6px;color:#64748b;">Served with seasonal vegetables</div>
+      </div>
+    </div>` },
+  { section:'Menu', num:3, name:"Chef's Pick", fmt:'square',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;"><span>⭐ Featured Dish</span></div>
+      <div class="mock-overlay">
+        <div class="mock-badge badge-gold" style="position:absolute;top:10px;left:10px;">Chef's Pick</div>
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:9px;color:#fff;">Wagyu Burger</div>
+        <div style="font-size:6px;color:rgba(255,255,255,0.8);">Dry-aged, truffle aioli, brioche bun</div>
+      </div>
+    </div>` },
+  { section:'Menu', num:4, name:'Platter Close-up', fmt:'square',
+    html:`<div style="height:100%;position:relative;transform:rotate(0deg);">
+      <div class="mock-photo" style="height:100%;align-items:flex-start;padding-top:20%;"><span>📸 Top-down</span></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:8px;background:linear-gradient(0deg,${T.charcoal}dd 0%,transparent 100%);">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;color:#fff;">Sunday Roast Platter</div>
+        <div style="font-size:6px;color:rgba(255,255,255,0.7);">Feeds 2 · $38</div>
+      </div>
+    </div>` },
+  { section:'Menu', num:5, name:'New Menu Item', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px;background:#fff;">
+      <div class="mock-photo" style="width:70%;flex:1;border-radius:4px;transform:rotate(-2deg);box-shadow:0 2px 8px rgba(0,0,0,0.1);"><span>📷 Polaroid</span></div>
+      <div style="font-family:'Playfair Display',serif;font-size:7px;transform:rotate(-1deg);color:${T.charcoal};">New on the Menu</div>
+    </div>` },
+  { section:'Menu', num:6, name:'Ingredient Hero', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#fff;">
+      <div style="font-size:20px;">🍅</div>
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:9px;color:${T.charcoal};">San Marzano Tomatoes</div>
+      <div style="font-size:5px;color:#64748b;text-align:center;max-width:70%;">Imported from Italy · Sun-ripened · Zero preservatives</div>
+    </div>` },
+  { section:'Menu', num:7, name:'Combo Deal', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;">
+      <div style="display:flex;flex:1;gap:2px;padding:10px 10px 0;">
+        <div class="mock-photo" style="flex:1;"><span>🍔</span></div>
+        <div style="display:flex;align-items:center;font-size:10px;font-weight:700;color:${T.terracotta};">+</div>
+        <div class="mock-photo" style="flex:1;"><span>🍟</span></div>
+        <div style="display:flex;align-items:center;font-size:10px;font-weight:700;color:${T.terracotta};">+</div>
+        <div class="mock-photo" style="flex:1;"><span>🥤</span></div>
+      </div>
+      <div style="padding:8px 10px;display:flex;justify-content:space-between;align-items:center;background:#fff;">
+        <div><div style="font-weight:600;font-size:7px;">Combo Meal</div><div style="font-size:5px;color:#64748b;">Burger + Fries + Drink</div></div>
+        <div class="mock-badge badge-gold">$15.99</div>
+      </div>
+    </div>` },
+  { section:'Menu', num:8, name:'Drink Special', fmt:'square',
+    html:`<div style="height:100%;display:flex;background:${T.charcoal};color:#fff;overflow:hidden;">
+      <div style="flex:1;padding:12px;display:flex;flex-direction:column;justify-content:center;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:10px;transform:rotate(-5deg);">Summer</div>
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:12px;transform:rotate(-5deg);color:${T.gold};">Spritz</div>
+        <div style="font-size:5px;margin-top:4px;opacity:0.7;">Aperol · Prosecco · Soda</div>
+        <div class="mock-badge badge-gold" style="align-self:flex-start;margin-top:6px;">$12</div>
+      </div>
+      <div class="mock-photo" style="width:45%;height:100%;"><span>🥂</span></div>
+    </div>` },
+  { section:'Menu', num:9, name:'Dessert Feature', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:${T.charcoal};color:#fff;">
+      <div class="mock-photo" style="width:100px;height:100px;border-radius:50%;"><span>🍰</span></div>
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;">Tiramisu</div>
+      <div style="font-size:5px;opacity:0.7;text-align:center;">House-made · Mascarpone · Espresso</div>
+      <div class="mock-badge badge-gold">$9</div>
+    </div>` },
+  { section:'Menu', num:10, name:'Our Menu Carousel', fmt:'carousel',
+    html:`<div style="height:100%;display:flex;flex-direction:column;">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${T.cream};gap:6px;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:12px;color:${T.charcoal};">Our Menu</div>
+        <div style="width:40%;height:2px;background:${T.gold};"></div>
+        <div style="font-size:6px;color:#64748b;">Swipe to explore →</div>
+        <div style="font-size:16px;margin-top:4px;">📋</div>
+      </div>
+      <div style="padding:6px 10px;background:#fff;display:flex;gap:4px;justify-content:center;">
+        <div style="width:6px;height:6px;border-radius:50%;background:${T.terracotta};"></div>
+        <div style="width:6px;height:6px;border-radius:50%;background:#ddd;"></div>
+        <div style="width:6px;height:6px;border-radius:50%;background:#ddd;"></div>
+        <div style="width:6px;height:6px;border-radius:50%;background:#ddd;"></div>
+      </div>
+    </div>` },
+
+  // ========== PROMOTIONS ==========
+  { section:'Promo', num:11, name:'Happy Hour', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:${T.terracotta};color:#fff;">
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:14px;letter-spacing:2px;">HAPPY HOUR</div>
+      <div style="font-size:8px;opacity:0.9;">Mon–Fri · 4PM–6PM</div>
+      <div class="mock-badge badge-gold" style="font-size:8px;padding:4px 14px;">50% OFF Drinks</div>
+    </div>` },
+  { section:'Promo', num:12, name:'Limited Offer', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:${T.charcoal};color:#fff;">
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:10px;">Limited Offer</div>
+      <div style="font-size:6px;opacity:0.7;">Ends Sunday</div>
+      <div style="display:flex;gap:6px;">
+        <div style="background:${T.cream};color:${T.charcoal};padding:4px 6px;border-radius:4px;font-weight:700;font-size:7px;">3</div>
+        <div style="background:${T.cream};color:${T.charcoal};padding:4px 6px;border-radius:4px;font-weight:700;font-size:7px;">2</div>
+        <div style="background:${T.cream};color:${T.charcoal};padding:4px 6px;border-radius:4px;font-weight:700;font-size:7px;">1</div>
+      </div>
+      <div style="font-size:5px;opacity:0.7;">days left</div>
+    </div>` },
+  { section:'Promo', num:13, name:'BOGO', fmt:'square',
+    html:`<div style="height:100%;display:flex;">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${T.cream};">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:14px;color:${T.terracotta};">BUY 1</div>
+        <div style="font-size:6px;color:#64748b;">Burger</div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:${T.olive};color:#fff;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:14px;">GET 1</div>
+        <div style="font-size:6px;opacity:0.8;">Free</div>
+      </div>
+    </div>` },
+  { section:'Promo', num:14, name:'Loyalty Promo', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#fff;padding:14px;">
+      <div style="width:70%;height:40%;border:2px dashed ${T.gold};border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+        <div style="font-size:7px;font-weight:600;color:${T.charcoal};">Loyalty Card</div>
+        <div style="display:flex;gap:4px;margin-top:6px;">
+          <div style="width:8px;height:8px;border-radius:50%;border:1px solid ${T.gold};"></div>
+          <div style="width:8px;height:8px;border-radius:50%;border:1px solid ${T.gold};"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:${T.gold};"></div>
+          <div style="width:8px;height:8px;border-radius:50%;border:1px solid ${T.gold};"></div>
+          <div style="width:8px;height:8px;border-radius:50%;border:1px solid ${T.gold};"></div>
+        </div>
+      </div>
+      <div style="font-size:6px;color:#64748b;">Earn points with every visit</div>
+    </div>` },
+  { section:'Promo', num:15, name:'Student Discount', fmt:'square',
+    html:`<div style="height:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:${T.cream};padding:14px;">
+      <div style="font-size:18px;">🎓</div>
+      <div>
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;color:${T.charcoal};">Student Discount</div>
+        <div class="mock-badge badge-terra" style="margin-top:4px;">15% OFF</div>
+        <div style="font-size:5px;color:#64748b;margin-top:2px;">With valid ID</div>
+      </div>
+    </div>` },
+  { section:'Promo', num:16, name:'Family Meal Deal', fmt:'square',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;"><span>👨‍👩‍👧‍👦</span></div>
+      <div class="mock-overlay">
+        <div class="mock-badge badge-olive" style="margin-bottom:4px;">Feeds 4</div>
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:9px;color:#fff;">Family Feast</div>
+        <div style="font-size:5px;color:rgba(255,255,255,0.7);">2 mains · 2 sides · 4 drinks · $49</div>
+      </div>
+    </div>` },
+  { section:'Promo', num:17, name:'Free Delivery', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#fff;">
+      <div style="font-size:18px;">🚚</div>
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;">Free Delivery</div>
+      <div style="font-size:5px;color:#64748b;text-align:center;">On orders over $25<br>Within 5km radius</div>
+    </div>` },
+  { section:'Promo', num:18, name:'First Visit Offer', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:${T.terracotta};color:#fff;">
+      <div style="font-family:'Playfair Display',serif;font-size:10px;font-style:italic;">First time?</div>
+      <div style="font-weight:700;font-size:9px;">Welcome! Here's 10% off</div>
+      <div style="border:2px dashed #fff;padding:4px 10px;border-radius:4px;font-weight:700;font-size:7px;letter-spacing:1px;">WELCOME10</div>
+      <div style="font-size:5px;opacity:0.7;">Show this at checkout</div>
+    </div>` },
+
+  // ========== EVENTS & SEASONAL ==========
+  { section:'Event', num:19, name:'Live Music Night', fmt:'square',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;"><span>🎵 Live Music</span></div>
+      <div class="mock-overlay" style="padding:10px;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;color:#fff;">Live Jazz Night</div>
+        <div style="font-size:5px;color:rgba(255,255,255,0.7);">Every Friday · 7PM–10PM</div>
+        <div class="mock-badge badge-gold" style="margin-top:4px;">Book a Table</div>
+      </div>
+    </div>` },
+  { section:'Event', num:20, name:'Holiday Special', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#cc3333;color:#fff;">
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:12px;color:${T.gold};">Christmas</div>
+      <div style="font-size:6px;">Special Holiday Menu</div>
+      <div style="font-size:5px;opacity:0.7;">Dec 24–26 · Reserve now</div>
+    </div>` },
+  { section:'Event', num:21, name:'Weekend Brunch', fmt:'square',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;"><span>🥞 Brunch</span></div>
+      <div class="mock-overlay">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;color:#fff;">Weekend Brunch</div>
+        <div style="font-size:5px;color:rgba(255,255,255,0.7);">Sat–Sun · 9AM–2PM</div>
+      </div>
+    </div>` },
+  { section:'Event', num:22, name:'New Year Party', fmt:'story',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);"><span style="color:${T.gold};opacity:1;">🎆</span></div>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:18px;color:${T.gold};">2026</div>
+        <div class="mock-badge badge-gold" style="font-size:12px;padding:6px 20px;">Book Your Table</div>
+      </div>
+    </div>` },
+  { section:'Event', num:23, name:"Valentine's Dinner", fmt:'square',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;background:linear-gradient(135deg,#fce4ec 0%,#f8bbd0 100%);"><span style="color:#c62828;">❤️</span></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px;background:linear-gradient(0deg,rgba(198,40,40,0.6) 0%,transparent 100%);">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;color:#fff;">Valentine's Dinner</div>
+        <div style="font-size:5px;color:rgba(255,255,255,0.8);">Feb 14 · Reserve your table</div>
+      </div>
+    </div>` },
+  { section:'Event', num:24, name:'Seasonal Menu Launch', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;">
+      <div class="mock-photo" style="flex:1;"><span>🌱 Spring Menu</span></div>
+      <div style="padding:8px 10px;background:#fff;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;">Introducing Spring Menu</div>
+        <div style="font-size:5px;color:#64748b;">Seasonal · Farm-fresh · New flavours</div>
+      </div>
+    </div>` },
+
+  // ========== BEHIND THE SCENES ==========
+  { section:'BTS', num:25, name:'Meet the Chef', fmt:'square',
+    html:`<div style="height:100%;display:flex;">
+      <div class="mock-photo" style="flex:1;"><span>👨‍🍳 Chef</span></div>
+      <div style="flex:1;padding:10px;display:flex;flex-direction:column;justify-content:center;background:#fff;">
+        <div style="font-family:'Playfair Display',serif;font-size:7px;font-style:italic;color:${T.terracotta};">"Fresh ingredients, simple techniques."</div>
+        <div style="font-weight:600;font-size:7px;margin-top:6px;">Chef Marco</div>
+        <div style="font-size:5px;color:#64748b;">Head Chef · 12 years</div>
+      </div>
+    </div>` },
+  { section:'BTS', num:26, name:'Kitchen Prep', fmt:'square',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;"><span>🔪 Prep</span></div>
+      <div class="mock-overlay">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:7px;color:#fff;">Made Fresh Daily</div>
+        <div style="font-size:5px;color:rgba(255,255,255,0.7);">Every dish prepared in-house</div>
+      </div>
+    </div>` },
+  { section:'BTS', num:27, name:'Ingredient Source', fmt:'square',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;"><span>🌾 Farm</span></div>
+      <div class="mock-overlay">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:7px;color:#fff;">From Farm to Table</div>
+        <div style="font-size:5px;color:rgba(255,255,255,0.7);">Sourced from local farms</div>
+      </div>
+    </div>` },
+  { section:'BTS', num:28, name:'Staff Spotlight', fmt:'square',
+    html:`<div style="height:100%;display:flex;">
+      <div class="mock-photo" style="flex:1;"><span>👤 Staff</span></div>
+      <div style="flex:1;padding:10px;display:flex;flex-direction:column;justify-content:center;background:#fff;">
+        <div style="font-weight:600;font-size:7px;">Maria Santos</div>
+        <div style="font-size:5px;color:${T.terracotta};">Lead Server</div>
+        <div style="font-size:5px;color:#64748b;">⭐ 5 years · Customer favourite</div>
+      </div>
+    </div>` },
+
+  // ========== TESTIMONIALS ==========
+  { section:'Testimonial', num:29, name:'Customer Review', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#fff;padding:14px;">
+      <div style="font-family:'Playfair Display',serif;font-size:8px;font-style:italic;text-align:center;color:${T.charcoal};">"The best pasta I've had outside of Italy. Unreal flavour."</div>
+      <div style="display:flex;gap:2px;">${'★'.repeat(5).split('').map(()=>`<span style="color:${T.gold};font-size:8px;">★</span>`).join('')}</div>
+      <div style="font-size:5px;color:#64748b;">— Sarah M.</div>
+    </div>` },
+  { section:'Testimonial', num:30, name:'Most Loved Dish', fmt:'square',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;"><span>🏆 Bestseller</span></div>
+      <div class="mock-overlay">
+        <div class="mock-badge badge-gold" style="margin-bottom:4px;">Most Ordered</div>
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;color:#fff;">Truffle Risotto</div>
+        <div style="font-size:5px;color:rgba(255,255,255,0.7);">250+ orders this month</div>
+      </div>
+    </div>` },
+  { section:'Testimonial', num:31, name:'Media Feature', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:${T.charcoal};color:#fff;padding:14px;">
+      <div style="font-family:'Playfair Display',serif;font-size:8px;font-style:italic;text-align:center;">"A hidden gem in the city."</div>
+      <div style="width:40%;height:1px;background:${T.gold};"></div>
+      <div style="font-weight:600;font-size:6px;color:${T.gold};">— Food & Wine Magazine</div>
+    </div>` },
+  { section:'Testimonial', num:32, name:'Rating Promo', fmt:'story',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:${T.cream};">
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:24px;color:${T.charcoal};">4.8</div>
+      <div style="display:flex;gap:4px;">${'★'.repeat(5).split('').map(()=>`<span style="color:${T.gold};font-size:16px;">★</span>`).join('')}</div>
+      <div style="font-size:10px;color:#64748b;">Google Reviews</div>
+      <div class="mock-badge badge-terra" style="font-size:10px;padding:6px 18px;">Leave a Review</div>
+    </div>` },
+
+  // ========== HOURS & INFO ==========
+  { section:'Info', num:33, name:'Open Hours', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;justify-content:center;padding:14px;background:#fff;">
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:8px;text-align:center;margin-bottom:8px;">Hours</div>
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        ${['Mon–Thu','Fri–Sat','Sun'].map(d => `<div style="display:flex;justify-content:space-between;font-size:6px;border-bottom:1px solid #eee;padding:2px 0;">
+          <span style="color:#64748b;">${d}</span><span style="font-weight:600;">${d==='Sun' ? '10AM–8PM' : d==='Mon–Thu' ? '11AM–10PM' : '11AM–11PM'}</span>
+        </div>`).join('')}
+      </div>
+    </div>` },
+  { section:'Info', num:34, name:'Location', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;background:#fff;">
+      <div class="mock-photo" style="flex:1;background:linear-gradient(135deg,#e8e0d8 0%,#d4cbc0 100%);"><span>📍</span></div>
+      <div style="padding:8px 10px;">
+        <div style="font-weight:600;font-size:7px;">Visit Us</div>
+        <div style="font-size:5px;color:#64748b;">123 High Street<br>Manchester, M1 1AA</div>
+      </div>
+    </div>` },
+  { section:'Info', num:35, name:'Delivery Info', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#fff;padding:14px;">
+      <div style="font-size:16px;">🛵</div>
+      <div style="font-weight:600;font-size:7px;">Delivery Zone</div>
+      <div style="font-size:5px;color:#64748b;text-align:center;">Within 5km · Min. $20<br>Free delivery over $30</div>
+      <div style="font-size:5px;color:${T.terracotta};">ETA: 30–45 min</div>
+    </div>` },
+  { section:'Info', num:36, name:'Contact', fmt:'square',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:${T.charcoal};color:#fff;">
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:9px;">Get in Touch</div>
+      <div style="display:flex;gap:12px;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:10px;">📞</span><span style="font-size:5px;">0161 123 4567</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><span style="font-size:10px;">✉️</span><span style="font-size:5px;">hello@resto.com</span></div>
+      </div>
+      <div style="display:flex;gap:8px;font-size:10px;opacity:0.6;">📷 @restaurant</div>
+    </div>` },
+
+  // ========== STORIES ==========
+  { section:'Story', num:37, name:'Promo Story', fmt:'story',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:100%;"><span>🍕</span></div>
+      <div style="position:absolute;inset:0;background:linear-gradient(0deg,${T.charcoal}99 0%,transparent 50%);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:24px;gap:8px;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:18px;color:#fff;">Pizza Night</div>
+        <div style="font-size:9px;color:rgba(255,255,255,0.8);">Every Tuesday · 2-for-1</div>
+        <div class="mock-badge badge-gold" style="font-size:10px;padding:6px 20px;">Order Now</div>
+      </div>
+    </div>` },
+  { section:'Story', num:38, name:'Poll Story', fmt:'story',
+    html:`<div style="height:100%;display:flex;flex-direction:column;background:${T.cream};padding:20px;">
+      <div style="font-weight:700;font-size:14px;text-align:center;color:${T.charcoal};margin-bottom:16px;">THIS or THAT?</div>
+      <div style="display:flex;flex:1;gap:12px;">
+        <div class="mock-photo" style="flex:1;border-radius:8px;"><span>🍝</span></div>
+        <div class="mock-photo" style="flex:1;border-radius:8px;"><span>🍕</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <div style="flex:1;padding:8px;border:2px solid ${T.terracotta};border-radius:8px;text-align:center;font-size:8px;font-weight:600;color:${T.terracotta};">Pasta</div>
+        <div style="flex:1;padding:8px;border:2px solid ${T.olive};border-radius:8px;text-align:center;font-size:8px;font-weight:600;color:${T.olive};">Pizza</div>
+      </div>
+    </div>` },
+  { section:'Story', num:39, name:'Menu Story', fmt:'story',
+    html:`<div style="height:100%;position:relative;">
+      <div class="mock-photo" style="height:65%;"><span>🥗</span></div>
+      <div style="flex:1;padding:14px;background:#fff;display:flex;flex-direction:column;gap:4px;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:12px;">Caesar Salad</div>
+        <div style="font-size:8px;color:#64748b;">Romaine · Parmesan · Croutons</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+          <div class="mock-badge badge-gold" style="font-size:10px;padding:4px 14px;">$14</div>
+          <div style="font-size:8px;color:${T.terracotta};font-weight:600;">Order Now →</div>
+        </div>
+      </div>
+    </div>` },
+  { section:'Story', num:40, name:'Hours Story', fmt:'story',
+    html:`<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:${T.charcoal};color:#fff;padding:24px;">
+      <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:16px;">Open Today</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div style="font-size:9px;">11:00 AM – 10:00 PM</div>
+        <div style="font-size:7px;opacity:0.6;">Kitchen closes at 9:30 PM</div>
+      </div>
+      <div style="width:40%;height:1px;background:${T.gold};"></div>
+      <div style="font-size:8px;opacity:0.7;">See you soon! 🍽️</div>
+    </div>` },
+];
+
+function getFormatClass(fmt) {
+  if (fmt === 'story') return 'story';
+  if (fmt === 'carousel') return 'carousel';
+  return 'square';
+}
+
+function getFormatLabel(fmt) {
+  if (fmt === 'story') return 'Story 9:16';
+  if (fmt === 'carousel') return 'Carousel 4:5';
+  return 'Square 1:1';
+}
+
+function getCategoryColor(section) {
+  const map = { 'Menu':'#c8553d', 'Promo':'#e8b84b', 'Event':'#6b8f5e', 'BTS':'#1a1a1a', 'Testimonial':'#c8553d', 'Info':'#6b8f5e', 'Story':'#1a1a1a' };
+  return map[section] || '#64748b';
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const sections = [...new Set(templates.map(t => t.section))];
+  const sectionNames = { 'Menu':'Menu & Dishes', 'Promo':'Promotions & Offers', 'Event':'Events & Seasonal', 'BTS':'Behind the Scenes', 'Testimonial':'Testimonials & Social Proof', 'Info':'Hours & Info', 'Story':'Story Templates' };
+
+  app.innerHTML = sections.map(s => {
+    const items = templates.filter(t => t.section === s);
+    return `<div class="section" data-section="${s}">
+      <div class="section-title" style="border-bottom-color:${getCategoryColor(s)};">${sectionNames[s]} (${items.length})</div>
+      <div class="grid">${items.map(t => `
+        <div class="frame" data-section="${t.section}">
+          <div class="template ${getFormatClass(t.fmt)}">
+            <div class="artboard">${t.html}</div>
+          </div>
+          <div class="label">
+            <span><span class="num">#${String(t.num).padStart(2,'0')}</span> <span class="name">${t.name}</span></span>
+            <span>${getFormatLabel(t.fmt)}</span>
+          </div>
+        </div>
+      `).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function filterTemplates(section) {
+  document.querySelectorAll('.filters button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.section').forEach(el => {
+    if (section === 'all' || el.dataset.section === section) {
+      el.style.display = 'block';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+}
+
+render();
+</script>
+</body>
+</html>

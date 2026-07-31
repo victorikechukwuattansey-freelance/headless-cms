@@ -1,0 +1,19 @@
+{
+  "name": "@saas/analytics",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@saas/config": "workspace:*",
+    "posthog-js": "^1.150.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

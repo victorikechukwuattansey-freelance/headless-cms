@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>African Real Estate Agent Growth Kit — Template Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --charcoal: #2D2D2D;
+  --cream: #F5F0E8;
+  --terracotta: #C26A4A;
+  --olive: #7B8D5D;
+  --gold: #C9A84C;
+  --cream-dark: #E8E0D2;
+  --white: #FFFFFF;
+  --light-gray: #F8F6F3;
+  --shadow: 0 4px 24px rgba(45,45,45,0.08);
+  --shadow-hover: 0 12px 48px rgba(45,45,45,0.15);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Lato', sans-serif;
+  background: var(--cream);
+  color: var(--charcoal);
+  line-height: 1.6;
+}
+.container { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--charcoal) 0%, #1a1a1a 100%);
+  color: var(--cream);
+  padding: 80px 0 64px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 50%, rgba(201,168,76,0.08) 0%, transparent 60%),
+              radial-gradient(circle at 80% 50%, rgba(194,106,74,0.06) 0%, transparent 60%);
+}
+.hero-badge {
+  display: inline-block;
+  background: var(--gold);
+  color: var(--charcoal);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  padding: 6px 18px;
+  border-radius: 20px;
+  margin-bottom: 24px;
+}
+.hero h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+.hero h1 span { color: var(--gold); }
+.hero p {
+  font-size: 1.1rem;
+  font-weight: 300;
+  max-width: 600px;
+  margin: 0 auto 32px;
+  opacity: 0.85;
+}
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  flex-wrap: wrap;
+}
+.hero-stats div { text-align: center; }
+.hero-stats strong {
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  color: var(--gold);
+  display: block;
+}
+.hero-stats span {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  opacity: 0.7;
+}
+
+/* Section */
+.section { padding: 80px 0; }
+.section-label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.section-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.section-sub {
+  font-size: 1rem;
+  opacity: 0.7;
+  max-width: 560px;
+  margin-bottom: 48px;
+}
+
+/* Grid */
+.grid { display: grid; gap: 28px; }
+.grid-4 { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.grid-3 { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.grid-2 { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.grid-6 { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+
+/* Mockup Card */
+.mockup-card {
+  background: var(--white);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: default;
+}
+.mockup-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-hover);
+}
+.mockup-card .preview {
+  aspect-ratio: 8.5 / 11;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.mockup-card .preview.square { aspect-ratio: 1 / 1; }
+.mockup-card .preview.landscape { aspect-ratio: 16 / 9; }
+.mockup-card .preview.hcard { aspect-ratio: 1.6 / 1; }
+.mockup-card .preview.letter { aspect-ratio: 8.5 / 11; }
+.mockup-card .preview.invoice { aspect-ratio: 1.3 / 1; }
+.mockup-card .preview.insta-story { aspect-ratio: 9 / 16; }
+.mockup-card .preview.insta-square { aspect-ratio: 1 / 1; }
+.mockup-card .preview.contents { aspect-ratio: auto; min-height: 320px; }
+.mockup-card .meta {
+  padding: 16px 20px 18px;
+  border-top: 1px solid #eee;
+}
+.mockup-card .meta h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.mockup-card .meta .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.mockup-card .meta .tags span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+.tag-gold { background: rgba(201,168,76,0.15); color: #8a7530; }
+.tag-terracotta { background: rgba(194,106,74,0.15); color: #8a4a30; }
+.tag-olive { background: rgba(123,141,93,0.15); color: #4a5a30; }
+.tag-charcoal { background: rgba(45,45,45,0.1); color: var(--charcoal); }
+
+/* Flyer base */
+.flyer { height: 100%; display: flex; flex-direction: column; position: relative; }
+.flyer-top {
+  padding: 16px 20px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.flyer-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  text-align: center;
+}
+.flyer-body .price {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.flyer-body .address {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.flyer-body .specs {
+  display: flex;
+  gap: 14px;
+  font-size: 0.65rem;
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+.flyer-body .cta {
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 5px 18px;
+  border-radius: 20px;
+  margin-top: 4px;
+}
+
+/* Luxury */
+.flyer-luxury { background: linear-gradient(145deg, #1a1a1a, #2d2d2d); color: var(--cream); }
+.flyer-luxury .flyer-top { color: var(--gold); border-bottom: 1px solid rgba(201,168,76,0.3); }
+.flyer-luxury .cta { background: var(--gold); color: var(--charcoal); }
+.flyer-luxury .accent-line { width: 60%; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); margin: 6px auto; }
+
+/* Apartment */
+.flyer-apartment { background: linear-gradient(145deg, #f5f0e8, #e8e0d2); color: var(--charcoal); }
+.flyer-apartment .flyer-top { color: var(--terracotta); border-bottom: 2px solid var(--terracotta); }
+.flyer-apartment .cta { background: var(--terracotta); color: var(--white); }
+.flyer-apartment .accent-line { width: 40px; height: 3px; background: var(--terracotta); margin: 6px auto; }
+
+/* Land */
+.flyer-land { background: linear-gradient(145deg, #f0f3ea, #e2e8d4); color: var(--charcoal); }
+.flyer-land .flyer-top { color: var(--olive); border-bottom: 2px dashed var(--olive); }
+.flyer-land .cta { background: var(--olive); color: var(--white); }
+.flyer-land .accent-line { width: 40px; height: 3px; background: var(--olive); margin: 6px auto; }
+
+/* Commercial */
+.flyer-commercial { background: linear-gradient(145deg, #2d2d2d, #3d3d3d); color: var(--cream); }
+.flyer-commercial .flyer-top { color: var(--gold); border-bottom: 1px solid rgba(201,168,76,0.3); }
+.flyer-commercial .cta { background: linear-gradient(135deg, var(--gold), var(--terracotta)); color: var(--charcoal); }
+.flyer-commercial .accent-line { width: 40px; height: 3px; background: linear-gradient(90deg, var(--gold), var(--terracotta)); margin: 6px auto; }
+
+/* Rental */
+.flyer-rental { background: linear-gradient(145deg, #faf6f0, #f0e8dc); color: var(--charcoal); }
+.flyer-rental .flyer-top { color: var(--terracotta); border-bottom: 1px solid rgba(194,106,74,0.3); }
+.flyer-rental .cta { background: var(--terracotta); color: var(--white); }
+.flyer-rental .accent-line { width: 40px; height: 3px; background: var(--terracotta); margin: 6px auto; }
+
+/* Just Listed */
+.flyer-justlisted { background: linear-gradient(145deg, #ffffff, #f5f0e8); color: var(--charcoal); }
+.flyer-justlisted .flyer-top { color: var(--gold); border-bottom: 2px solid var(--gold); }
+.flyer-justlisted .cta { background: var(--gold); color: var(--charcoal); }
+.flyer-justlisted .badge-justlisted {
+  position: absolute; top: 12px; right: 12px;
+  background: var(--gold); color: var(--charcoal);
+  font-size: 9px; font-weight: 900; text-transform: uppercase;
+  letter-spacing: 1px; padding: 4px 12px;
+  border-radius: 4px; transform: rotate(3deg);
+}
+
+/* Sold */
+.flyer-sold { background: linear-gradient(145deg, #1a1a1a, #2d2d2d); color: var(--cream); }
+.flyer-sold .flyer-top { color: var(--gold); border-bottom: 1px solid rgba(201,168,76,0.2); }
+.flyer-sold .cta { background: var(--terracotta); color: var(--white); }
+.flyer-sold .stamp-sold {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-15deg);
+  font-size: 2rem; font-weight: 900; letter-spacing: 4px; color: rgba(194,106,74,0.5);
+  border: 4px solid rgba(194,106,74,0.4); padding: 8px 20px; border-radius: 6px;
+}
+
+/* Open House */
+.flyer-openhouse { background: linear-gradient(145deg, #ffffff, #f5f0e8); color: var(--charcoal); }
+.flyer-openhouse .flyer-top { color: var(--gold); border-bottom: 2px solid var(--gold); }
+.flyer-openhouse .cta { background: var(--gold); color: var(--charcoal); }
+.flyer-openhouse .badge-openhouse {
+  position: absolute; top: 12px; right: 12px;
+  background: var(--gold); color: var(--charcoal);
+  font-size: 9px; font-weight: 900; text-transform: uppercase;
+  letter-spacing: 1px; padding: 4px 12px; border-radius: 4px;
+}
+
+/* Instagram */
+.insta-mock { height: 100%; display: flex; flex-direction: column; position: relative; }
+.insta-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid #eee;
+  font-size: 10px; font-weight: 700;
+}
+.insta-avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold), var(--terracotta));
+}
+.insta-body {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 16px; text-align: center;
+}
+.insta-body .insta-icon { font-size: 1.6rem; margin-bottom: 6px; opacity: 0.3; }
+.insta-body h4 { font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; }
+.insta-body p { font-size: 0.65rem; opacity: 0.6; line-height: 1.4; }
+
+/* Stationery */
+.stationery-card { height: 100%; display: flex; flex-direction: column; }
+.bc-front {
+  height: 100%;
+  background: linear-gradient(135deg, var(--charcoal), #1a1a1a);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 20px; text-align: center; color: var(--cream);
+}
+.bc-front .bc-icon { font-size: 1.4rem; margin-bottom: 8px; opacity: 0.5; }
+.bc-front h4 { font-family: 'Playfair Display', serif; font-size: 0.85rem; margin-bottom: 2px; }
+.bc-front p { font-size: 0.55rem; opacity: 0.6; letter-spacing: 1px; text-transform: uppercase; }
+.bc-front .bc-line { width: 30px; height: 2px; background: var(--gold); margin: 8px auto; }
+
+/* Letterhead */
+.letter-mock { height: 100%; background: var(--white); padding: 20px; display: flex; flex-direction: column; }
+.letter-mock .letter-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--charcoal); padding-bottom: 10px; margin-bottom: 12px; }
+.letter-mock .letter-header .lh-name { font-family: 'Playfair Display', serif; font-size: 0.85rem; font-weight: 700; }
+.letter-mock .letter-header .lh-details { font-size: 0.5rem; text-align: right; opacity: 0.6; line-height: 1.5; }
+.letter-mock .letter-content { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.letter-mock .letter-content .line { height: 6px; background: #eee; border-radius: 3px; }
+.letter-mock .letter-content .line:nth-child(1) { width: 100%; }
+.letter-mock .letter-content .line:nth-child(2) { width: 85%; }
+.letter-mock .letter-content .line:nth-child(3) { width: 92%; }
+.letter-mock .letter-content .line:nth-child(4) { width: 70%; }
+.letter-mock .letter-content .line:nth-child(5) { width: 88%; }
+.letter-mock .letter-content .line:nth-child(6) { width: 60%; }
+.letter-mock .letter-content .line:nth-child(7) { width: 95%; }
+.letter-mock .letter-footer { margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee; display: flex; justify-content: center; gap: 12px; font-size: 0.5rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 1px; }
+
+/* Invoice */
+.invoice-mock { height: 100%; background: var(--white); padding: 16px; display: flex; flex-direction: column; }
+.invoice-mock .inv-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.invoice-mock .inv-header h5 { font-family: 'Playfair Display', serif; font-size: 0.75rem; }
+.invoice-mock .inv-header span { font-size: 0.5rem; opacity: 0.5; }
+.invoice-mock .inv-table { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.invoice-mock .inv-table .inv-row { display: flex; justify-content: space-between; font-size: 0.55rem; padding: 4px 0; border-bottom: 1px solid #f5f5f5; }
+.invoice-mock .inv-table .inv-row:first-child { font-weight: 700; border-bottom: 2px solid var(--charcoal); font-size: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.invoice-mock .inv-total { margin-top: 6px; display: flex; justify-content: space-between; font-weight: 700; font-size: 0.65rem; padding-top: 6px; border-top: 2px solid var(--charcoal); }
+
+/* Contents Tree */
+.tree { padding: 24px; font-family: 'Lato', monospace; font-size: 0.75rem; line-height: 1.8; }
+.tree .folder { color: var(--gold); font-weight: 700; }
+.tree .file { color: var(--charcoal); opacity: 0.75; }
+.tree .indent { padding-left: 20px; }
+.tree .indent2 { padding-left: 40px; }
+.tree .module { font-weight: 700; color: var(--charcoal); position: relative; padding-left: 16px; margin-top: 4px; }
+.tree .module::before { content: '\25B8'; position: absolute; left: 0; color: var(--gold); }
+
+/* Lead Magnet */
+.lead-magnet { padding: 24px 16px; text-align: center; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.lead-magnet .lm-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; margin-bottom: 4px; }
+.lead-magnet h4 { font-size: 0.75rem; font-weight: 700; }
+.lead-magnet p { font-size: 0.6rem; opacity: 0.6; line-height: 1.3; }
+.lead-magnet .lm-badge { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; padding: 2px 10px; border-radius: 10px; margin-top: 4px; }
+
+/* Color helpers */
+.bg-cream { background: var(--cream); }
+.bg-charcoal { background: var(--charcoal); color: var(--cream); }
+.bg-gold { background: var(--gold); color: var(--charcoal); }
+.bg-terracotta { background: var(--terracotta); color: var(--white); }
+.bg-olive { background: var(--olive); color: var(--white); }
+.bg-white { background: var(--white); }
+
+/* Footer */
+.footer { background: var(--charcoal); color: var(--cream); text-align: center; padding: 48px 32px; }
+.footer h2 { font-family: 'Playfair Display', serif; font-size: 1.8rem; margin-bottom: 8px; }
+.footer p { opacity: 0.6; font-size: 0.9rem; margin-bottom: 24px; }
+.footer .btn { display: inline-block; background: var(--gold); color: var(--charcoal); font-weight: 900; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; text-decoration: none; padding: 14px 40px; border-radius: 30px; transition: transform 0.2s, box-shadow 0.2s; }
+.footer .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(201,168,76,0.3); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container { padding: 0 20px; }
+  .hero { padding: 48px 0 40px; }
+  .hero-stats { gap: 24px; }
+  .section { padding: 48px 0; }
+  .grid-4 { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-6 { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">Template Preview Gallery</div>
+    <h1>African Real Estate Agent<br><span>Growth Kit</span></h1>
+    <p>300+ editable Canva templates — flyers, social media graphics, stationery, lead magnets &amp; more — designed for the African real estate market.</p>
+    <div class="hero-stats">
+      <div><strong>300+</strong><span>Templates</span></div>
+      <div><strong>10</strong><span>Modules</span></div>
+      <div><strong>30+</strong><span>Flyer Layouts</span></div>
+      <div><strong>8</strong><span>Lead Magnets</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 1. Property Flyers -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Section 01</div>
+    <h2 class="section-title">Property Flyer Templates</h2>
+    <p class="section-sub">Fully editable A4 / US Letter flyers for every listing type. Each includes agent branding, photo placeholders, property details, and a call-to-action.</p>
+    <div class="grid grid-4">
+
+      <div class="mockup-card">
+        <div class="preview">
+          <div class="flyer flyer-luxury">
+            <div class="flyer-top"><span>Luxury Home</span><span>★★★★★</span></div>
+            <div class="flyer-body">
+              <div class="price">$450,000</div>
+              <div class="address">12 Palm Grove Estate</div>
+              <div class="accent-line"></div>
+              <div class="specs"><span>5 Bed</span><span>4 Bath</span><span>450 m²</span></div>
+              <div class="cta">Schedule a Viewing</div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Luxury Home Flyer</h3>
+          <div class="tags"><span class="tag-gold">Gold accents</span><span class="tag-charcoal">A4</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview">
+          <div class="flyer flyer-apartment">
+            <div class="flyer-top"><span>Apartment</span><span>🏢</span></div>
+            <div class="flyer-body">
+              <div class="price">$185,000</div>
+              <div class="address">Harbour View Towers</div>
+              <div class="accent-line"></div>
+              <div class="specs"><span>3 Bed</span><span>2 Bath</span><span>120 m²</span></div>
+              <div class="cta">Book a Tour</div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Apartment Flyer</h3>
+          <div class="tags"><span class="tag-terracotta">Terracotta accents</span><span class="tag-charcoal">A4</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview">
+          <div class="flyer flyer-land">
+            <div class="flyer-top"><span>Land</span><span>🌿</span></div>
+            <div class="flyer-body">
+              <div class="price">$38,000</div>
+              <div class="address">Tatu City — Plot 47</div>
+              <div class="accent-line"></div>
+              <div class="specs"><span>1,200 m²</span><span>Title Deed</span></div>
+              <div class="cta">Inquire Now</div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Land / Plot Flyer</h3>
+          <div class="tags"><span class="tag-olive">Olive accents</span><span class="tag-charcoal">A4</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview">
+          <div class="flyer flyer-commercial">
+            <div class="flyer-top"><span>Commercial</span><span>🏛</span></div>
+            <div class="flyer-body">
+              <div class="price">$750,000</div>
+              <div class="address">Westlands Business Park</div>
+              <div class="accent-line"></div>
+              <div class="specs"><span>2,400 m²</span><span>Prime Location</span></div>
+              <div class="cta">View Property</div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Commercial Flyer</h3>
+          <div class="tags"><span class="tag-gold">Gold + Terracotta</span><span class="tag-charcoal">A4</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview">
+          <div class="flyer flyer-rental">
+            <div class="flyer-top"><span>Rental</span><span>🔑</span></div>
+            <div class="flyer-body">
+              <div class="price">$1,200/mo</div>
+              <div class="address">Sunset Boulevard, Unit 7</div>
+              <div class="accent-line"></div>
+              <div class="specs"><span>2 Bed</span><span>1 Bath</span><span>80 m²</span></div>
+              <div class="cta">Apply Now</div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Rental Flyer</h3>
+          <div class="tags"><span class="tag-terracotta">Terracotta accents</span><span class="tag-charcoal">A4</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview">
+          <div class="flyer flyer-justlisted">
+            <div class="flyer-top"><span>Just Listed</span><span>✨</span></div>
+            <div class="flyer-body">
+              <div class="price">$265,000</div>
+              <div class="address">42 Acacia Drive</div>
+              <div class="accent-line"></div>
+              <div class="specs"><span>4 Bed</span><span>3 Bath</span><span>200 m²</span></div>
+              <div class="cta">See Inside</div>
+            </div>
+            <div class="badge-justlisted">Just Listed</div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Just Listed Flyer</h3>
+          <div class="tags"><span class="tag-gold">Gold badge</span><span class="tag-charcoal">A4</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview">
+          <div class="flyer flyer-sold">
+            <div class="flyer-top"><span>Sold</span><span>🏆</span></div>
+            <div class="flyer-body">
+              <div class="price">$520,000</div>
+              <div class="address">94 Baobab Lane</div>
+              <div class="accent-line"></div>
+              <div class="specs"><span>6 Bed</span><span>5 Bath</span><span>500 m²</span></div>
+              <div class="cta">View Similar Listings</div>
+            </div>
+            <div class="stamp-sold">SOLD</div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Sold Flyer</h3>
+          <div class="tags"><span class="tag-charcoal">SOLD stamp</span><span class="tag-charcoal">A4</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview">
+          <div class="flyer flyer-openhouse">
+            <div class="flyer-top"><span>Open House</span><span>🏠</span></div>
+            <div class="flyer-body">
+              <div class="price">Open House</div>
+              <div class="address">Sun, 14 Aug · 2-5 PM</div>
+              <div class="accent-line"></div>
+              <div class="specs"><span>15 Jasmine Road</span><span>Refreshments</span></div>
+              <div class="cta">Save My Spot</div>
+            </div>
+            <div class="badge-openhouse">Open House</div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Open House Flyer</h3>
+          <div class="tags"><span class="tag-gold">Gold badge</span><span class="tag-charcoal">A4</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- 2. Instagram Templates -->
+<section class="section" style="background: var(--white);">
+  <div class="container">
+    <div class="section-label">Section 02</div>
+    <h2 class="section-title">Instagram &amp; Social Templates</h2>
+    <p class="section-sub">Carousel posts, stories, quote graphics, and testimonial cards sized perfectly for Instagram, Facebook, and LinkedIn.</p>
+    <div class="grid grid-4">
+
+      <div class="mockup-card">
+        <div class="preview square">
+          <div class="insta-mock bg-cream">
+            <div class="insta-header">
+              <div class="insta-avatar"></div>
+              <div>Your Agency Name</div>
+            </div>
+            <div class="insta-body">
+              <div class="insta-icon">⏪</div>
+              <h4>Carousel Post</h4>
+              <p>Swipeable multi-slide layout with title card, 4 property slides, and CTA finale</p>
+              <div style="display:flex;gap:4px;margin-top:10px;">
+                <div style="width:6px;height:6px;border-radius:50%;background:var(--gold);"></div>
+                <div style="width:6px;height:6px;border-radius:50%;background:#ddd;"></div>
+                <div style="width:6px;height:6px;border-radius:50%;background:#ddd;"></div>
+                <div style="width:6px;height:6px;border-radius:50%;background:#ddd;"></div>
+                <div style="width:6px;height:6px;border-radius:50%;background:#ddd;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Property Carousel</h3>
+          <div class="tags"><span class="tag-gold">1080x1080</span><span class="tag-terracotta">5 slides</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview insta-story">
+          <div class="insta-mock" style="background:linear-gradient(135deg,var(--charcoal),#1a1a1a);color:var(--cream);">
+            <div class="insta-header" style="border-bottom-color:rgba(255,255,255,0.1);">
+              <div class="insta-avatar"></div>
+              <div>Your Agency</div>
+              <div style="margin-left:auto;font-size:8px;">📌</div>
+            </div>
+            <div class="insta-body" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+              <div style="font-size:2rem;">🏡</div>
+              <h4 style="font-size:1rem;font-family:'Playfair Display',serif;">Just Listed</h4>
+              <p style="font-size:0.7rem;opacity:0.7;">Swipe up to view</p>
+              <div style="margin-top:6px;width:40px;height:40px;border-radius:50%;border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:0.8rem;">↑</div>
+            </div>
+            <div style="padding:8px 12px;border-top:1px solid rgba(255,255,255,0.1);display:flex;gap:4px;">
+              <div style="flex:1;height:2px;background:var(--gold);border-radius:2px;"></div>
+              <div style="flex:1;height:2px;background:rgba(255,255,255,0.2);border-radius:2px;"></div>
+              <div style="flex:1;height:2px;background:rgba(255,255,255,0.2);border-radius:2px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Instagram Story</h3>
+          <div class="tags"><span class="tag-gold">1080x1920</span><span class="tag-charcoal">Swipe-up CTA</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview square">
+          <div class="insta-mock" style="background:linear-gradient(135deg,var(--charcoal),#2a2a2a);color:var(--cream);">
+            <div class="insta-header" style="border-bottom-color:rgba(255,255,255,0.1);">
+              <div class="insta-avatar"></div>
+              <div>Real Estate Tips</div>
+            </div>
+            <div class="insta-body" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+              <div style="font-size:2rem;color:var(--gold);font-family:'Playfair Display',serif;line-height:1.2;margin-bottom:12px;">"</div>
+              <p style="font-size:0.7rem;font-style:italic;opacity:0.9;text-align:center;">"The best investment on earth is earth."</p>
+              <p style="font-size:0.55rem;opacity:0.5;margin-top:8px;">— Louis Glickman</p>
+              <div style="margin-top:12px;width:30px;height:2px;background:var(--gold);"></div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Quote Graphic</h3>
+          <div class="tags"><span class="tag-gold">1080x1080</span><span class="tag-charcoal">Inspirational</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview square">
+          <div class="insta-mock bg-white">
+            <div class="insta-header">
+              <div class="insta-avatar"></div>
+              <div>Testimonials</div>
+            </div>
+            <div class="insta-body" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;">
+              <div style="width:36px;height:36px;border-radius:50%;background:var(--cream);display:flex;align-items:center;justify-content:center;font-size:1rem;margin-bottom:8px;">👤</div>
+              <h4 style="font-size:0.7rem;color:var(--gold);">Sarah M.</h4>
+              <p style="font-size:0.6rem;text-align:center;max-width:200px;opacity:0.7;">"Found my dream home in just 2 weeks! The agent was incredibly helpful throughout the process."</p>
+              <div style="margin-top:6px;font-size:0.6rem;color:var(--gold);">★★★★★</div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Testimonial Card</h3>
+          <div class="tags"><span class="tag-gold">1080x1080</span><span class="tag-terracotta">Social proof</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- 3. Business Stationery -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Section 03</div>
+    <h2 class="section-title">Business Stationery</h2>
+    <p class="section-sub">Professional branding assets that establish credibility with clients and partners. Fully editable in Canva.</p>
+    <div class="grid grid-3">
+
+      <div class="mockup-card">
+        <div class="preview hcard">
+          <div class="stationery-card">
+            <div class="bc-front">
+              <div class="bc-icon">🏡</div>
+              <div class="bc-line"></div>
+              <h4>Your Agency Name</h4>
+              <p>Real Estate · Property Consultants</p>
+              <div class="bc-line"></div>
+              <div style="font-size:0.5rem;opacity:0.5;margin-top:6px;letter-spacing:0.5px;">+254 700 000 000 · hello@agency.com</div>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Business Card</h3>
+          <div class="tags"><span class="tag-gold">3.5x2 in</span><span class="tag-charcoal">Front design</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview letter">
+          <div class="letter-mock">
+            <div class="letter-header">
+              <div>
+                <div class="lh-name">Your Agency Name</div>
+                <div style="font-size:0.5rem;opacity:0.5;letter-spacing:1px;text-transform:uppercase;">Real Estate</div>
+              </div>
+              <div class="lh-details">
+                <div>Nairobi, Kenya</div>
+                <div>+254 700 000 000</div>
+              </div>
+            </div>
+            <div class="letter-content">
+              <div class="line"></div>
+              <div class="line"></div>
+              <div class="line"></div>
+              <div class="line"></div>
+              <div class="line"></div>
+              <div class="line"></div>
+              <div class="line"></div>
+            </div>
+            <div class="letter-footer">
+              <span>Nairobi</span><span> · </span><span>Mombasa</span><span> · </span><span>Kisumu</span>
+            </div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Letterhead</h3>
+          <div class="tags"><span class="tag-gold">A4</span><span class="tag-charcoal">Full branding</span></div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview invoice">
+          <div class="invoice-mock">
+            <div class="inv-header">
+              <h5>INVOICE</h5>
+              <span>#001-24</span>
+            </div>
+            <div class="inv-table">
+              <div class="inv-row"><span>Description</span><span>Amount</span></div>
+              <div class="inv-row"><span>Commission — 123 Palm Ave</span><span>$12,500</span></div>
+              <div class="inv-row"><span>Marketing Fee</span><span>$800</span></div>
+              <div class="inv-row"><span>Admin Fee</span><span>$250</span></div>
+            </div>
+            <div class="inv-total"><span>Total Due</span><span>$13,550</span></div>
+            <div style="margin-top:8px;font-size:0.5rem;opacity:0.4;text-align:center;">Payment due within 15 days</div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Invoice Template</h3>
+          <div class="tags"><span class="tag-gold">A4</span><span class="tag-terracotta">Professional</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- 4. Product Contents -->
+<section class="section" style="background: var(--white);">
+  <div class="container">
+    <div class="section-label">Section 04</div>
+    <h2 class="section-title">What's Inside — Full Module Breakdown</h2>
+    <p class="section-sub">10 complete modules covering every aspect of a real estate agent's marketing needs. Everything is organised, labelled, and ready to edit.</p>
+    <div class="grid grid-2">
+      <div class="mockup-card" style="grid-column:1/-1;">
+        <div class="preview contents">
+          <div class="tree">
+            <div><span class="folder">📁 African Real Estate Agent Growth Kit</span></div>
+            <div class="indent module">📁 01 — Brand Style Guide</div>
+            <div class="indent2 file">Brand board, color palette, fonts, logo usage, tone of voice</div>
+            <div class="indent module">📁 02 — Property Flyers</div>
+            <div class="indent2 file">8 flyer layouts x 3 colorways = 24 editable designs (Canva)</div>
+            <div class="indent module">📁 03 — Social Media Graphics</div>
+            <div class="indent2 file">30 carousel posts, 20 stories, 15 quote cards, 10 testimonials</div>
+            <div class="indent module">📁 04 — Listing Presentation Deck</div>
+            <div class="indent2 file">15-slide pitch deck for listing appointments (Canva + PDF)</div>
+            <div class="indent module">📁 05 — Email Templates</div>
+            <div class="indent2 file">20 emails: nurture sequences, follow-ups, open house invites, thank-yous</div>
+            <div class="indent module">📁 06 — Business Stationery</div>
+            <div class="indent2 file">Business card, letterhead, invoice, proposal cover, thank-you card</div>
+            <div class="indent module">📁 07 — WhatsApp & SMS Scripts</div>
+            <div class="indent2 file">30 message templates for prospecting, follow-ups, and referrals</div>
+            <div class="indent module">📁 08 — Content Calendar</div>
+            <div class="indent2 file">30-day content plan with post copy, hashtags, and scheduling grid</div>
+            <div class="indent module">📁 09 — Sales Page & Lead Magnets</div>
+            <div class="indent2 file">Sales page copy + 6 lead magnet templates (checklists, guides, calculators)</div>
+            <div class="indent module">📁 10 — Launch Checklist</div>
+            <div class="indent2 file">Step-by-step checklist to set up your marketing systems in 7 days</div>
+          </div>
+        </div>
+        <div class="meta">
+          <h3>Complete Product Structure</h3>
+          <div class="tags"><span class="tag-gold">10 modules</span><span class="tag-terracotta">300+ files</span><span class="tag-olive">Canva + PDF + Docs</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Lead Magnets -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Section 05</div>
+    <h2 class="section-title">Bonus Lead Magnets</h2>
+    <p class="section-sub">6 done-for-you lead magnets to build your email list and capture hot leads from day one.</p>
+    <div class="grid grid-6">
+
+      <div class="mockup-card">
+        <div class="preview square">
+          <div class="lead-magnet bg-charcoal">
+            <div class="lm-icon bg-gold">✓</div>
+            <h4 style="color:var(--cream);">Home Buyer's Checklist</h4>
+            <p style="color:var(--cream);">30-point checklist for first-time buyers</p>
+            <div class="lm-badge bg-gold">Checklist</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview square">
+          <div class="lead-magnet bg-cream">
+            <div class="lm-icon bg-terracotta" style="color:white;">📊</div>
+            <h4>Property Value Guide</h4>
+            <p>How to price your home for sale</p>
+            <div class="lm-badge bg-terracotta" style="color:white;">Guide</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview square">
+          <div class="lead-magnet bg-white">
+            <div class="lm-icon bg-olive" style="color:white;">🧮</div>
+            <h4>Mortgage Calculator</h4>
+            <p>Interactive affordability calculator</p>
+            <div class="lm-badge bg-olive" style="color:white;">Tool</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview square">
+          <div class="lead-magnet bg-charcoal">
+            <div class="lm-icon bg-gold">📋</div>
+            <h4 style="color:var(--cream);">Selling Prep Planner</h4>
+            <p style="color:var(--cream);">Pre-sale preparation timeline</p>
+            <div class="lm-badge bg-gold">Planner</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview square">
+          <div class="lead-magnet bg-cream">
+            <div class="lm-icon bg-terracotta" style="color:white;">🏠</div>
+            <h4>Rental Guide</h4>
+            <p>Tenant's guide to renting</p>
+            <div class="lm-badge bg-terracotta" style="color:white;">Guide</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mockup-card">
+        <div class="preview square">
+          <div class="lead-magnet bg-white">
+            <div class="lm-icon bg-gold">📈</div>
+            <h4>Investment ROI Sheet</h4>
+            <p>Calculate rental property returns</p>
+            <div class="lm-badge bg-gold">Sheet</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<section class="footer">
+  <h2>African Real Estate Agent <span style="color:var(--gold);">Growth Kit</span></h2>
+  <p>300+ Canva templates · 10 modules · Done-for-you marketing system</p>
+  <a href="#" class="btn">View Full Product →</a>
+  <div style="margin-top:32px;opacity:0.3;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;">
+    Template Preview Gallery · All designs shown are simulated mockups
+  </div>
+</section>
+
+</body>
+</html>

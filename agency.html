@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agency OS</title>
+<link rel="stylesheet" href="os-core.css">
+<style>
+.os-pnl-table { width: 100%; border-collapse: collapse; margin-top: 12px; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.os-pnl-table th, .os-pnl-table td { padding: 10px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+.os-pnl-table th { background: #f8f9fa; font-size: 12px; text-transform: uppercase; color: #666; }
+.os-profit { color: #2e7d32; font-weight: 600; }
+.os-loss { color: #c62828; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="os-sidebar" id="sidebar"></div>
+<div class="os-main">
+  <div class="os-topbar">
+    <h1 id="screen-title">Dashboard</h1>
+    <div class="os-topbar-right">
+      <div id="search-container"></div>
+      <button class="os-btn os-btn-sm" onclick="exportData()">📥 Export</button>
+      <button class="os-btn os-btn-sm" onclick="importData()">📤 Import</button>
+    </div>
+  </div>
+  <div class="os-content" id="content"></div>
+</div>
+
+<script src="os-core.js"></script>
+<script>
+const PIPELINE_STAGES = [
+  { key: 'lead', label: 'Lead', icon: '🟡' },
+  { key: 'qualified', label: 'Qualified', icon: '🔵' },
+  { key: 'proposal', label: 'Proposal', icon: '🟣' },
+  { key: 'negotiation', label: 'Negotiation', icon: '🔴' },
+  { key: 'closed-won', label: 'Closed Won', icon: '🟢' },
+  { key: 'closed-lost', label: 'Closed Lost', icon: '⚫' },
+];
+
+OS.db.define('contacts', {
+  fields: [
+    { key: 'name', label: 'Name', type: 'text' },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'phone', label: 'Phone', type: 'text' },
+    { key: 'company', label: 'Company', type: 'text' },
+    { key: 'tags', label: 'Tags', type: 'text', placeholder: 'comma-separated' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('deals', {
+  fields: [
+    { key: 'title', label: 'Deal Title', type: 'text' },
+    { key: 'contactId', label: 'Contact', type: 'select', options: () => OS.db.list('contacts').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'value', label: 'Value ($)', type: 'number' },
+    { key: 'stage', label: 'Stage', type: 'select', options: PIPELINE_STAGES.map(s => ({ value: s.key, label: s.label })), default: 'lead' },
+    { key: 'assignedTo', label: 'Assigned To', type: 'text' },
+    { key: 'source', label: 'Source', type: 'text' },
+    { key: 'dealType', label: 'Type', type: 'select', options: ['Service', 'Product', 'Retainer', 'Project'] },
+    { key: 'probability', label: 'Probability (%)', type: 'number', default: 10 },
+    { key: 'expectedClose', label: 'Expected Close', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('team', {
+  fields: [
+    { key: 'name', label: 'Name', type: 'text' },
+    { key: 'role', label: 'Role', type: 'text' },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'capacity', label: 'Capacity (hrs/week)', type: 'number', default: 40 },
+  ]
+});
+
+OS.db.define('projects', {
+  fields: [
+    { key: 'name', label: 'Project Name', type: 'text' },
+    { key: 'client', label: 'Client', type: 'text' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Active', 'On Hold', 'Completed', 'Cancelled'], default: 'Active' },
+    { key: 'budget', label: 'Budget ($)', type: 'number' },
+    { key: 'deadline', label: 'Deadline', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('tasks', {
+  fields: [
+    { key: 'title', label: 'Task', type: 'text' },
+    { key: 'projectId', label: 'Project', type: 'select', options: () => OS.db.list('projects').map(p => ({ value: p.id, label: p.name })) },
+    { key: 'assignee', label: 'Assignee', type: 'text' },
+    { key: 'due', label: 'Due Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Pending', 'In Progress', 'Done'], default: 'Pending' },
+    { key: 'priority', label: 'Priority', type: 'select', options: ['Low', 'Medium', 'High', 'Urgent'], default: 'Medium' },
+  ]
+});
+
+OS.db.define('invoices', {
+  fields: [
+    { key: 'dealId', label: 'Deal', type: 'select', options: () => OS.db.list('deals').map(d => ({ value: d.id, label: d.title })) },
+    { key: 'contactId', label: 'Client', type: 'select', options: () => OS.db.list('contacts').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'items', label: 'Line Items (JSON)', type: 'textarea', placeholder: '[{"desc":"Service","amt":1000}]' },
+    { key: 'total', label: 'Total ($)', type: 'number' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Draft', 'Sent', 'Paid', 'Overdue'], default: 'Draft' },
+    { key: 'dueDate', label: 'Due Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+  ]
+});
+
+OS.db.define('expenses', {
+  fields: [
+    { key: 'projectId', label: 'Project', type: 'select', options: () => OS.db.list('projects').map(p => ({ value: p.id, label: p.name })) },
+    { key: 'category', label: 'Category', type: 'select', options: ['Software', 'Contractor', 'Travel', 'Office', 'Marketing', 'Other'] },
+    { key: 'amount', label: 'Amount ($)', type: 'number' },
+    { key: 'date', label: 'Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'vendor', label: 'Vendor', type: 'text' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+seedDemoData();
+
+const screens = {};
+
+function nav(label, icon, key, renderFn) {
+  screens[key] = renderFn;
+  return { label, icon, key };
+}
+
+const navItems = [
+  nav('Dashboard', '📊', 'dashboard', renderDashboard),
+  nav('Pipeline', '💼', 'pipeline', renderPipeline),
+  nav('Clients', '👤', 'clients', renderClients),
+  nav('Team', '👥', 'team', renderTeam),
+  nav('Projects', '📋', 'projects', renderProjects),
+  nav('Finances', '💰', 'finances', renderFinances),
+  nav('Invoices', '📄', 'invoices', renderInvoices),
+  nav('Reports', '📈', 'reports', renderReports),
+];
+
+let searchQuery = '';
+
+function renderNav() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.innerHTML = '';
+  sidebar.appendChild($el('h2', {}, 'Agency OS'));
+  const navDiv = $el('div', { className: 'os-nav' });
+  for (const item of navItems) {
+    const el = $el('div', {
+      className: 'os-nav-item',
+      onClick: () => navigate(item.key),
+      dataset: { screen: item.key },
+    }, item.icon, $el('span', {}, item.label));
+    navDiv.appendChild(el);
+  }
+  sidebar.appendChild(navDiv);
+  sidebar.appendChild($el('div', { className: 'os-sidebar-footer' }, 'Agency OS v1'));
+}
+
+function navigate(screen) {
+  OS.state.currentScreen = screen;
+  document.querySelectorAll('.os-nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.screen === screen);
+  });
+  const item = navItems.find(n => n.key === screen);
+  document.getElementById('screen-title').textContent = item ? item.label : 'Dashboard';
+  render(screen);
+}
+
+function render(screen) {
+  const fn = screens[screen] || screens.dashboard;
+  fn();
+}
+
+// Dashboard
+function renderDashboard() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const totalDeals = OS.db.list('deals');
+  const wonDeals = totalDeals.filter(d => d.stage === 'closed-won');
+  const activeDeals = totalDeals.filter(d => !['closed-won', 'closed-lost'].includes(d.stage));
+  const totalRevenue = wonDeals.reduce((s, d) => s + (parseFloat(d.value) || 0), 0);
+  const pipelineValue = activeDeals.reduce((s, d) => s + (parseFloat(d.value) || 0), 0);
+  const totalExpenses = OS.db.totals('expenses', 'amount');
+  const teamCount = OS.db.list('team').length;
+
+  OS.ui.renderCards(c, [
+    { label: 'Pipeline Value', value: pipelineValue, prefix: '$', color: '#0f3460' },
+    { label: 'Closed Revenue', value: totalRevenue, prefix: '$', color: '#2e7d32' },
+    { label: 'Active Deals', value: activeDeals.length, color: '#1565c0' },
+    { label: 'Expenses', value: totalExpenses, prefix: '$', color: '#c62828' },
+    { label: 'Net Profit', value: totalRevenue - totalExpenses, prefix: '$', color: totalRevenue - totalExpenses >= 0 ? '#2e7d32' : '#c62828' },
+    { label: 'Team Members', value: teamCount, color: '#6a1b9a' },
+  ]);
+
+  if (activeDeals.length) {
+    c.appendChild($el('h3', { style: { marginBottom: '12px' } }, 'Active Deals'));
+    OS.ui.renderTable(c, activeDeals.slice(0, 5), [
+      { label: 'Deal', render: d => d.title },
+      { label: 'Value', render: d => `$${Number(d.value || 0).toLocaleString()}` },
+      { label: 'Stage', render: d => `<span class="os-badge os-badge-${d.stage}">${PIPELINE_STAGES.find(s => s.key === d.stage)?.label || d.stage}</span>` },
+      { label: 'Assignee', key: 'assignedTo' },
+      { label: 'Close', key: 'expectedClose' },
+    ]);
+  }
+}
+
+// Pipeline
+function renderPipeline() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Sales Pipeline'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addDeal() }, '+ New Deal'));
+  c.appendChild(header);
+
+  const deals = OS.db.list('deals');
+  const byStage = {};
+  for (const s of PIPELINE_STAGES) byStage[s.key] = deals.filter(d => d.stage === s.key);
+
+  OS.ui.renderKanban(c, byStage, PIPELINE_STAGES,
+    (item, newStage) => {
+      OS.db.update('deals', item.id, { stage: newStage });
+      renderPipeline();
+      OS.ui.showToast(`${item.title} moved to ${PIPELINE_STAGES.find(s => s.key === newStage)?.label}`, 'success');
+    },
+    (item) => editDeal(item)
+  );
+}
+
+function addDeal() {
+  const schema = OS.db.schema('deals');
+  schema.fields.find(f => f.key === 'contactId').options = () => OS.db.list('contacts').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, {}, (data) => {
+    OS.db.create('deals', data);
+    OS.ui.closeModal();
+    renderPipeline();
+    OS.ui.showToast('Deal created', 'success');
+  });
+  OS.ui.showModal('New Deal', container);
+}
+
+function editDeal(deal) {
+  const schema = OS.db.schema('deals');
+  schema.fields.find(f => f.key === 'contactId').options = () => OS.db.list('contacts').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, deal, (data) => {
+    OS.db.update('deals', deal.id, data);
+    OS.ui.closeModal();
+    renderPipeline();
+    OS.ui.showToast('Deal updated', 'success');
+  });
+  OS.ui.showModal('Edit Deal', container);
+}
+
+// Clients
+function renderClients() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Clients'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addContact() }, '+ New Client'));
+  c.appendChild(header);
+
+  const contacts = OS.db.search('contacts', searchQuery);
+  const deals = OS.db.list('deals');
+
+  const data = contacts.map(ct => ({
+    ...ct,
+    dealCount: deals.filter(d => d.contactId === ct.id).length,
+    totalValue: deals.filter(d => d.contactId === ct.id && d.stage === 'closed-won').reduce((s, d) => s + (parseFloat(d.value) || 0), 0),
+  }));
+
+  OS.ui.renderTable(c, data, [
+    { label: 'Name', key: 'name' },
+    { label: 'Email', key: 'email' },
+    { label: 'Company', key: 'company' },
+    { label: 'Deals', key: 'dealCount' },
+    { label: 'Revenue', render: r => `$${r.totalValue.toLocaleString()}` },
+    { label: 'Tags', key: 'tags' },
+  ], {
+    onEdit: (row) => editContact(row),
+    onDelete: (row) => { OS.db.delete('contacts', row.id); renderClients(); OS.ui.showToast('Contact deleted', 'info'); },
+  });
+}
+
+function addContact() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('contacts'), {}, (data) => {
+    data.tags = (data.tags || '').split(',').map(t => t.trim()).filter(Boolean).join(', ');
+    OS.db.create('contacts', data);
+    OS.ui.closeModal();
+    renderClients();
+    OS.ui.showToast('Client created', 'success');
+  });
+  OS.ui.showModal('New Client', container);
+}
+
+function editContact(contact) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('contacts'), contact, (data) => {
+    data.tags = (data.tags || '').split(',').map(t => t.trim()).filter(Boolean).join(', ');
+    OS.db.update('contacts', contact.id, data);
+    OS.ui.closeModal();
+    renderClients();
+    OS.ui.showToast('Client updated', 'success');
+  });
+  OS.ui.showModal('Edit Client', container);
+}
+
+// Team
+function renderTeam() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Team'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addTeamMember() }, '+ Add Member'));
+  c.appendChild(header);
+
+  const members = OS.db.search('team', searchQuery);
+  const deals = OS.db.list('deals');
+  const data = members.map(m => ({
+    ...m,
+    activeDeals: deals.filter(d => d.assignedTo === m.name && !['closed-won', 'closed-lost'].includes(d.stage)).length,
+  }));
+
+  OS.ui.renderTable(c, data, [
+    { label: 'Name', key: 'name' },
+    { label: 'Role', key: 'role' },
+    { label: 'Email', key: 'email' },
+    { label: 'Capacity', key: 'capacity', render: r => `${r.capacity || 40}h/wk` },
+    { label: 'Active Deals', key: 'activeDeals' },
+  ], {
+    onEdit: (row) => editTeamMember(row),
+    onDelete: (row) => { OS.db.delete('team', row.id); renderTeam(); },
+  });
+}
+
+function addTeamMember() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('team'), {}, (data) => {
+    OS.db.create('team', data);
+    OS.ui.closeModal();
+    renderTeam();
+    OS.ui.showToast('Member added', 'success');
+  });
+  OS.ui.showModal('Add Team Member', container);
+}
+
+function editTeamMember(member) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('team'), member, (data) => {
+    OS.db.update('team', member.id, data);
+    OS.ui.closeModal();
+    renderTeam();
+  });
+  OS.ui.showModal('Edit Member', container);
+}
+
+// Projects
+function renderProjects() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Projects'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addProject() }, '+ New Project'));
+  c.appendChild(header);
+
+  const projects = OS.db.search('projects', searchQuery);
+  const tasks = OS.db.list('tasks');
+
+  const data = projects.map(p => ({
+    ...p,
+    taskCount: tasks.filter(t => t.projectId === p.id).length,
+    doneTasks: tasks.filter(t => t.projectId === p.id && t.status === 'Done').length,
+  }));
+
+  OS.ui.renderTable(c, data, [
+    { label: 'Name', key: 'name' },
+    { label: 'Client', key: 'client' },
+    { label: 'Status', render: r => `<span class="os-badge os-badge-${r.status === 'Active' ? 'active' : r.status === 'Completed' ? 'done' : 'pending'}">${r.status}</span>` },
+    { label: 'Budget', render: r => `$${Number(r.budget || 0).toLocaleString()}` },
+    { label: 'Tasks', render: r => `${r.doneTasks}/${r.taskCount}` },
+    { label: 'Deadline', key: 'deadline' },
+  ], {
+    onEdit: (row) => editProject(row),
+    onDelete: (row) => { OS.db.delete('projects', row.id); renderProjects(); },
+  });
+}
+
+function addProject() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('projects'), {}, (data) => {
+    OS.db.create('projects', data);
+    OS.ui.closeModal();
+    renderProjects();
+    OS.ui.showToast('Project created', 'success');
+  });
+  OS.ui.showModal('New Project', container);
+}
+
+function editProject(project) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('projects'), project, (data) => {
+    OS.db.update('projects', project.id, data);
+    OS.ui.closeModal();
+    renderProjects();
+  });
+  OS.ui.showModal('Edit Project', container);
+}
+
+// Finances (P&L)
+function renderFinances() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  c.appendChild($el('h2', {}, 'Profit & Loss'));
+
+  const wonDeals = OS.db.list('deals').filter(d => d.stage === 'closed-won');
+  const revenue = wonDeals.reduce((s, d) => s + (parseFloat(d.value) || 0), 0);
+  const expenses = OS.db.list('expenses');
+  const totalExpenses = expenses.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+  const netProfit = revenue - totalExpenses;
+
+  OS.ui.renderCards(c, [
+    { label: 'Total Revenue', value: revenue, prefix: '$', color: '#2e7d32' },
+    { label: 'Total Expenses', value: totalExpenses, prefix: '$', color: '#c62828' },
+    { label: 'Net Profit', value: netProfit, prefix: '$', color: netProfit >= 0 ? '#2e7d32' : '#c62828' },
+    { label: 'Profit Margin', value: revenue ? `${(netProfit / revenue * 100).toFixed(1)}%` : '0%', color: '#0f3460' },
+  ]);
+
+  c.appendChild($el('h3', { style: { marginTop: '24px', marginBottom: '12px' } }, 'Revenue by Client'));
+  const byClient = {};
+  for (const d of wonDeals) {
+    const ct = OS.db.read('contacts', d.contactId);
+    const name = ct ? ct.name : 'Unknown';
+    byClient[name] = (byClient[name] || 0) + (parseFloat(d.value) || 0);
+  }
+  renderSimpleTable(c, Object.entries(byClient).map(([k, v]) => ({ Client: k, Revenue: `$${v.toLocaleString()}` })));
+
+  c.appendChild($el('h3', { style: { marginTop: '24px', marginBottom: '12px' } }, 'Expenses by Category'));
+  const byCat = OS.db.sumBy('expenses', 'amount', 'category');
+  renderSimpleTable(c, Object.entries(byCat).map(([k, v]) => ({ Category: k, Amount: `$${v.toLocaleString()}` })));
+
+  c.appendChild($el('h3', { style: { marginTop: '24px', marginBottom: '12px' } }, 'All Expenses'));
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('span'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addExpense() }, '+ Add Expense'));
+  c.appendChild(header);
+
+  OS.ui.renderTable(c, expenses, [
+    { label: 'Date', key: 'date' },
+    { label: 'Category', key: 'category' },
+    { label: 'Amount', render: r => `$${Number(r.amount || 0).toLocaleString()}` },
+    { label: 'Project', key: 'projectId', render: r => { const p = OS.db.read('projects', r.projectId); return p ? p.name : '-'; } },
+    { label: 'Vendor', key: 'vendor' },
+  ], {
+    onDelete: (row) => { OS.db.delete('expenses', row.id); renderFinances(); },
+  });
+}
+
+function addExpense() {
+  const schema = OS.db.schema('expenses');
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, {}, (data) => {
+    OS.db.create('expenses', data);
+    OS.ui.closeModal();
+    renderFinances();
+    OS.ui.showToast('Expense added', 'success');
+  });
+  OS.ui.showModal('Add Expense', container);
+}
+
+// Invoices
+function renderInvoices() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Invoices'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addInvoice() }, '+ New Invoice'));
+  c.appendChild(header);
+
+  const invoices = OS.db.search('invoices', searchQuery);
+  OS.ui.renderTable(c, invoices, [
+    { label: 'ID', render: r => r.id.slice(-6).toUpperCase() },
+    { label: 'Client', render: r => { const ct = OS.db.read('contacts', r.contactId); return ct ? ct.name : '-'; } },
+    { label: 'Total', render: r => `$${Number(r.total || 0).toLocaleString()}` },
+    { label: 'Status', render: r => `<span class="os-badge os-badge-${r.status === 'Paid' ? 'paid' : r.status === 'Overdue' ? 'overdue' : 'pending'}">${r.status}</span>` },
+    { label: 'Due Date', key: 'dueDate' },
+  ], {
+    onEdit: (row) => editInvoice(row),
+    onDelete: (row) => { OS.db.delete('invoices', row.id); renderInvoices(); },
+  });
+
+  const paid = invoices.filter(i => i.status === 'Paid').reduce((s, i) => s + (parseFloat(i.total) || 0), 0);
+  const outstanding = invoices.filter(i => i.status !== 'Paid').reduce((s, i) => s + (parseFloat(i.total) || 0), 0);
+  c.appendChild($el('div', { style: { display: 'flex', gap: '24px', marginTop: '20px', fontSize: '14px' } },
+    $el('span', {}, `💰 Paid: $${paid.toLocaleString()}`),
+    $el('span', { style: { color: '#c62828' } }, `📌 Outstanding: $${outstanding.toLocaleString()}`)
+  ));
+}
+
+function addInvoice() {
+  const schema = OS.db.schema('invoices');
+  schema.fields.find(f => f.key === 'dealId').options = () => OS.db.list('deals').map(d => ({ value: d.id, label: d.title }));
+  schema.fields.find(f => f.key === 'contactId').options = () => OS.db.list('contacts').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, {}, (data) => {
+    OS.db.create('invoices', data);
+    OS.ui.closeModal();
+    renderInvoices();
+    OS.ui.showToast('Invoice created', 'success');
+  });
+  OS.ui.showModal('New Invoice', container);
+}
+
+function editInvoice(invoice) {
+  const schema = OS.db.schema('invoices');
+  schema.fields.find(f => f.key === 'dealId').options = () => OS.db.list('deals').map(d => ({ value: d.id, label: d.title }));
+  schema.fields.find(f => f.key === 'contactId').options = () => OS.db.list('contacts').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, invoice, (data) => {
+    OS.db.update('invoices', invoice.id, data);
+    OS.ui.closeModal();
+    renderInvoices();
+    OS.ui.showToast('Invoice updated', 'success');
+  });
+  OS.ui.showModal('Edit Invoice', container);
+}
+
+// Reports
+function renderReports() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  c.appendChild($el('h2', {}, 'Reports'));
+
+  const allDeals = OS.db.list('deals');
+  const won = allDeals.filter(d => d.stage === 'closed-won');
+  const lost = allDeals.filter(d => d.stage === 'closed-lost');
+  const active = allDeals.filter(d => !['closed-won', 'closed-lost'].includes(d.stage));
+  const winRate = (won.length + lost.length) > 0 ? (won.length / (won.length + lost.length) * 100).toFixed(1) : 'N/A';
+  const avgDealSize = won.length ? won.reduce((s, d) => s + (parseFloat(d.value) || 0), 0) / won.length : 0;
+  const pipelineVelocity = active.length ? active.reduce((s, d) => s + (parseFloat(d.probability) || 0), 0) / active.length : 0;
+  const pipelineValue = active.reduce((s, d) => s + (parseFloat(d.value) || 0), 0);
+
+  OS.ui.renderCards(c, [
+    { label: 'Win Rate', value: winRate === 'N/A' ? 'N/A' : `${winRate}%`, color: '#1565c0' },
+    { label: 'Avg Deal Size', value: avgDealSize, prefix: '$', color: '#2e7d32' },
+    { label: 'Pipeline Value', value: pipelineValue, prefix: '$', color: '#0f3460' },
+    { label: 'Avg Probability', value: `${pipelineVelocity.toFixed(0)}%`, color: '#6a1b9a' },
+    { label: 'Won Deals', value: won.length, color: '#2e7d32' },
+    { label: 'Lost Deals', value: lost.length, color: '#c62828' },
+  ]);
+
+  c.appendChild($el('h3', { style: { marginTop: '24px', marginBottom: '12px' } }, 'Deal Breakdown by Stage'));
+  const stageData = PIPELINE_STAGES.map(s => ({
+    Stage: s.label,
+    Count: allDeals.filter(d => d.stage === s.key).length,
+    Value: `$${allDeals.filter(d => d.stage === s.key).reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0).toLocaleString()}`
+  }));
+  renderSimpleTable(c, stageData);
+
+  const topClients = {};
+  for (const d of won) {
+    const ct = OS.db.read('contacts', d.contactId);
+    const name = ct ? ct.name : 'Unknown';
+    topClients[name] = (topClients[name] || 0) + (parseFloat(d.value) || 0);
+  }
+  const sortedClients = Object.entries(topClients).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (sortedClients.length) {
+    c.appendChild($el('h3', { style: { marginTop: '24px', marginBottom: '12px' } }, 'Top Clients by Revenue'));
+    renderSimpleTable(c, sortedClients.map(([k, v]) => ({ Client: k, Revenue: `$${v.toLocaleString()}` })));
+  }
+}
+
+// Helpers
+function renderSimpleTable(container, data) {
+  if (!data.length) return;
+  const keys = Object.keys(data[0]);
+  const table = $el('table', { className: 'os-table' });
+  const thead = $el('thead');
+  thead.appendChild($el('tr', {}, ...keys.map(k => $el('th', {}, k))));
+  table.appendChild(thead);
+  const tbody = $el('tbody');
+  for (const row of data) {
+    tbody.appendChild($el('tr', {}, ...keys.map(k => $el('td', {}, String(row[k])))));
+  }
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function exportData() {
+  const schemas = ['contacts', 'deals', 'team', 'projects', 'tasks', 'invoices', 'expenses'];
+  const data = {};
+  for (const s of schemas) data[s] = OS.db.list(s);
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `agency-os-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  OS.ui.showToast('Data exported', 'success');
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async (e) => {
+    const text = await e.target.files[0].text();
+    try {
+      const data = JSON.parse(text);
+      for (const [schema, items] of Object.entries(data)) {
+        if (OS.db._data[schema] !== undefined) {
+          OS.db._data[schema] = items;
+          OS.db._save(schema);
+        }
+      }
+      render(OS.state.currentScreen);
+      OS.ui.showToast('Data imported successfully', 'success');
+    } catch (err) {
+      OS.ui.showToast('Import failed: ' + err.message, 'error');
+    }
+  };
+  input.click();
+}
+
+function seedDemoData() {
+  if (localStorage.getItem('os_agency_seeded')) return;
+  const c1 = OS.db.create('contacts', { name: 'Acme Corp', email: 'info@acme.com', phone: '+1-555-0100', company: 'Acme Corp', tags: 'Enterprise, Tech', notes: 'Key account' });
+  const c2 = OS.db.create('contacts', { name: 'Sarah Johnson', email: 'sarah@example.com', phone: '+1-555-0101', company: 'TechStart Inc', tags: 'Startup', notes: 'Warm lead from conference' });
+  const c3 = OS.db.create('contacts', { name: 'Mike Chen', email: 'mike@global.org', phone: '+1-555-0102', company: 'Global Org', tags: 'Enterprise, Non-profit' });
+  const c4 = OS.db.create('contacts', { name: 'Emily Davis', email: 'emily@design.co', phone: '+1-555-0103', company: 'Design Co', tags: 'SMB, Creative' });
+  const c5 = OS.db.create('contacts', { name: 'James Wilson', email: 'james@wilson.io', phone: '+1-555-0104', company: 'Wilson Partners', tags: 'VIP, Finance' });
+
+  OS.db.create('deals', { title: 'Website Redesign', contactId: c1.id, value: 25000, stage: 'negotiation', assignedTo: 'Alex', source: 'Referral', dealType: 'Project', probability: 75, expectedClose: '2026-08-15', notes: 'Scope includes full redesign and CMS' });
+  OS.db.create('deals', { title: 'SEO Package', contactId: c2.id, value: 5000, stage: 'proposal', assignedTo: 'Jordan', source: 'Conference', dealType: 'Service', probability: 50, expectedClose: '2026-07-30', notes: '3-month SEO optimization' });
+  OS.db.create('deals', { title: 'Mobile App Dev', contactId: c3.id, value: 80000, stage: 'qualified', assignedTo: 'Alex', source: 'Cold Outreach', dealType: 'Project', probability: 25, expectedClose: '2026-09-01' });
+  OS.db.create('deals', { title: 'Social Media Mgmt', contactId: c4.id, value: 3000, stage: 'lead', assignedTo: 'Sam', source: 'Website', dealType: 'Retainer', probability: 10, expectedClose: '2026-08-01' });
+  OS.db.create('deals', { title: 'Brand Strategy', contactId: c5.id, value: 15000, stage: 'proposal', assignedTo: 'Jordan', source: 'Referral', dealType: 'Service', probability: 60, expectedClose: '2026-08-20' });
+  OS.db.create('deals', { title: 'Cloud Migration', contactId: c1.id, value: 45000, stage: 'lead', assignedTo: 'Alex', source: 'Upsell', dealType: 'Project', probability: 15, expectedClose: '2026-10-01' });
+
+  OS.db.create('team', { name: 'Alex Rivera', role: 'Project Manager', email: 'alex@agency.com', capacity: 40 });
+  OS.db.create('team', { name: 'Jordan Lee', role: 'Sales Lead', email: 'jordan@agency.com', capacity: 40 });
+  OS.db.create('team', { name: 'Sam Patel', role: 'Designer', email: 'sam@agency.com', capacity: 35 });
+
+  OS.db.create('projects', { name: 'Acme Website', client: 'Acme Corp', status: 'Active', budget: 25000, deadline: '2026-09-01' });
+  OS.db.create('projects', { name: 'TechStart SEO', client: 'TechStart Inc', status: 'Active', budget: 5000, deadline: '2026-10-01' });
+  OS.db.create('projects', { name: 'Brand Guidelines', client: 'Wilson Partners', status: 'Active', budget: 15000, deadline: '2026-08-15' });
+
+  OS.db.create('tasks', { title: 'Homepage wireframes', projectId: OS.db.list('projects')[0].id, assignee: 'Sam Patel', due: '2026-08-01', status: 'In Progress', priority: 'High' });
+  OS.db.create('tasks', { title: 'Keyword research', projectId: OS.db.list('projects')[1].id, assignee: 'Jordan Lee', due: '2026-07-25', status: 'Pending', priority: 'Medium' });
+  OS.db.create('tasks', { title: 'Color palette', projectId: OS.db.list('projects')[2].id, assignee: 'Sam Patel', due: '2026-07-30', status: 'Done', priority: 'High' });
+
+  OS.db.create('invoices', { dealId: OS.db.list('deals')[0].id, contactId: c1.id, items: '[{"desc":"Deposit","amt":7500}]', total: 7500, status: 'Paid', dueDate: '2026-07-15' });
+  OS.db.create('invoices', { dealId: OS.db.list('deals')[1].id, contactId: c2.id, items: '[{"desc":"SEO Mo 1","amt":1667}]', total: 1667, status: 'Sent', dueDate: '2026-08-01' });
+
+  OS.db.create('expenses', { projectId: OS.db.list('projects')[0].id, category: 'Software', amount: 299, date: '2026-07-15', vendor: 'Adobe', notes: 'Creative Cloud' });
+  OS.db.create('expenses', { projectId: OS.db.list('projects')[2].id, category: 'Contractor', amount: 2500, date: '2026-07-14', vendor: 'Freelancer', notes: 'Illustration' });
+
+  localStorage.setItem('os_agency_seeded', '1');
+}
+
+// Search
+OS.ui.renderSearch(document.getElementById('search-container'), 'Search Agency OS...', (q) => {
+  searchQuery = q;
+  render(OS.state.currentScreen);
+});
+
+// Init
+renderNav();
+navigate('dashboard');
+</script>
+</body>
+</html>

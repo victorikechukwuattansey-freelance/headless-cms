@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restaurant Social Media Kit — Quick Start Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  width: 1080px; height: 1920px;
+  font-family: 'Inter', sans-serif;
+  background: #faf6f0;
+  color: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.top-bar {
+  height: 8px;
+  background: linear-gradient(90deg, #c8553d 0%, #e8b84b 50%, #6b8f5e 100%);
+}
+.header {
+  padding: 40px 60px 24px;
+  text-align: center;
+}
+.header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 36px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 2px;
+}
+.header .subtitle {
+  font-size: 15px;
+  color: #64748b;
+  font-weight: 400;
+}
+.header .badge-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.header .badge {
+  padding: 5px 16px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-terra { background: #c8553d; color: #fff; }
+.badge-gold { background: #e8b84b; color: #1a1a1a; }
+.badge-olive { background: #6b8f5e; color: #fff; }
+.badge-charcoal { background: #1a1a1a; color: #fff; }
+
+.cta-section {
+  margin: 0 40px 20px;
+  background: #1a1a1a;
+  border-radius: 14px;
+  padding: 24px 32px;
+  text-align: center;
+}
+.cta-section .cta-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+.cta-section .cta-link {
+  display: inline-block;
+  background: #e8b84b;
+  color: #1a1a1a;
+  padding: 12px 48px;
+  border-radius: 28px;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 8px;
+  text-decoration: none;
+}
+.cta-section .cta-hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  line-height: 1.5;
+}
+
+.steps {
+  flex: 1;
+  padding: 0 40px 16px;
+}
+.steps-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.step {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.step-num {
+  width: 32px; height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 14px;
+}
+.step-content { flex: 1; }
+.step-content .title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 1px;
+}
+.step-content .desc {
+  font-size: 11px;
+  color: #555;
+  line-height: 1.5;
+}
+
+.categories {
+  margin: 0 40px 16px;
+}
+.categories .cat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.cat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+.cat-item {
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  text-align: center;
+}
+.cat-item .cat-name {
+  font-size: 11px;
+  font-weight: 600;
+}
+.cat-item .cat-count {
+  font-size: 10px;
+  color: #64748b;
+}
+.cat-item .cat-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.palette-section {
+  margin: 0 40px 16px;
+  padding: 14px 20px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.palette-section .pl-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.color-row {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+}
+.color-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.color-swatch {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid #e0e0e0;
+}
+.color-item .name { font-size: 9px; font-weight: 600; }
+.color-item .hex { font-size: 8px; color: #999; }
+.font-row {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  margin-top: 10px;
+}
+.font-item { text-align: center; }
+.font-item .fn { font-size: 13px; }
+.font-item .fr { font-size: 10px; color: #64748b; }
+
+.footer {
+  background: #1a1a1a;
+  color: #fff;
+  padding: 20px 60px;
+  text-align: center;
+  margin-top: auto;
+}
+.footer .license {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.6;
+}
+.footer .license strong { color: #e8b84b; }
+</style>
+</head>
+<body>
+<div class="top-bar"></div>
+
+<div class="header">
+  <h1>Restaurant Social Media Kit</h1>
+  <p class="subtitle">40 Canva Templates for Instagram &amp; Facebook</p>
+  <div class="badge-row">
+    <span class="badge badge-terra">20 Square Posts</span>
+    <span class="badge badge-gold">12 Story Templates</span>
+    <span class="badge badge-olive">8 Carousel Slides</span>
+  </div>
+</div>
+
+<div class="cta-section">
+  <div class="cta-label">Step 0 — Access Your Templates</div>
+  <div class="cta-link">Open Templates in Canva →</div>
+  <div class="cta-hint">Click the link above, sign in to Canva (free), and click <strong>"Use Template"</strong> to edit.</div>
+</div>
+
+<div class="steps">
+  <div class="steps-grid">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="title">Replace photos</div>
+        <div class="desc">Click any photo placeholder → <strong>"Replace this image"</strong>. Upload your own food, interior, or team photos.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="title">Edit text</div>
+        <div class="desc">Click any text box and type your content. <strong>Playfair Display</strong> for headings, <strong>Inter</strong> for body.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="title">Customize colors</div>
+        <div class="desc">The 5-color palette is pre-loaded. Click any element and pick a new color from the brand kit.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="title">Download &amp; post</div>
+        <div class="desc"><strong>Share → Download → PNG</strong> for posts, <strong>MP4</strong> for stories. Post directly on Instagram.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="categories">
+  <div class="cat-label">What's Inside — 40 Templates in 6 Categories</div>
+  <div class="cat-grid">
+    <div class="cat-item">
+      <div class="cat-name"><span class="cat-dot" style="background:#c8553d"></span>Menu &amp; Dishes</div>
+      <div class="cat-count">10 templates</div>
+    </div>
+    <div class="cat-item">
+      <div class="cat-name"><span class="cat-dot" style="background:#e8b84b"></span>Promotions &amp; Offers</div>
+      <div class="cat-count">8 templates</div>
+    </div>
+    <div class="cat-item">
+      <div class="cat-name"><span class="cat-dot" style="background:#6b8f5e"></span>Events &amp; Seasonal</div>
+      <div class="cat-count">6 templates</div>
+    </div>
+    <div class="cat-item">
+      <div class="cat-name"><span class="cat-dot" style="background:#1a1a1a"></span>Behind the Scenes</div>
+      <div class="cat-count">4 templates</div>
+    </div>
+    <div class="cat-item">
+      <div class="cat-name"><span class="cat-dot" style="background:#c8553d"></span>Testimonials &amp; Info</div>
+      <div class="cat-count">8 templates</div>
+    </div>
+    <div class="cat-item">
+      <div class="cat-name"><span class="cat-dot" style="background:#e8b84b"></span>Stories</div>
+      <div class="cat-count">4 templates</div>
+    </div>
+  </div>
+</div>
+
+<div class="palette-section">
+  <div class="pl-label">Color Palette &amp; Fonts</div>
+  <div class="color-row">
+    <div class="color-item">
+      <div class="color-swatch" style="background:#1a1a1a;"></div>
+      <span class="name">Charcoal</span>
+      <span class="hex">#1a1a1a</span>
+    </div>
+    <div class="color-item">
+      <div class="color-swatch" style="background:#faf6f0;border-color:#d0c8c0;"></div>
+      <span class="name">Cream</span>
+      <span class="hex">#faf6f0</span>
+    </div>
+    <div class="color-item">
+      <div class="color-swatch" style="background:#c8553d;"></div>
+      <span class="name">Terracotta</span>
+      <span class="hex">#c8553d</span>
+    </div>
+    <div class="color-item">
+      <div class="color-swatch" style="background:#6b8f5e;"></div>
+      <span class="name">Olive</span>
+      <span class="hex">#6b8f5e</span>
+    </div>
+    <div class="color-item">
+      <div class="color-swatch" style="background:#e8b84b;"></div>
+      <span class="name">Gold</span>
+      <span class="hex">#e8b84b</span>
+    </div>
+  </div>
+  <div class="font-row">
+    <div class="font-item">
+      <div class="fn" style="font-family:'Playfair Display',serif;font-weight:700;">Playfair Display</div>
+      <div class="fr">Headings</div>
+    </div>
+    <div class="font-item">
+      <div class="fn" style="font-family:'Inter',sans-serif;">Inter</div>
+      <div class="fr">Body text</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <p class="license">
+    <strong>Commercial use</strong> for your business. Resale or redistribution of templates is prohibited.<br>
+    Requires a free Canva account. Canva Pro unlocks premium stock photos and elements.<br>
+    Designed by &mdash; RestoKit. All photo placeholders are for preview only.
+  </p>
+</div>
+</body>
+</html>

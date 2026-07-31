@@ -1,0 +1,8 @@
+{
+  "ollamaModel": "llama3.2:latest",
+  "ttsVoice": "Microsoft Zira Desktop",
+  "whisperExe": "~/.whisper/whisper-cli.exe",
+  "whisperModel": "~/.whisper/ggml-tiny.bin",
+  "audioDevice": "",
+  "recordTimeoutSec": 15
+}

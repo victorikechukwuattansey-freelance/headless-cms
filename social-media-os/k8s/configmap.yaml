@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smos-config
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/part-of: social-media-os
+data:
+  # ── General ──────────────────────────────
+  NODE_ENV: "production"
+  LOG_LEVEL: "warn"
+  METRICS_ENABLED: "true"
+
+  # ── Database ──────────────────────────────
+  DATABASE_URL: "postgresql://smos:$(DATABASE_PASSWORD)@smos-postgres:5432/social_media_os"
+  DATABASE_POOL_MIN: "2"
+  DATABASE_POOL_MAX: "20"
+  DATABASE_SSL: "true"
+
+  # ── Cache ─────────────────────────────────
+  REDIS_URL: "redis://:$(REDIS_PASSWORD)@smos-redis:6379"
+
+  # ── Auth ──────────────────────────────────
+  JWT_EXPIRES_IN: "15m"
+  JWT_REFRESH_EXPIRES_IN: "7d"
+
+  # ── AI Models ─────────────────────────────
+  OPENAI_MODEL: "gpt-4-turbo"
+  ANTHROPIC_MODEL: "claude-opus-4"
+  GEMINI_MODEL: "gemini-2.0-pro-exp"
+
+  # ── Social API Versions ───────────────────
+  FACEBOOK_API_VERSION: "v19.0"
+  TWITTER_API_VERSION: "2"
+
+  # ── Frontend ──────────────────────────────
+  NEXT_PUBLIC_API_URL: "https://api.socialmediaos.com"
+  NEXT_PUBLIC_APP_URL: "https://socialmediaos.com"
+  NEXT_PUBLIC_POSTHOG_HOST: "https://app.posthog.com"
+  NEXTAUTH_URL: "https://socialmediaos.com"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+  # ── Object Storage ────────────────────────
+  S3_REGION: "us-east-1"
+  S3_BUCKET_MEDIA: "smos-media"
+  S3_BUCKET_ASSETS: "smos-assets"
+  S3_BUCKET_EXPORTS: "smos-exports"
+
+  # ── Storage Backend ───────────────────────
+  STORAGE_BACKEND: "s3"
+  MEDIA_MAX_FILE_SIZE: "52428800"
+  MEDIA_ALLOWED_MIME_TYPES: "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+
+  # ── Rate Limiting ─────────────────────────
+  RATE_LIMIT_TTL: "60"
+  RATE_LIMIT_MAX: "100"
+
+  # ── Queue ─────────────────────────────────
+  QUEUE_CONCURRENCY: "10"
+  QUEUE_RETRY_MAX: "3"
+  QUEUE_RETRY_DELAY: "5000"
+
+  # ── Feature Flags ─────────────────────────
+  FF_AI_SUGGESTIONS: "true"
+  FF_SCHEDULING: "true"
+  FF_ANALYTICS: "true"
+  FF_TEAM_COLLAB: "true"
+  FF_WHITE_LABEL: "false"
+
+  # ── Webhook ───────────────────────────────
+  WEBHOOK_MAX_RETRIES: "5"
+
+  # ── Monitoring ────────────────────────────
+  SENTRY_ENVIRONMENT: "production"
+  DATADOG_SITE: "datadoghq.com"
+  OTEL_SERVICE_NAME: "social-media-os"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+
+  # ── Payment ───────────────────────────────
+  STRIPE_PRICE_MONTHLY: "price_monthly"
+  STRIPE_PRICE_YEARLY: "price_yearly"
+  STRIPE_PRICE_ENTERPRISE: "price_enterprise"

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "qwen/qwen-2.5-coder-32b-instruct",
+  "small_model": "mistralai/mistral-small-24b-instruct",
+    "instructions": [
+      "AGENTS.md",
+      "C:\\Users\\1040 G8\\Documents\\Brain\\VAULT-INDEX.md",
+      "C:\\Users\\1040 G8\\Documents\\Brain\\_system\\JARVIS-OPERATING-SYSTEM.md",
+      "C:\\Users\\1040 G8\\Documents\\Brain\\Active Priorities.md"
+    ],
+  "references": {
+    "vault": {
+      "path": "C:\\Users\\1040 G8\\Documents\\Brain",
+      "description": "Use for all vault notes, daily logs, priorities, and memory. This is the primary knowledge store."
+    },
+    "open-canva": {
+      "path": "C:\\Users\\1040 G8\\Documents\\jarvis-demo\\_open-canva",
+      "description": "OpenCanva template design workspace — React component-based designs. Use for generating social media templates, flyers, and marketing graphics. Run `npm run dev` to preview."
+    }
+  },
+  "mcp": {
+    "memory": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-memory"],
+      "enabled": true,
+      "env": {
+        "MEMORY_FILE_PATH": "C:\\Users\\1040 G8\\Documents\\jarvis-demo\\.claude\\memory.jsonl"
+      }
+    },
+    "cortex": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "-y", "cortex-mcp-server"],
+      "enabled": true
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "-y", "@playwright/mcp"],
+      "enabled": true
+    },
+    "github": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-github"],
+      "enabled": true,
+      "env": {
+        "GITHUB_TOKEN": "{env:GITHUB_TOKEN}"
+      }
+    },
+    "sqlite": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-sqlite", ".claude/db.sqlite"],
+      "enabled": true
+    },
+    "filesystem": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\1040 G8\\Documents", "C:\\Users\\1040 G8\\Documents\\jarvis-demo\\_open-canva"],
+      "enabled": true
+    },
+    "social": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "-y", "@posteverywhere/mcp"],
+      "enabled": true,
+      "env": {
+        "POSTEVERYWHERE_API_KEY": "{env:POSTEVERYWHERE_API_KEY}"
+      }
+    },
+    "affinity-designer": {
+      "type": "local",
+      "command": ["cmd", "/c", "C:\\Users\\1040G8~1\\DOCUME~1\\JARVIS~1\\_MCP-A~1\\node_modules\\.bin\\tsx.cmd", "C:\\Users\\1040G8~1\\DOCUME~1\\JARVIS~1\\_MCP-A~1\\src\\index.ts"],
+      "enabled": true
+    },
+    "figma": {
+      "type": "http",
+      "url": "https://mcp.figma.com/mcp",
+      "enabled": true,
+      "timeout": 30000,
+      "headers": {
+        "Figma-Token": "{env:FIGMA_TOKEN}"
+      }
+    },
+    "oxylabs": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "-y", "@oxylabs/oxylabs-mcp"],
+      "enabled": true,
+      "env": {
+        "OXYLABS_USERNAME": "{env:OXYLABS_USERNAME}",
+        "OXYLABS_PASSWORD": "{env:OXYLABS_PASSWORD}",
+        "OXYLABS_AI_STUDIO_API_KEY": "{env:OXYLABS_AI_STUDIO_API_KEY}"
+      }
+    }
+  }
+  
+}

@@ -1,0 +1,35 @@
+{
+  "name": "saas-boilerplate",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "clean": "turbo clean",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "prepare": "husky",
+    "db:generate": "pnpm --filter @saas/database db:generate",
+    "db:push": "pnpm --filter @saas/database db:push",
+    "db:migrate": "pnpm --filter @saas/database db:migrate",
+    "db:seed": "pnpm --filter @saas/database db:seed",
+    "db:studio": "pnpm --filter @saas/database db:studio",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "@turbo/gen": "^2.0.0",
+    "@types/node": "^20.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0",
+    "prettier": "^3.3.0",
+    "prettier-plugin-tailwindcss": "^0.6.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "packageManager": "pnpm@9.1.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}

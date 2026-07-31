@@ -1,0 +1,23 @@
+{
+  "name": "@saas/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@saas/config": "workspace:*",
+    "@saas/database": "workspace:*",
+    "@saas/types": "workspace:*",
+    "next": "^15.0.0",
+    "zod": "^3.23.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}

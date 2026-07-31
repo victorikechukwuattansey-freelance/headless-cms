@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "execution_nodes_execution_id_node_key_key" ON "execution_nodes"("execution_id", "node_key");

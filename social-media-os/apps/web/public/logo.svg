@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40" fill="none">
+  <rect width="120" height="40" rx="8" fill="#C87A5A"/>
+  <text x="12" y="27" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="white">SMO</text>
+  <circle cx="94" cy="20" r="8" fill="rgba(255,255,255,0.2)"/>
+  <path d="M90 20h8M94 16v8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

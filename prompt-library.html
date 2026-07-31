@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Prompt Library</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+.app-header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: 24px 32px; }
+.app-header h1 { font-size: 22px; font-weight: 700; }
+.app-header p { font-size: 13px; color: #8888aa; margin-top: 4px; }
+
+.app-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 24px; gap: 24px; }
+
+.sidebar { width: 220px; flex-shrink: 0; }
+.sidebar-section { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.sidebar-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 10px; }
+.category-btn { display: block; width: 100%; text-align: left; padding: 8px 12px; border: none; background: none; border-radius: 6px; cursor: pointer; font-size: 13px; color: #444; margin-bottom: 2px; transition: all 0.15s; }
+.category-btn:hover { background: #f0f2f8; color: #1a1a2e; }
+.category-btn.active { background: #1a1a2e; color: #fff; font-weight: 500; }
+.category-btn .count { float: right; color: #aaa; font-size: 11px; }
+.category-btn.active .count { color: #8899cc; }
+
+.tool-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-btn { padding: 6px 14px; border: 1px solid #d0d0d0; border-radius: 20px; background: #fff; cursor: pointer; font-size: 12px; color: #555; transition: all 0.15s; }
+.tool-btn:hover { border-color: #888; }
+.tool-btn.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+
+.main-content { flex: 1; min-width: 0; }
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.search-box { flex: 1; min-width: 200px; padding: 10px 16px; border: 1px solid #d0d0d0; border-radius: 8px; font-size: 14px; outline: none; background: #fff; }
+.search-box:focus { border-color: #1a1a2e; box-shadow: 0 0 0 3px rgba(26,26,46,0.08); }
+.results-count { font-size: 13px; color: #888; white-space: nowrap; }
+
+.prompt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+
+.prompt-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; transition: box-shadow 0.2s; display: flex; flex-direction: column; }
+.prompt-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+
+.prompt-card-header { padding: 16px 16px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.prompt-card-header h3 { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.prompt-tool-badge { flex-shrink: 0; padding: 3px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.badge-midjourney { background: #fff3e0; color: #e65100; }
+.badge-chatgpt { background: #e8f5e9; color: #2e7d32; }
+.badge-claude { background: #f3e5f5; color: #6a1b9a; }
+
+.prompt-card-desc { padding: 6px 16px 0; font-size: 12px; color: #888; line-height: 1.4; }
+
+.prompt-card-body { padding: 12px 16px; flex: 1; }
+.prompt-text { background: #f5f6fa; border-radius: 6px; padding: 12px; font-size: 12.5px; line-height: 1.5; color: #333; font-family: 'SF Mono', 'Fira Code', monospace; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; cursor: pointer; position: relative; }
+.prompt-text:hover { background: #eef0f6; }
+.prompt-text .copy-hint { position: absolute; top: 8px; right: 8px; font-size: 10px; color: #aaa; background: rgba(255,255,255,0.9); padding: 2px 8px; border-radius: 4px; opacity: 0; transition: opacity 0.2s; }
+.prompt-text:hover .copy-hint { opacity: 1; }
+.prompt-text.copied { background: #e8f5e9; }
+.prompt-text .variable { color: #1565c0; font-weight: 500; }
+
+.prompt-card-footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-top: 1px solid #f0f0f0; }
+.prompt-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.prompt-tag { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: #f0f0f5; color: #666; }
+.prompt-difficulty { font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: 0.3px; }
+
+.empty-state { text-align: center; padding: 80px 20px; color: #999; }
+.empty-state h3 { font-size: 18px; margin-bottom: 8px; color: #666; }
+.empty-state p { font-size: 13px; }
+
+.copy-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a2e; color: #fff; padding: 10px 24px; border-radius: 8px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100; }
+.copy-toast.show { opacity: 1; }
+
+@media (max-width: 768px) {
+  .app-layout { flex-direction: column; padding: 16px; }
+  .sidebar { width: 100%; }
+  .sidebar-section { margin-bottom: 12px; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .prompt-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>Prompt Library</h1>
+  <p>Curated, engineered prompts for Midjourney, ChatGPT, and Claude</p>
+</div>
+
+<div class="app-layout">
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <h3>Category</h3>
+      <div id="category-filters"></div>
+    </div>
+    <div class="sidebar-section">
+      <h3>Tool</h3>
+      <div class="tool-filters" id="tool-filters"></div>
+    </div>
+    <div class="sidebar-section">
+      <h3>Difficulty</h3>
+      <div class="tool-filters" id="difficulty-filters"></div>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="toolbar">
+      <input class="search-box" id="search" type="text" placeholder="Search prompts, tags, or tools...">
+      <span class="results-count" id="results-count">0 prompts</span>
+    </div>
+    <div class="prompt-grid" id="prompt-grid"></div>
+  </div>
+</div>
+
+<div class="copy-toast" id="copy-toast">Copied to clipboard</div>
+
+<script>
+const PROMPTS = [
+  // ── REAL ESTATE MARKETING ──
+  { id: 're-1', title: 'Luxury Property Listing Description', tool: 'chatgpt', category: 'Real Estate Marketing', difficulty: 'Beginner', desc: 'Compelling MLS listing copy that highlights premium features and creates emotional desire.', tags: ['listing', 'copy', 'luxury'], prompt: `Write a luxury real estate listing for {{address}}, a {{bedrooms}} bedroom, {{bathrooms}} bathroom {{property_type}} in {{neighborhood}}. 
+
+Highlight these unique features:
+- {{feature_1}}
+- {{feature_2}}
+- {{feature_3}}
+
+Target audience: {{target_buyer_profile}}
+Asking price: ${{price}}
+
+Tone: Sophisticated yet warm. Create a narrative that makes the buyer envision their life in this home. Emphasize exclusivity without being pretentious. Use sensory language for the main living areas and primary suite.` },
+
+  { id: 're-2', title: 'Open House Social Media Post', tool: 'chatgpt', category: 'Real Estate Marketing', difficulty: 'Beginner', desc: 'Attention-grabbing social post to drive foot traffic to open houses.', tags: ['social', 'open-house', 'instagram'], prompt: `Create an Instagram caption and Facebook post for an open house at {{address}}.
+
+Property specs: {{bedrooms}}bd/{{bathrooms}}ba, {{sqft}} sqft, {{key_selling_point}}
+Open House: {{date}} from {{start_time}} to {{end_time}}
+Price: ${{price}}
+
+Write 3 options:
+1. Short & punchy (1-2 lines)
+2. Storytelling (3-4 lines with emojis)
+3. Urgency-driven (FOMO angle)
+
+Include 5-8 relevant hashtags. Add a call-to-action for agents to RSVP.` },
+
+  { id: 're-3', title: 'Neighborhood Market Report', tool: 'claude', category: 'Real Estate Marketing', difficulty: 'Intermediate', desc: 'Data-rich market analysis that positions the agent as a local expert.', tags: ['market-report', 'authority', 'data'], prompt: `Compose a neighborhood market report for {{neighborhood_name}} to be sent to my email list of {{subscriber_count}} past clients and leads.
+
+Include sections for:
+1. Market overview (1 paragraph) — median price trend, inventory levels, days on market
+2. Year-over-year comparison — how {{year}} compares to last year
+3. "What this means for buyers" (3 bullet points)
+4. "What this means for sellers" (3 bullet points)
+5. Featured listing spotlight ({{featured_address}})
+
+Data points to incorporate:
+- Median sale price: {{median_price}}
+- Homes sold this month: {{homes_sold}}
+- Average DOM: {{avg_dom}}
+- Inventory: {{inventory_count}}
+
+Tone: Authoritative but accessible. Cite specific data. End with a soft CTA for a free consultation.` },
+
+  { id: 're-4', title: 'Real Estate Video Script (Walkthrough)', tool: 'chatgpt', category: 'Real Estate Marketing', difficulty: 'Intermediate', desc: 'Walkthrough video script that takes viewers on a virtual tour.', tags: ['video', 'walkthrough', 'youtube'], prompt: `Write a 3-minute walkthrough video script for {{property_address}}.
+
+Shot sequence:
+1. Curb appeal shot (5 sec) — "Welcome to..."
+2. Entryway / foyer (15 sec) — first impressions
+3. Living room (30 sec) — flow, natural light, dimensions
+4. Kitchen (30 sec) — countertops, appliances, island
+5. Primary suite (25 sec) — bedroom, walk-in closet, en-suite
+6. Outdoor space (20 sec) — patio, yard, views
+7. Closing (15 sec) — call to action, contact info
+
+For each section: describe what the camera shows AND what the voiceover says. Use descriptive language that paints a picture for audio-only listeners (podcast viewers). End with: "Call {{agent_name}} at {{phone_number}} for a private showing."` },
+
+  { id: 're-5', title: 'Realtor Bio & Brand Statement', tool: 'claude', category: 'Real Estate Marketing', difficulty: 'Beginner', desc: 'Personal bio that builds trust and showcases your unique value proposition.', tags: ['bio', 'branding', 'about'], prompt: `Write a real estate agent bio for {{name}} at {{brokerage}}.
+
+Background:
+- Years in business: {{years_experience}}
+- Specializes in: {{specialty_area}} (e.g., first-time buyers, luxury, commercial)
+- Top production: ${{annual_volume}} in sales volume last year
+- Personal: {{personal_detail}} (e.g., "former teacher," "mom of 3," "Marine veteran")
+- Community involvement: {{community}}
+
+Deliverables:
+1. Short bio (50 words) — for Instagram, Zillow, social profiles
+2. Full bio (150 words) — for website "About" page
+3. One-liner tagline (10 words)
+
+Tone: Trustworthy, approachable, results-driven. Differentiate from the average agent by highlighting {{unique_selling_point}}.` },
+
+  { id: 're-6', title: 'Midjourney — Modern Home Exterior', tool: 'midjourney', category: 'Real Estate Marketing', difficulty: 'Intermediate', desc: 'Architecture visualization prompt for marketing renders.', tags: ['architecture', 'exterior', 'render'], prompt: `/imagine prompt: Modern {{architectural_style}} home exterior, {{bedrooms}}-story facade, {{exterior_material}} siding with {{roof_material}} roof, large {{window_style}} windows, {{landscape_style}} landscaping, pathway leading to {{door_style}} front door, ambient {{time_of_day}} lighting, professional architectural photography, shot with {{camera_lens}}, volumetric lighting, 8K --ar 16:9 --v 6.1` },
+
+  { id: 're-7', title: 'Midjourney — Interior Staging Photo', tool: 'midjourney', category: 'Real Estate Marketing', difficulty: 'Intermediate', desc: 'Staged interior scenes for listing photography or virtual staging.', tags: ['interior', 'staging', 'photography'], prompt: `/imagine prompt: Bright {{room_type}} interior, {{style}} decor style, {{color_scheme}} color palette, {{flooring_material}} floors, natural light from {{window_direction}}-facing windows, {{decor_elements}} on coffee table, {{wall_art}} on accent wall, cozy throw blankets on {{furniture_type}}, professional real estate photography, wide angle lens, high ceiling, airy atmosphere, 8K, highly detailed --ar 4:3 --v 6.1` },
+
+  // ── DIGITAL PRODUCT MARKETING ──
+  { id: 'dp-1', title: 'Sales Page — Course or Digital Product', tool: 'chatgpt', category: 'Digital Product Marketing', difficulty: 'Intermediate', desc: 'Full sales page copy structured around the PAS framework.', tags: ['sales-page', 'copy', 'conversion'], prompt: `Write a sales page for {{product_name}}, a {{product_type}} for {{target_audience}} priced at ${{price}}.
+
+Product details:
+- Main transformation: {{transformation}}
+- Key modules/lessons: {{modules}}
+- Includes: {{bonuses}}
+- Testimonial: {{testimonial_snippet}}
+
+Structure:
+1. HEADLINE: Problem-aware hook + promise of transformation (under 60 chars)
+2. SUBHEADLINE: Expand on the promise, create curiosity
+3. THE PROBLEM: 2-3 sentences that agitate the pain point
+4. THE SOLUTION: Introduce {{product_name}} as the answer
+5. WHAT'S INSIDE: Bullet-point overview of {{modules}}
+6. BONUSES: Stack perceived value
+7. PRICING: Present price, show value comparison
+8. GUARANTEE: Risk reversal statement
+9. CTA: "Add to Cart" button text + urgency micro-copy
+
+Tone: Direct, benefit-driven, conversational. Use "you" language throughout.` },
+
+  { id: 'dp-2', title: 'Launch Email Sequence (5 Emails)', tool: 'chatgpt', category: 'Digital Product Marketing', difficulty: 'Advanced', desc: 'Full cart-open sequence that nurtures and converts.', tags: ['email', 'launch', 'sequence'], prompt: `Write a 5-email launch sequence for {{product_name}} ({{product_type}}) priced at ${{price}}.
+
+Audience: {{target_audience}} who already know {{brand_name}}.
+Launch timeline: Cart opens {{open_date}}, closes {{close_date}}.
+
+Email 1 — THE ANNOUNCEMENT (Subject: max 40 chars)
+Hype + personal story of why I created this. No hard sell. Just excitement and a clear "it's live."
+
+Email 2 — THE PROBLEM DEEP-DIVE (Subject: curiosity gap)
+Agitate the pain. Share a specific story of a student/client who struggled before using this.
+
+Email 3 — THE SOLUTION WALKTHROUGH (Subject: social proof)
+Walk through what's inside. Share 1-2 specific wins from beta testers. Bullet points of modules.
+
+Email 4 — THE OBJECTION HANDLER (Subject: "you might be wondering...")
+Address top 3 objections: time, money-back, skill level. Share guarantee details.
+
+Email 5 — THE CLOSER (Subject: urgency + scarcity)
+Cart closes soon. Recap transformation. One last testimonial. Direct CTA.
+
+Each email: 150-250 words. Plain text style (not HTML-heavy). Personal from {{author_name}}.` },
+
+  { id: 'dp-3', title: 'Google Ads — Digital Product Copy', tool: 'claude', category: 'Digital Product Marketing', difficulty: 'Advanced', desc: 'High-CTR ad copy across search, display, and social formats.', tags: ['ads', 'ppc', 'conversion'], prompt: `Generate Google Ads copy for {{product_name}}, a {{product_type}} for {{target_audience}}.
+
+Pricing: ${{price}}
+Unique mechanism: {{unique_mechanism}}
+Main objection to overcome: {{objection}}
+
+Write:
+1. SEARCH ADS: 3 headlines (max 30 chars each), 2 descriptions (max 90 chars each), 2 callout extensions — for each of 3 different angles (pain-point, benefit, curiosity)
+2. DISPLAY ADS: 3 short headlines (max 25 chars), 3 long headlines (max 90 chars), 2 descriptions (max 90 chars), 2 business names
+3. RESPONSIVE SEARCH ADS: 5 pin-able headlines, 5 pin-able descriptions
+
+For each ad: highlight the transformation, not the features. Include a number or data point where possible. Add urgency triggers for cart-close scenarios.` },
+
+  { id: 'dp-4', title: 'Landing Page Hero Section', tool: 'chatgpt', category: 'Digital Product Marketing', difficulty: 'Beginner', desc: 'High-converting hero copy focused on clarity and action.', tags: ['landing-page', 'hero', 'conversion'], prompt: `Write 3 hero section variations for {{product_name}}, a {{product_type}} for {{target_audience}}.
+
+Product transformation in one sentence: {{transformation}}
+Price: ${{price}}
+
+For each variation, provide:
+1. Headline (max 12 words, benefit-driven)
+2. Subheadline (max 25 words, elaborates on headline)
+3. CTA button text (2-4 words, action-oriented)
+4. Social proof line below CTA (e.g., "Join 2,000+ students")
+
+Variation A: DIRECT — State the transformation clearly.
+Variation B: CURIOSITY — Use a question or counter-intuitive statement.
+Variation C: SOCIAL — Lead with proof (number of users, testimonials, etc.).
+
+Add a PS: "Make the headline scannable in under 3 seconds. The subheadline must pass the 'so what?' test."` },
+
+  { id: 'dp-5', title: 'Midjourney — Product Mockup Scene', tool: 'midjourney', category: 'Digital Product Marketing', difficulty: 'Beginner', desc: 'Lifestyle product photography for digital product marketing.', tags: ['product', 'mockup', 'branding'], prompt: `/imagine prompt: {{product_name}} displayed on {{device_type}} screen, {{scene_style}} flat lay composition on {{surface_material}} desk, {{props}} beside the device, {{lighting_style}} lighting, {{color_scheme}} color palette, minimalist, clean aesthetic, commercial product photography, 50mm lens, soft shadows, high detail, 8K --ar 4:3 --v 6.1` },
+
+  { id: 'dp-6', title: 'Customer Onboarding Email Flow', tool: 'claude', category: 'Digital Product Marketing', difficulty: 'Intermediate', desc: 'Drip sequence that activates new buyers and reduces churn.', tags: ['onboarding', 'email', 'retention'], prompt: `Design a 7-email onboarding sequence for new purchasers of {{product_name}}.
+
+Customer profile: {{target_audience}}
+Product type: {{product_type}}
+First-week goal: {{activation_goal}} (e.g., "complete first lesson," "publish first post")
+
+Email 1 (Immediate — Delivery): Welcome + what to expect + link to access + support contact
+Email 2 (Day 1): Quick-start guide — the ONE thing they should do first
+Email 3 (Day 2): Top 3 mistakes beginners make (and how to avoid them)
+Email 4 (Day 3): Case study / success story from a customer who got results
+Email 5 (Day 5): "You haven't started yet?" — re-engagement + objection handling
+Email 6 (Day 7): Community or bonus access — build stickiness
+Email 7 (Day 10): Check-in — ask for feedback, offer help, request review
+
+Each email: max 200 words. Friendly, helpful tone. Not salesy. Include personal PS from {{author_name}}.` },
+
+  { id: 'dp-7', title: 'Product Launch Social Posts', tool: 'chatgpt', category: 'Digital Product Marketing', difficulty: 'Beginner', desc: 'Pre-launch teasers and launch day social content.', tags: ['social', 'launch', 'teaser'], prompt: `Create a 7-post social media campaign for {{product_name}} launching on {{launch_date}}.
+
+Platform: {{platform}} (Instagram / LinkedIn / Twitter/X)
+Target audience: {{target_audience}}
+Price: ${{price}}
+
+Post 1 (T-7): Teaser — "Something is coming." No details, just curiosity.
+Post 2 (T-5): Problem post — "Are you struggling with {{specific_pain}}?"
+Post 3 (T-3): Behind the scenes — show the creation process, build authenticity.
+Post 4 (T-1): Preview — reveal the name + what it does, open waitlist.
+Post 5 (Launch Day): "It's live!" — direct link, clear CTA.
+Post 6 (T+1): Social proof — share first purchase or testimonial.
+Post 7 (T+3): Urgency — closing soon / price increase coming.
+
+For each post: provide caption (max 150 chars for short, 300 for long), 3-5 hashtags, and a top comment hook (for engagement bait).` },
+
+  // ── COPYWRITING FRAMEWORKS ──
+  { id: 'cw-1', title: 'PAS Copywriting Framework', tool: 'chatgpt', category: 'Copywriting Frameworks', difficulty: 'Beginner', desc: 'Problem-Agitate-Solution — the classic conversion framework.', tags: ['framework', 'conversion', 'pas'], prompt: `Apply the PAS (Problem-Agitate-Solution) framework to write copy for {{product_or_service}}.
+
+Target audience: {{target_audience}}
+Core problem: {{core_problem}}
+Solution: {{solution_description}}
+
+PROBLEM (60-80 words):
+Start by describing the problem so vividly the reader feels seen. Use specific language. "You know how it feels when..."
+
+AGITATE (40-60 words):
+Make it hurt. What has this problem cost them? Time? Money? Relationships? Sleep? "And the worst part is, it keeps getting worse because..."
+
+SOLUTION (80-100 words):
+Introduce {{product_or_service}} as the natural answer. Don't oversell — just show how it directly resolves the problem stated above. Include one specific feature that maps to the pain point.
+
+End with a micro-commitment CTA (low friction). "Try this one thing today..."` },
+
+  { id: 'cw-2', title: 'AIDA Copywriting Framework', tool: 'claude', category: 'Copywriting Frameworks', difficulty: 'Beginner', desc: 'Attention-Interest-Desire-Action — the full funnel framework.', tags: ['framework', 'aida', 'funnel'], prompt: `Write copy using the AIDA framework for {{product_or_service}}.
+
+Target: {{target_audience}}
+Offer: {{offer}}
+CTA: {{desired_action}}
+
+ATTENTION (1-2 sentences):
+Lead with a bold statement, surprising statistic, or provocative question. "{{hook_example}}"
+
+INTEREST (3-4 sentences):
+Build on the hook. Why does this matter? What's the context? Share a relevant insight or story.
+
+DESIRE (4-5 sentences):
+Paint the picture of life after the transformation. Use sensory language. Include a testimonial or proof point. Show them what's possible.
+
+ACTION (1-2 sentences):
+Clear, specific, low-friction CTA. Tell them exactly what to do next. Create urgency or scarcity if authentic.
+
+Total length: 150-200 words. Read aloud to check flow.` },
+
+  { id: 'cw-3', title: 'StoryBrand Framework — BrandScript', tool: 'claude', category: 'Copywriting Frameworks', difficulty: 'Advanced', desc: 'Donald Miller\'s StoryBrand framework — make the customer the hero.', tags: ['framework', 'storybrand', 'branding'], prompt: `Write a StoryBrand BrandScript for {{business_name}}.
+
+Industry: {{industry}}
+Target customer: {{target_audience}}
+Product/service: {{offer}}
+
+StoryBrand 7-part framework:
+
+1. CHARACTER (the customer):
+   - What does {{target_audience}} want? {{want}}
+   - What's their internal problem? {{internal_problem}} (e.g., "I feel like an impostor")
+   - What's their external problem? {{external_problem}} (e.g., "I can't get clients")
+
+2. PROBLEM (the villain):
+   - Name the external antagonist: {{villain}} (not the customer — e.g., "confusion," "overwhelm")
+
+3. GUIDE (your brand):
+   - Authority: {{authority}} (e.g., "15 years in the industry")
+   - Empathy: {{empathy_statement}}
+
+4. PLAN (the steps):
+   - Step 1: {{step_1}}
+   - Step 2: {{step_2}}
+   - Step 3: {{step_3}}
+
+5. CALL TO ACTION:
+   - Direct CTA: {{direct_cta}}
+   - Transitional CTA: {{transitional_cta}} (e.g., free guide)
+
+6. AVOID FAILURE:
+   - What's at stake if they don't act? {{stakes}}
+
+7. SUCCESS:
+   - What does their life look like after? {{success_vision}}
+
+Output: a 1-page BrandScript (250-400 words) following the above structure.` },
+
+  { id: 'cw-4', title: 'Email Subject Line Generator', tool: 'chatgpt', category: 'Copywriting Frameworks', difficulty: 'Beginner', desc: 'High-open-rate subject lines using proven psychological triggers.', tags: ['email', 'subject-lines', 'templates'], prompt: `Generate 20 email subject lines for {{email_topic}} targeting {{target_audience}}.
+
+Type of email: {{email_type}} (newsletter / promotion / launch / re-engagement / thank-you)
+
+Include 5 subject lines for each of these 4 categories:
+
+1. CURIOSITY GAP (intriguing, incomplete information)
+   "The one thing nobody tells you about {{topic}}"
+   Example pattern: "Why your [common_approach] isn't working"
+
+2. GREED / TRANSFORMATION (what they'll gain)
+   "How to [achieve_desired_outcome] in [timeframe]"
+   Example pattern: "Increase your {{metric}} by {{number}}% this week"
+
+3. URGENCY / SCARCITY (fear of missing out)
+   "Last chance to [get_benefit]"
+   Example pattern: "Only {{count}} spots left for {{offer}}"
+
+4. SOCIAL PROOF / AUTHORITY (others are doing it)
+   "{{number}} {{audience_members}} are doing this — are you?"
+   Example pattern: "What {{admired_figure}} taught me about {{topic}}"
+
+Keep subject lines under 50 characters. No clickbait that doesn't deliver. Every subject line must be honest about what's inside.` },
+
+  { id: 'cw-5', title: 'Value Proposition Canvas', tool: 'claude', category: 'Copywriting Frameworks', difficulty: 'Advanced', desc: 'Strategic framework to align product features with customer jobs, pains, and gains.', tags: ['strategy', 'positioning', 'value-prop'], prompt: `Help me craft a value proposition for {{product_or_service}} using the Value Proposition Canvas framework.
+
+Customer profile:
+- Customer: {{target_audience}}
+- Customer jobs (functional, social, emotional):
+  {{customer_jobs}}
+- Pains (negative experiences, emotions, risks):
+  {{customer_pains}}
+- Gains (desired outcomes, benefits, aspirations):
+  {{customer_gains}}
+
+Value map:
+- Products & services: {{offerings}}
+- Pain relievers (how you alleviate each pain):
+  {{pain_relievers}}
+- Gain creators (how you create each gain):
+  {{gain_creators}}
+
+Output:
+1. A single-sentence value proposition: "We help {{target_audience}} who {{pain}} by {{solution}} so they can {{gain}}."
+2. A 3-bullet value proposition for the website hero section
+3. A 30-second elevator pitch using the GPBS framework (Goal-Problem-Bridge-Solution)` },
+
+  { id: 'cw-6', title: 'Before-After-Bridge Framework', tool: 'chatgpt', category: 'Copywriting Frameworks', difficulty: 'Beginner', desc: 'Show transformation by contrasting the "before" state with the "after" state.', tags: ['framework', 'transformation', 'bab'], prompt: `Write copy using the Before-After-Bridge (BAB) framework for {{product_or_service}}.
+
+BEFORE: Paint a vivid picture of {{target_audience}}'s life before using {{product_or_service}}.
+- What's frustrating? {{frustration}}
+- What are they missing? {{what_they_miss}}
+- What's holding them back? {{barrier}}
+
+AFTER: Paint the transformed reality after using {{product_or_service}}.
+- What's better? {{improvement}}
+- How do they feel? {{new_emotion}}
+- What's now possible? {{new_possibility}}
+
+BRIDGE: One sentence connecting Before to After. "But then they discovered {{product_or_service}}..." — explain simply how it bridges the gap.
+
+Write 3 versions:
+1. Short form (100 words) — for social media or email
+2. Medium form (200 words) — for blog post or landing page
+3. Long form (400 words) — for sales page or video script
+
+Each version must include a specific, concrete detail that makes the transformation believable.` },
+
+  { id: 'cw-7', title: 'Hook Generator — 50 Angles', tool: 'chatgpt', category: 'Copywriting Frameworks', difficulty: 'Intermediate', desc: '50 opening hooks across 10 psychological trigger categories.', tags: ['hooks', 'engagement', 'social-media'], prompt: `Generate 50 opening hooks for content about {{topic}} targeting {{target_audience}}.
+
+5 hooks for each of these 10 categories:
+
+1. CONTROVERSIAL — challenge a widely held belief
+2. STATISTICAL — start with a surprising number
+3. QUESTION — provoke curiosity or self-reflection
+4. STORY — open in the middle of action
+5. MISTAKE-REVEAL — "I spent {{time}} doing {{thing}} before I realized..."
+6. HOW-TO FRAME — promise a specific outcome in a specific time
+7. COMPARISON — X vs Y (e.g., "ChatGPT vs Claude for copywriting")
+8. COUNTER-INTUITIVE — go against conventional wisdom
+9. IDENTITY-BASED — "If you're a [identity], you need to hear this."
+10. PREDICTION — make a bold claim about the future
+
+Each hook should be complete and ready to post (max 150 characters). Label each hook with its trigger category. Focus on scroll-stopping specificity — vague hooks get scrolled past.` },
+
+  { id: 'cw-8', title: 'Brand Voice & Tone Guide', tool: 'claude', category: 'Copywriting Frameworks', difficulty: 'Intermediate', desc: 'Define and codify a brand voice with do/don\'t examples.', tags: ['brand', 'voice', 'guidelines'], prompt: `Create a brand voice guide for {{brand_name}}, a {{brand_type}} in the {{industry}} industry.
+
+Target audience: {{target_audience}}
+Brand personality (pick 3): {{personality_traits}} (e.g., bold, witty, compassionate, authoritative, playful)
+
+For each of the following dimensions, provide: the rule, a DO example, and a DON'T example:
+
+1. FORMALITY: How formal or casual is the language?
+2. JARGON: Industry terms — use freely or avoid?
+3. HUMOR: Acceptable? What kind? (puns, sarcasm, self-deprecating)
+4. EMOTION: How much emotional language? When is it appropriate?
+5. AUTHORITY: How do we show expertise without sounding arrogant?
+6. INCLUSIVITY: Pronouns, accessibility, cultural sensitivity
+7. FORMATTING: Emoji use? ALL CAPS? Exclamation points? Sentence case?
+
+Deliver:
+- Voice description (3 sentences)
+- Tone spectrum (how tone shifts by channel — email vs social vs support)
+- 5 "always say" phrases
+- 5 "never say" phrases
+- A 50-word sample in brand voice for: homepage hero, product description, support email, Twitter post` },
+
+  // ── SOCIAL MEDIA CONTENT ──
+  { id: 'sm-1', title: 'LinkedIn Thought Leadership Post', tool: 'chatgpt', category: 'Social Media Content', difficulty: 'Beginner', desc: 'Authority-building post that positions you as a leader in your space.', tags: ['linkedin', 'thought-leadership', 'authority'], prompt: `Write a LinkedIn thought leadership post for {{author_name}} ({{title}} at {{company}}).
+
+Topic: {{topic}}
+Key insight: {{insight}}
+Target audience: {{target_audience}}
+
+Structure:
+1. HOOK (1 line): Start with a bold statement, question, or relatable observation
+2. STORY / CONTEXT (3-4 lines): Personal experience or on-the-ground observation
+3. THE INSIGHT (2-3 lines): What you've learned that others miss
+4. ACTIONABLE TAKEAWAY (1-2 lines): Something the reader can apply today
+5. DISCUSSION QUESTION (1 line): End with a question to drive comments
+
+Formatting rules:
+- Short paragraphs (1-3 lines max)
+- Line break between each section
+- No emojis in every line (use 2-3 max for emphasis)
+- Add 3-5 relevant hashtags at the end
+
+Length: 180-250 words. The goal is comments + shares, not just likes.` },
+
+  { id: 'sm-2', title: 'Twitter/X Thread Architecture', tool: 'claude', category: 'Social Media Content', difficulty: 'Intermediate', desc: 'Viral thread structure with hook, education, and retweet-bait ending.', tags: ['twitter', 'thread', 'viral'], prompt: `Write a Twitter/X thread (10-15 tweets) about {{topic}}.
+
+Author voice: {{voice_style}} (e.g., educator, contrarian, storyteller)
+Target audience: {{target_audience}}
+Core message: {{core_message}}
+
+Thread structure:
+
+Tweet 1 (HOOK): Stop-the-scroll hook. Bold claim, question, or surprising fact.
+Tweet 2 (EMPATHY + SETUP): "I know what you're thinking..." or relatable scenario.
+Tweets 3-8 (MEAT): Key points, 1 per tweet. Each tweet should make sense on its own.
+Tweet 9 (RECAP): Summary tweet with a visual element (if applicable).
+Tweet 10 (CTA + RETWEET BAIT): "RT if you agree" or "Tag someone who needs to see this."
+
+Rules:
+- Each tweet under 240 characters (leave room for engagement)
+- Number each tweet (1/12, 2/12...)
+- Bold key phrases with asterisks
+- End with a clear, valuable takeaway the reader can implement immediately` },
+
+  { id: 'sm-3', title: 'Instagram Carousel Script', tool: 'chatgpt', category: 'Social Media Content', difficulty: 'Intermediate', desc: 'Multi-slide carousel that educates, saves, and converts.', tags: ['instagram', 'carousel', 'education'], prompt: `Create a 10-slide Instagram Carousel script about {{topic}} for {{brand_name}}.
+
+Target audience: {{target_audience}}
+Goal: {{goal}} (awareness / engagement / conversions)
+
+For each slide, provide:
+- SLIDE 1 (Cover): Title + subtitle. Bold, contrasting colors. Scroll-stopping hook.
+- SLIDE 2: The problem / context
+- SLIDE 3-4: Core educational content (keep it visual)
+- SLIDE 5-6: How-to / step-by-step
+- SLIDE 7: Common mistakes or myths debunked
+- SLIDE 8: Pro tip / advanced insight
+- SLIDE 9: Key takeaway (save-able summary)
+- SLIDE 10: CTA slide — follow, share, link in bio, comment
+
+Design notes for each slide: text layout, imagery suggestion, color scheme, font hierarchy.
+
+Caption (2200 chars max): Hook → elaboration → CTA. Use 3-5 line breaks. 10-15 relevant hashtags in a separate comment.` },
+
+  { id: 'sm-4', title: 'Midjourney — Branded Social Graphic', tool: 'midjourney', category: 'Social Media Content', difficulty: 'Beginner', desc: 'On-brand social media imagery for consistent visual identity.', tags: ['design', 'branding', 'social-graphic'], prompt: `/imagine prompt: {{brand_name}} social media post background, {{visual_style}} style, {{color_scheme}} color gradient, {{main_subject}} as focal point, {{texture_or_pattern}} texture overlay, {{mood}} mood, minimalist composition, {{lighting}} lighting, social media format, 4K --ar 1:1 --v 6.1` },
+
+  // ── SEO & CONTENT STRATEGY ──
+  { id: 'seo-1', title: 'SEO-Optimized Blog Post Outline', tool: 'claude', category: 'SEO & Content Strategy', difficulty: 'Intermediate', desc: 'Data-informed blog outline that targets search intent and featured snippets.', tags: ['seo', 'blog', 'outline'], prompt: `Create an SEO-optimized blog post outline targeting the keyword "{{target_keyword}}".
+
+Search intent: {{search_intent}} (informational / commercial / transactional)
+Target audience: {{target_audience}}
+Target word count: {{word_count}} words
+
+Provide:
+
+1. TITLE TAG (55-60 chars): Include {{target_keyword}} near the beginning. Add power words.
+2. META DESCRIPTION (150-160 chars): Include {{target_keyword}} + CTA.
+3. URL SLUG: Short, keyword-rich.
+4. HEADING STRUCTURE (H1-H4):
+   - H1: {{title}}
+   - H2: Introduction (include {{target_keyword}} in first 100 words)
+   - H2-H4 sections covering: {{section_1}}, {{section_2}}, {{section_3}}, {{section_4}}, {{section_5}}
+   - H2: FAQ section (3-5 questions targeting "People Also Ask" boxes)
+   - H2: Conclusion with internal link suggestion
+5. FEATURED SNIPPET OPPORTUNITY: Write a 40-50 word paragraph that could be pulled as a featured snippet for {{target_keyword}}.
+6. INTERNAL LINKING: Suggest 3 internal links from existing content.
+7. RELATED KEYWORDS: 5 LSI keywords to sprinkle naturally throughout.` },
+
+  { id: 'seo-2', title: 'Content Cluster Strategy', tool: 'claude', category: 'SEO & Content Strategy', difficulty: 'Advanced', desc: 'Topic cluster model for domain authority and topical relevance.', tags: ['strategy', 'clusters', 'pillar'], prompt: `Design a content cluster strategy for {{topic}}.
+
+Business: {{business_name}}
+Domain: {{domain}}
+Target keyword: {{pillar_keyword}}
+
+Deliver:
+
+1. PILLAR PAGE OUTLINE: Comprehensive guide covering {{topic}} broadly. 3000+ words. Include sections for {{subtopics}}.
+
+2. CLUSTER CONTENT (8-10 articles):
+   For each article, specify:
+   - Title (includes long-tail keyword)
+   - Target keyword (search volume opportunity)
+   - Word count (1200-2000)
+   - Angle (how it differs from other cluster pieces)
+   - Internal links to pillar page
+
+3. CONTENT UPGRADES: What downloadable asset pairs with each cluster piece? (checklist, template, worksheet)
+
+4. TOPICAL AUTHORITY GAPS: What related topics are NOT covered yet? Suggest 3 future cluster directions.
+
+5. INTERNAL LINKING MAP: How pillar and cluster pieces link to each other. Create a hub-and-spoke diagram description.` },
+
+  { id: 'seo-3', title: 'Product Description — SEO + Conversion', tool: 'chatgpt', category: 'SEO & Content Strategy', difficulty: 'Beginner', desc: 'Product copy that ranks in search and converts browsers to buyers.', tags: ['product', 'ecommerce', 'conversion'], prompt: `Write an SEO-optimized product description for {{product_name}}.
+
+Product type: {{product_type}}
+Target keyword: {{target_keyword}}
+Price: {{price}}
+Key features: {{features}}
+Unique selling point: {{usp}}
+
+Structure:
+1. PRODUCT TITLE (max 70 chars): Include {{target_keyword}} naturally
+2. SHORT DESCRIPTION (150-200 chars): Use in product listings and meta. 1-2 sentences. Benefit-first.
+3. LONG DESCRIPTION (300-400 words): 
+   - Opening paragraph: Problem-solution, {{target_keyword}} naturally included
+   - Feature-benefit bullets (5-7): Each starts with a feature, colon, then benefit
+   - "Why {{product_name}}?" section: Brand story + USP
+   - Social proof: "Trusted by {{number}} {{customers}}"
+   - FAQ: 3 questions addressing objections
+4. SEO META: Title tag, meta description, alt text suggestion for main image
+
+Tone: {{tone}} (aspirational / practical / technical / playful). Avoid keyword stuffing. Varied language throughout.` },
+
+  { id: 'seo-4', title: 'Midjourney — Blog Featured Image', tool: 'midjourney', category: 'SEO & Content Strategy', difficulty: 'Beginner', desc: 'Custom featured images for blog posts and social sharing.', tags: ['blog', 'featured-image', 'design'], prompt: `/imagine prompt: Abstract visualization of {{blog_topic}}, {{visual_metaphor}} as central element, {{color_palette}} color palette, {{composition_style}} composition, soft gradients, {{lighting_mood}} lighting, editorial style, modern graphic design, minimal text overlay area, blog featured image, 16:9 aspect ratio, 4K --ar 16:9 --v 6.1` },
+
+  // ── BUSINESS & SALES ──
+  { id: 'bus-1', title: 'Cold Outreach Email', tool: 'chatgpt', category: 'Business & Sales', difficulty: 'Intermediate', desc: 'Personalized cold email that gets replies, not deleted.', tags: ['outreach', 'cold-email', 'sales'], prompt: `Write a cold outreach email to {{prospect_name}} ({{prospect_title}} at {{prospect_company}}).
+
+Your offer: {{offer}}
+Your company: {{your_company}}
+Your credibility: {{credibility}} (mutual connection, relevant experience, notable client)
+
+Email structure:
+
+SUBJECT LINE (max 45 chars): Personalize. Avoid "just checking in." Use {{personalization_hook}}.
+
+BODY:
+- Line 1: Compliment or observation about their work/company (proves you did research)
+- Line 2: Bridge statement — why you're reaching out specifically to them
+- Line 3-4: The offer — concise, benefit-focused, not feature-dump
+- Line 5: Social proof — "We helped {{similar_company}} achieve {{result}}"
+- Line 6: Soft CTA — "Worth a 10-minute call?" or "Should I send over more details?"
+
+SIGNATURE: Name, title, company, phone, link (no images)
+
+Rules: Under 150 words. One clear CTA. No attachments. Personalize at least 3 elements. Write like a human, not a sales bot.` },
+
+  { id: 'bus-2', title: 'Proposal Executive Summary', tool: 'claude', category: 'Business & Sales', difficulty: 'Intermediate', desc: 'Winning proposal summary that sells the outcome before the price.', tags: ['proposal', 'sales', 'closing'], prompt: `Write an executive summary for a {{service_type}} proposal to {{prospect_company}}.
+
+Prospect's stated goal: {{prospect_goal}}
+Our solution: {{solution_name}}
+Investment: ${{price}}
+Timeline: {{timeline}}
+
+Structure:
+1. THE CHALLENGE (3-4 sentences): Show deep understanding of their specific situation. Use language from our discovery conversations.
+2. OUR APPROACH (4-5 sentences): How we solve it. Methodology. Why it's different from alternatives.
+3. THE DELIVERABLES (bullet list): 5-7 concrete outcomes.
+4. TIMELINE & INVESTMENT (2-3 sentences): Brief. No surprises.
+5. WHY US (2-3 sentences): Relevant case studies or credentials.
+6. NEXT STEPS (1-2 sentences): Clear path forward. Low-friction first step.
+
+Tone: Confident but not arrogant. Consultative. Focus on ROI, not features. Close with an expression of enthusiasm about working together.` },
+
+  { id: 'bus-3', title: 'Discovery Call Questions', tool: 'claude', category: 'Business & Sales', difficulty: 'Beginner', desc: 'Qualifying questions that uncover pain, budget, authority, and timeline.', tags: ['sales', 'discovery', 'qualifying'], prompt: `Generate a discovery call question framework for a {{service_type}} sales conversation.
+
+Ideal customer profile: {{target_audience}}
+Offer: {{offer}}
+Price range: {{price_range}}
+
+Organize questions by these 4 categories (3-5 questions each):
+
+1. BUDGET (B):
+   - "What budget have you allocated for solving {{problem}}?"
+   - "How do you typically budget for {{solution_type}}?"
+
+2. AUTHORITY (A):
+   - "Who else is involved in the decision?"
+   - "What does the approval process look like?"
+
+3. NEED (N):
+   - "What have you tried so far to solve {{problem}}?"
+   - "What's the cost of NOT solving this?"
+
+4. TIMELINE (T):
+   - "When do you want to have this in place?"
+   - "What's driving that timeline?"
+
+After the questions, provide a BANT scoring rubric: how to rate each response (Hot / Warm / Cold) and what a qualified lead looks like for this offer.
+
+Also include 3 "trial close" questions to test readiness before the formal proposal.` },
+
+  { id: 'bus-4', title: 'Midjourney — Brand Identity Moodboard', tool: 'midjourney', category: 'Business & Sales', difficulty: 'Intermediate', desc: 'Visual brand direction for pitches, moodboards, and branding proposals.', tags: ['branding', 'moodboard', 'identity'], prompt: `/imagine prompt: {{brand_name}} brand identity moodboard, {{industry}} industry, {{brand_personality}} personality, {{primary_color}} and {{secondary_color}} color palette, {{texture_or_material}} textures, {{visual_style}} style elements, {{iconography_style}} icons, typography from {{font_family}}, {{mood}} atmosphere, grid layout with {{number_of_elements}} panels, professional brand board design, 4K --ar 16:9 --v 6.1` },
+];
+
+const CATEGORIES = [...new Set(PROMPTS.map(p => p.category))];
+const TOOLS = [...new Set(PROMPTS.map(p => p.tool))];
+const DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'];
+
+let activeCategory = 'All';
+let activeTool = 'All';
+let activeDifficulty = 'All';
+let searchQuery = '';
+
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'className') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(), v);
+    else e.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (c == null) continue;
+    if (typeof c === 'string' || typeof c === 'number') e.appendChild(document.createTextNode(c));
+    else if (c instanceof Node) e.appendChild(c);
+  }
+  return e;
+}
+
+function getFilteredPrompts() {
+  return PROMPTS.filter(p => {
+    if (activeCategory !== 'All' && p.category !== activeCategory) return false;
+    if (activeTool !== 'All' && p.tool !== activeTool) return false;
+    if (activeDifficulty !== 'All' && p.difficulty !== activeDifficulty) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = p.title.toLowerCase().includes(q);
+      const matchCategory = p.category.toLowerCase().includes(q);
+      const matchTool = p.tool.toLowerCase().includes(q);
+      const matchTags = p.tags.some(t => t.toLowerCase().includes(q));
+      const matchPrompt = p.prompt.toLowerCase().includes(q);
+      const matchDesc = p.desc.toLowerCase().includes(q);
+      if (!(matchTitle || matchCategory || matchTool || matchTags || matchPrompt || matchDesc)) return false;
+    }
+    return true;
+  });
+}
+
+function render() {
+  const filtered = getFilteredPrompts();
+  document.getElementById('results-count').textContent = `${filtered.length} prompt${filtered.length !== 1 ? 's' : ''}`;
+
+  const grid = document.getElementById('prompt-grid');
+  grid.innerHTML = '';
+
+  if (!filtered.length) {
+    grid.appendChild(el('div', { className: 'empty-state' },
+      el('h3', {}, 'No prompts found'),
+      el('p', {}, 'Try a different category, tool, or search term.')));
+    return;
+  }
+
+  for (const p of filtered) {
+    const badgeClass = { midjourney: 'badge-midjourney', chatgpt: 'badge-chatgpt', claude: 'badge-claude' }[p.tool] || '';
+    const card = el('div', { className: 'prompt-card' });
+
+    const header = el('div', { className: 'prompt-card-header' });
+    header.appendChild(el('h3', {}, p.title));
+    header.appendChild(el('span', { className: `prompt-tool-badge ${badgeClass}` }, p.tool));
+    card.appendChild(header);
+
+    const desc = el('div', { className: 'prompt-card-desc' }, p.desc);
+    card.appendChild(desc);
+
+    const body = el('div', { className: 'prompt-card-body' });
+    const textEl = el('div', { className: 'prompt-text', onclick: () => copyPrompt(p, textEl) });
+    textEl.appendChild(el('span', { className: 'copy-hint' }, 'Click to copy'));
+    textEl.appendChild(document.createTextNode(formatPromptText(p.prompt)));
+    body.appendChild(textEl);
+    card.appendChild(body);
+
+    const footer = el('div', { className: 'prompt-card-footer' });
+    const tagsDiv = el('div', { className: 'prompt-tags' });
+    for (const tag of p.tags) {
+      tagsDiv.appendChild(el('span', { className: 'prompt-tag' }, tag));
+    }
+    footer.appendChild(tagsDiv);
+    footer.appendChild(el('span', { className: 'prompt-difficulty' }, p.difficulty));
+    card.appendChild(footer);
+
+    grid.appendChild(card);
+  }
+}
+
+function formatPromptText(text) {
+  return text.replace(/\{\{(.+?)\}\}/g, (_, m) => `\x1b[1m${m}\x1b[0m`);
+}
+
+function renderPromptText(text) {
+  const container = document.createElement('span');
+  const parts = text.split(/(\{\{.+?\}\})/g);
+  for (const part of parts) {
+    if (part.startsWith('{{') && part.endsWith('}}')) {
+      container.appendChild(el('span', { className: 'variable' }, part.slice(2, -2)));
+    } else {
+      container.appendChild(document.createTextNode(part));
+    }
+  }
+  return container;
+}
+
+function copyPrompt(prompt, el) {
+  navigator.clipboard.writeText(prompt.prompt).then(() => {
+    el.classList.add('copied');
+    const toast = document.getElementById('copy-toast');
+    toast.textContent = `Copied: "${prompt.title}"`;
+    toast.classList.add('show');
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => el.classList.remove('copied'), 300);
+    }, 2000);
+  });
+}
+
+function renderSidebar() {
+  const catContainer = document.getElementById('category-filters');
+  catContainer.innerHTML = '';
+  const allBtn = el('button', {
+    className: `category-btn ${activeCategory === 'All' ? 'active' : ''}`,
+    onClick: () => { activeCategory = 'All'; updateActiveStates(); render(); }
+  }, 'All Prompts', el('span', { className: 'count' }, String(PROMPTS.length)));
+  catContainer.appendChild(allBtn);
+
+  for (const cat of CATEGORIES) {
+    const count = PROMPTS.filter(p => p.category === cat).length;
+    const btn = el('button', {
+      className: `category-btn ${activeCategory === cat ? 'active' : ''}`,
+      onClick: () => { activeCategory = cat; updateActiveStates(); render(); }
+    }, cat, el('span', { className: 'count' }, String(count)));
+    catContainer.appendChild(btn);
+  }
+
+  const toolContainer = document.getElementById('tool-filters');
+  toolContainer.innerHTML = '';
+  const allTool = el('button', {
+    className: `tool-btn ${activeTool === 'All' ? 'active' : ''}`,
+    onClick: () => { activeTool = 'All'; updateActiveStates(); render(); }
+  }, 'All');
+  toolContainer.appendChild(allTool);
+
+  for (const tool of TOOLS) {
+    const count = PROMPTS.filter(p => p.tool === tool).length;
+    const btn = el('button', {
+      className: `tool-btn ${activeTool === tool ? 'active' : ''}`,
+      onClick: () => { activeTool = tool; updateActiveStates(); render(); }
+    }, `${tool.charAt(0).toUpperCase() + tool.slice(1)} (${count})`);
+    toolContainer.appendChild(btn);
+  }
+
+  const diffContainer = document.getElementById('difficulty-filters');
+  diffContainer.innerHTML = '';
+  const allDiff = el('button', {
+    className: `tool-btn ${activeDifficulty === 'All' ? 'active' : ''}`,
+    onClick: () => { activeDifficulty = 'All'; updateActiveStates(); render(); }
+  }, 'All');
+  diffContainer.appendChild(allDiff);
+
+  for (const diff of DIFFICULTIES) {
+    const count = PROMPTS.filter(p => p.difficulty === diff).length;
+    const btn = el('button', {
+      className: `tool-btn ${activeDifficulty === diff ? 'active' : ''}`,
+      onClick: () => { activeDifficulty = diff; updateActiveStates(); render(); }
+    }, `${diff} (${count})`);
+    diffContainer.appendChild(btn);
+  }
+}
+
+function updateActiveStates() {
+  document.querySelectorAll('.category-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim() === activeCategory || (activeCategory === 'All' && btn.textContent.trim().startsWith('All')));
+  });
+  document.querySelectorAll('#tool-filters .tool-btn').forEach(btn => {
+    const t = btn.textContent.split(' (')[0];
+    btn.classList.toggle('active', (activeTool === 'All' && t === 'All') || t.toLowerCase() === activeTool);
+  });
+  document.querySelectorAll('#difficulty-filters .tool-btn').forEach(btn => {
+    const d = btn.textContent.split(' (')[0];
+    btn.classList.toggle('active', (activeDifficulty === 'All' && d === 'All') || d === activeDifficulty);
+  });
+}
+
+renderSidebar();
+render();
+
+document.getElementById('search').addEventListener('input', (e) => {
+  searchQuery = e.target.value;
+  render();
+});
+</script>
+</body>
+</html>

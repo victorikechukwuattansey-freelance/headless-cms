@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Freelancer OS</title>
+<link rel="stylesheet" href="os-core.css">
+<style>
+.os-timesheet { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 20px; margin-top: 12px; }
+.os-timesheet-entry { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.os-timesheet-entry:last-child { border-bottom: none; }
+.os-week-total { font-size: 24px; font-weight: 700; color: #1a1a2e; text-align: center; padding: 16px; }
+</style>
+</head>
+<body>
+<div class="os-sidebar" id="sidebar"></div>
+<div class="os-main">
+  <div class="os-topbar">
+    <h1 id="screen-title">Dashboard</h1>
+    <div class="os-topbar-right">
+      <div id="search-container"></div>
+      <button class="os-btn os-btn-sm" onclick="exportData()">📥 Export</button>
+      <button class="os-btn os-btn-sm" onclick="importData()">📤 Import</button>
+    </div>
+  </div>
+  <div class="os-content" id="content"></div>
+</div>
+
+<script src="os-core.js"></script>
+<script>
+OS.db.define('clients', {
+  fields: [
+    { key: 'name', label: 'Name', type: 'text' },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'phone', label: 'Phone', type: 'text' },
+    { key: 'company', label: 'Company', type: 'text' },
+    { key: 'rate', label: 'Hourly Rate ($)', type: 'number' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('projects', {
+  fields: [
+    { key: 'name', label: 'Project', type: 'text' },
+    { key: 'clientId', label: 'Client', type: 'select', options: () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'status', label: 'Status', type: 'select', options: ['Active', 'On Hold', 'Completed', 'Cancelled'], default: 'Active' },
+    { key: 'budget', label: 'Budget ($)', type: 'number' },
+    { key: 'fixedPrice', label: 'Fixed Price?', type: 'select', options: ['Yes', 'No'], default: 'No' },
+    { key: 'deadline', label: 'Deadline', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('timeEntries', {
+  fields: [
+    { key: 'projectId', label: 'Project', type: 'select', options: () => OS.db.list('projects').map(p => ({ value: p.id, label: p.name })) },
+    { key: 'date', label: 'Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'hours', label: 'Hours', type: 'number' },
+    { key: 'description', label: 'Description', type: 'text' },
+    { key: 'billable', label: 'Billable', type: 'select', options: ['Yes', 'No'], default: 'Yes' },
+  ]
+});
+
+OS.db.define('invoices', {
+  fields: [
+    { key: 'clientId', label: 'Client', type: 'select', options: () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'projectId', label: 'Project', type: 'select', options: () => OS.db.list('projects').map(p => ({ value: p.id, label: p.name })) },
+    { key: 'items', label: 'Line Items (JSON)', type: 'textarea', placeholder: '[{"desc":"Service","amt":1000}]' },
+    { key: 'total', label: 'Total ($)', type: 'number' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Draft', 'Sent', 'Paid', 'Overdue'], default: 'Draft' },
+    { key: 'dueDate', label: 'Due Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+  ]
+});
+
+OS.db.define('expenses', {
+  fields: [
+    { key: 'category', label: 'Category', type: 'select', options: ['Software', 'Equipment', 'Travel', 'Office', 'Education', 'Taxes', 'Other'] },
+    { key: 'amount', label: 'Amount ($)', type: 'number' },
+    { key: 'date', label: 'Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'taxCategory', label: 'Tax Category', type: 'select', options: ['Business Expense', 'Home Office', 'Vehicle', 'Supplies'], default: 'Business Expense' },
+    { key: 'vendor', label: 'Vendor', type: 'text' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+seedDemoData();
+
+const screens = {};
+function nav(label, icon, key, renderFn) { screens[key] = renderFn; return { label, icon, key }; }
+
+const navItems = [
+  nav('Dashboard', '📊', 'dashboard', renderDashboard),
+  nav('Clients', '👤', 'clients', renderClients),
+  nav('Projects', '📋', 'projects', renderProjects),
+  nav('Time Log', '⏱', 'time', renderTimeLog),
+  nav('Invoices', '📄', 'invoices', renderInvoices),
+  nav('Expenses', '💰', 'expenses', renderExpenses),
+];
+
+let searchQuery = '';
+
+function renderNav() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.innerHTML = '';
+  sidebar.appendChild($el('h2', {}, 'Freelancer OS'));
+  const navDiv = $el('div', { className: 'os-nav' });
+  for (const item of navItems) {
+    navDiv.appendChild($el('div', { className: 'os-nav-item', onClick: () => navigate(item.key), dataset: { screen: item.key } },
+      item.icon, $el('span', {}, item.label)));
+  }
+  sidebar.appendChild(navDiv);
+  sidebar.appendChild($el('div', { className: 'os-sidebar-footer' }, 'Freelancer OS v1'));
+}
+
+function navigate(screen) {
+  OS.state.currentScreen = screen;
+  document.querySelectorAll('.os-nav-item').forEach(el => el.classList.toggle('active', el.dataset.screen === screen));
+  const item = navItems.find(n => n.key === screen);
+  document.getElementById('screen-title').textContent = item ? item.label : 'Dashboard';
+  render(screen);
+}
+
+function render(screen) { (screens[screen] || screens.dashboard)(); }
+
+// Dashboard
+function renderDashboard() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const activeProjects = OS.db.list('projects', { status: 'Active' });
+  const timeEntries = OS.db.list('timeEntries');
+  const totalHours = timeEntries.reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
+  const billableHours = timeEntries.filter(e => e.billable === 'Yes').reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
+  const paidInvoices = OS.db.list('invoices').filter(i => i.status === 'Paid');
+  const totalRevenue = paidInvoices.reduce((s, i) => s + (parseFloat(i.total) || 0), 0);
+  const totalExpenses = OS.db.totals('expenses', 'amount');
+
+  OS.ui.renderCards(c, [
+    { label: 'Revenue (Paid)', value: totalRevenue, prefix: '$', color: '#2e7d32' },
+    { label: 'Net Income', value: totalRevenue - totalExpenses, prefix: '$', color: totalRevenue - totalExpenses >= 0 ? '#2e7d32' : '#c62828' },
+    { label: 'Active Projects', value: activeProjects.length, color: '#1565c0' },
+    { label: 'Total Hours', value: totalHours.toFixed(1), sub: `${billableHours.toFixed(1)} billable`, color: '#0f3460' },
+    { label: 'Expenses', value: totalExpenses, prefix: '$', color: '#c62828' },
+  ]);
+
+  if (activeProjects.length) {
+    c.appendChild($el('h3', { style: { marginBottom: '12px', marginTop: '20px' } }, 'Active Projects'));
+    OS.ui.renderTable(c, activeProjects, [
+      { label: 'Project', key: 'name' },
+      { label: 'Client', render: r => { const cl = OS.db.read('clients', r.clientId); return cl ? cl.name : '-'; } },
+      { label: 'Deadline', key: 'deadline' },
+      { label: 'Budget', render: r => `$${Number(r.budget || 0).toLocaleString()}` },
+    ]);
+  }
+}
+
+// Clients
+function renderClients() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Clients'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addClient() }, '+ New Client'));
+  c.appendChild(header);
+
+  const clients = OS.db.search('clients', searchQuery);
+  const projects = OS.db.list('projects');
+  const invoices = OS.db.list('invoices');
+  const data = clients.map(cl => ({
+    ...cl,
+    projectCount: projects.filter(p => p.clientId === cl.id).length,
+    totalBilled: invoices.filter(i => i.clientId === cl.id && i.status === 'Paid').reduce((s, i) => s + (parseFloat(i.total) || 0), 0),
+  }));
+
+  OS.ui.renderTable(c, data, [
+    { label: 'Name', key: 'name' },
+    { label: 'Email', key: 'email' },
+    { label: 'Rate', render: r => r.rate ? `$${r.rate}/hr` : '-' },
+    { label: 'Projects', key: 'projectCount' },
+    { label: 'Billed', render: r => `$${r.totalBilled.toLocaleString()}` },
+  ], {
+    onEdit: (row) => editClient(row),
+    onDelete: (row) => { OS.db.delete('clients', row.id); renderClients(); },
+  });
+}
+
+function addClient() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('clients'), {}, (data) => {
+    OS.db.create('clients', data); OS.ui.closeModal(); renderClients();
+    OS.ui.showToast('Client added', 'success');
+  });
+  OS.ui.showModal('New Client', container);
+}
+
+function editClient(client) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('clients'), client, (data) => {
+    OS.db.update('clients', client.id, data); OS.ui.closeModal(); renderClients();
+  });
+  OS.ui.showModal('Edit Client', container);
+}
+
+// Projects
+function renderProjects() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Projects'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addProject() }, '+ New Project'));
+  c.appendChild(header);
+
+  const projects = OS.db.search('projects', searchQuery);
+  const timeEntries = OS.db.list('timeEntries');
+  const data = projects.map(p => {
+    const projectHours = timeEntries.filter(e => e.projectId === p.id).reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
+    const cl = OS.db.read('clients', p.clientId);
+    return { ...p, clientName: cl ? cl.name : '-', hours: projectHours.toFixed(1) };
+  });
+
+  OS.ui.renderTable(c, data, [
+    { label: 'Project', key: 'name' },
+    { label: 'Client', key: 'clientName' },
+    { label: 'Status', render: r => `<span class="os-badge os-badge-${r.status === 'Active' ? 'active' : r.status === 'Completed' ? 'done' : 'pending'}">${r.status}</span>` },
+    { label: 'Hours', key: 'hours' },
+    { label: 'Budget', render: r => `$${Number(r.budget || 0).toLocaleString()}` },
+    { label: 'Deadline', key: 'deadline' },
+  ], {
+    onEdit: (row) => editProject(row),
+    onDelete: (row) => { OS.db.delete('projects', row.id); renderProjects(); },
+  });
+}
+
+function addProject() {
+  const schema = OS.db.schema('projects');
+  schema.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, {}, (data) => {
+    OS.db.create('projects', data); OS.ui.closeModal(); renderProjects();
+    OS.ui.showToast('Project created', 'success');
+  });
+  OS.ui.showModal('New Project', container);
+}
+
+function editProject(project) {
+  const schema = OS.db.schema('projects');
+  schema.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, project, (data) => {
+    OS.db.update('projects', project.id, data); OS.ui.closeModal(); renderProjects();
+  });
+  OS.ui.showModal('Edit Project', container);
+}
+
+// Time Log
+function renderTimeLog() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  c.appendChild($el('h2', {}, 'Time Log'));
+  const entries = OS.db.search('timeEntries', searchQuery);
+  const totalHours = entries.reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
+  const billableHours = entries.filter(e => e.billable === 'Yes').reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
+
+  const stats = $el('div', { style: { display: 'flex', gap: '24px', marginBottom: '16px', fontSize: '14px' } });
+  stats.appendChild($el('span', {}, `Total: ${totalHours.toFixed(1)}h`));
+  stats.appendChild($el('span', { style: { color: '#2e7d32' } }, `Billable: ${billableHours.toFixed(1)}h`));
+  stats.appendChild($el('span', { style: { color: '#888' } }, `Non-billable: ${(totalHours - billableHours).toFixed(1)}h`));
+  c.appendChild(stats);
+
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('span'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addTimeEntry() }, '+ Log Time'));
+  c.appendChild(header);
+
+  const data = entries.map(e => {
+    const p = OS.db.read('projects', e.projectId);
+    return { ...e, projectName: p ? p.name : '-' };
+  });
+
+  OS.ui.renderTable(c, data, [
+    { label: 'Date', key: 'date' },
+    { label: 'Project', key: 'projectName' },
+    { label: 'Hours', key: 'hours' },
+    { label: 'Description', key: 'description' },
+    { label: 'Billable', render: r => r.billable === 'Yes' ? '✅' : '❌' },
+  ], {
+    onEdit: (row) => editTimeEntry(row),
+    onDelete: (row) => { OS.db.delete('timeEntries', row.id); renderTimeLog(); },
+  });
+}
+
+function addTimeEntry() {
+  const schema = OS.db.schema('timeEntries');
+  schema.fields.find(f => f.key === 'projectId').options = () => OS.db.list('projects').map(p => ({ value: p.id, label: p.name }));
+  const container = $el('div');
+  data = { date: new Date().toISOString().slice(0, 10), billable: 'Yes' };
+  OS.ui.renderForm(container, schema, data, (data) => {
+    OS.db.create('timeEntries', data); OS.ui.closeModal(); renderTimeLog();
+    OS.ui.showToast('Time logged', 'success');
+  });
+  OS.ui.showModal('Log Time', container);
+}
+
+function editTimeEntry(entry) {
+  const schema = OS.db.schema('timeEntries');
+  schema.fields.find(f => f.key === 'projectId').options = () => OS.db.list('projects').map(p => ({ value: p.id, label: p.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, entry, (data) => {
+    OS.db.update('timeEntries', entry.id, data); OS.ui.closeModal(); renderTimeLog();
+  });
+  OS.ui.showModal('Edit Entry', container);
+}
+
+// Invoices
+function renderInvoices() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Invoices'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addInvoice() }, '+ New Invoice'));
+  c.appendChild(header);
+
+  const invoices = OS.db.search('invoices', searchQuery);
+  const data = invoices.map(inv => {
+    const cl = OS.db.read('clients', inv.clientId);
+    return { ...inv, clientName: cl ? cl.name : '-' };
+  });
+
+  OS.ui.renderTable(c, data, [
+    { label: 'ID', render: r => `#${r.id.slice(-6).toUpperCase()}` },
+    { label: 'Client', key: 'clientName' },
+    { label: 'Total', render: r => `$${Number(r.total || 0).toLocaleString()}` },
+    { label: 'Status', render: r => `<span class="os-badge os-badge-${r.status === 'Paid' ? 'paid' : r.status === 'Overdue' ? 'overdue' : 'pending'}">${r.status}</span>` },
+    { label: 'Due', key: 'dueDate' },
+  ], {
+    onEdit: (row) => editInvoice(row),
+    onDelete: (row) => { OS.db.delete('invoices', row.id); renderInvoices(); },
+  });
+}
+
+function addInvoice() {
+  const schema = OS.db.schema('invoices');
+  schema.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  schema.fields.find(f => f.key === 'projectId').options = () => OS.db.list('projects').map(p => ({ value: p.id, label: p.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, {}, (data) => {
+    OS.db.create('invoices', data); OS.ui.closeModal(); renderInvoices();
+    OS.ui.showToast('Invoice created', 'success');
+  });
+  OS.ui.showModal('New Invoice', container);
+}
+
+function editInvoice(invoice) {
+  const schema = OS.db.schema('invoices');
+  schema.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  schema.fields.find(f => f.key === 'projectId').options = () => OS.db.list('projects').map(p => ({ value: p.id, label: p.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, schema, invoice, (data) => {
+    OS.db.update('invoices', invoice.id, data); OS.ui.closeModal(); renderInvoices();
+  });
+  OS.ui.showModal('Edit Invoice', container);
+}
+
+// Expenses
+function renderExpenses() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Expenses'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addExpense() }, '+ Add Expense'));
+  c.appendChild(header);
+
+  const expenses = OS.db.search('expenses', searchQuery);
+  const total = expenses.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+  c.appendChild($el('div', { style: { marginBottom: '16px', fontWeight: 600 } }, `Total: $${total.toLocaleString()}`));
+
+  OS.ui.renderTable(c, expenses, [
+    { label: 'Date', key: 'date' },
+    { label: 'Category', key: 'category' },
+    { label: 'Amount', render: r => `$${Number(r.amount || 0).toLocaleString()}` },
+    { label: 'Tax Category', key: 'taxCategory' },
+    { label: 'Vendor', key: 'vendor' },
+  ], {
+    onEdit: (row) => editExpense(row),
+    onDelete: (row) => { OS.db.delete('expenses', row.id); renderExpenses(); },
+  });
+}
+
+function addExpense() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('expenses'), { date: new Date().toISOString().slice(0, 10) }, (data) => {
+    OS.db.create('expenses', data); OS.ui.closeModal(); renderExpenses();
+    OS.ui.showToast('Expense added', 'success');
+  });
+  OS.ui.showModal('Add Expense', container);
+}
+
+function editExpense(expense) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('expenses'), expense, (data) => {
+    OS.db.update('expenses', expense.id, data); OS.ui.closeModal(); renderExpenses();
+  });
+  OS.ui.showModal('Edit Expense', container);
+}
+
+function exportData() {
+  const schemas = ['clients', 'projects', 'timeEntries', 'invoices', 'expenses'];
+  const data = {};
+  for (const s of schemas) data[s] = OS.db.list(s);
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `freelancer-os-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  OS.ui.showToast('Data exported', 'success');
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = async (e) => {
+    const text = await e.target.files[0].text();
+    try {
+      const data = JSON.parse(text);
+      for (const [schema, items] of Object.entries(data)) {
+        if (OS.db._data[schema] !== undefined) { OS.db._data[schema] = items; OS.db._save(schema); }
+      }
+      render(OS.state.currentScreen);
+      OS.ui.showToast('Data imported', 'success');
+    } catch (err) { OS.ui.showToast('Import failed: ' + err.message, 'error'); }
+  };
+  input.click();
+}
+
+function seedDemoData() {
+  if (localStorage.getItem('os_freelancer_seeded')) return;
+  const c1 = OS.db.create('clients', { name: 'Design Co', email: 'hello@designco.com', rate: 85, notes: 'Regular client' });
+  const c2 = OS.db.create('clients', { name: 'StartupX', email: 'team@startupx.io', rate: 100, notes: 'Equity + cash' });
+  const c3 = OS.db.create('clients', { name: 'Local Bakery', email: 'info@localbakery.com', rate: 65, notes: 'Small biz' });
+
+  OS.db.create('projects', { name: 'App UI Design', clientId: c1.id, status: 'Active', budget: 8000, fixedPrice: 'No', deadline: '2026-08-15' });
+  OS.db.create('projects', { name: 'Brand Guidelines', clientId: c2.id, status: 'Active', budget: 5000, fixedPrice: 'Yes', deadline: '2026-07-30' });
+  OS.db.create('projects', { name: 'Menu Redesign', clientId: c3.id, status: 'Active', budget: 1500, fixedPrice: 'Yes', deadline: '2026-08-01' });
+
+  const today = new Date();
+  for (let i = 0; i < 10; i++) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    OS.db.create('timeEntries', {
+      projectId: OS.db.list('projects')[i % 3].id,
+      date: d.toISOString().slice(0, 10),
+      hours: (2 + Math.random() * 6).toFixed(1),
+      description: ['Design work', 'Client meeting', 'Revisions', 'Development'][i % 4],
+      billable: i % 5 === 0 ? 'No' : 'Yes',
+    });
+  }
+  localStorage.setItem('os_freelancer_seeded', '1');
+}
+
+OS.ui.renderSearch(document.getElementById('search-container'), 'Search...', (q) => { searchQuery = q; render(OS.state.currentScreen); });
+renderNav();
+navigate('dashboard');
+</script>
+</body>
+</html>

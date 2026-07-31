@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join the Waitlist — AI Workflow Dashboard</title>
+  <meta name="description" content="Get early access to AI Workflow Dashboard — the visual platform for building AI-powered automation. Free during early access, founding rates for first members.">
+  <link rel="stylesheet" href="assets/design-system.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='32' y2='32' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%2322D3EE'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M6 20 L13 12 L19 18 L26 10' stroke='url(%23g)' stroke-width='2.5' stroke-linecap='round' fill='none'/%3E%3Cpath d='M19 18 L24 25' stroke='url(%23g)' stroke-width='2.5' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='6' cy='20' r='4' fill='%230A0A0F' stroke='url(%23g)' stroke-width='2.5'/%3E%3Ccircle cx='13' cy='12' r='4' fill='%230A0A0F' stroke='url(%23g)' stroke-width='2.5'/%3E%3Ccircle cx='19' cy='18' r='4' fill='%230A0A0F' stroke='url(%23g)' stroke-width='2.5'/%3E%3Ccircle cx='26' cy='10' r='3.5' fill='%2322D3EE'/%3E%3Ccircle cx='24' cy='25' r='3' fill='%237C5CFF'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<div class="page-bg" aria-hidden="true"></div>
+
+<!-- ============ NAV ============ -->
+<header class="nav">
+  <div class="container">
+    <a class="logo" href="index.html" aria-label="AI Workflow Dashboard home">
+      <svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg-nav" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/>
+          </linearGradient>
+        </defs>
+        <path d="M6 20 L13 12 L19 18 L26 10" stroke="url(#lg-nav)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M19 18 L24 25" stroke="url(#lg-nav)" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="6" cy="20" r="4" fill="#0A0A0F" stroke="url(#lg-nav)" stroke-width="2.5"/>
+        <circle cx="13" cy="12" r="4" fill="#0A0A0F" stroke="url(#lg-nav)" stroke-width="2.5"/>
+        <circle cx="19" cy="18" r="4" fill="#0A0A0F" stroke="url(#lg-nav)" stroke-width="2.5"/>
+        <circle cx="26" cy="10" r="3.5" fill="#22D3EE"/>
+        <circle cx="24" cy="25" r="3" fill="#7C5CFF"/>
+      </svg>
+      AI Workflow Dashboard
+    </a>
+    <div class="nav-cta">
+      <a class="btn btn-ghost btn-sm" href="index.html">← Back to home</a>
+      <button class="nav-burger" aria-label="Open menu" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 5.5h14M3 10h14M3 14.5h14"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="nav-mobile">
+  <a href="index.html">Back to home</a>
+  <a href="promo.html">Launch promo</a>
+  <a class="btn btn-primary" href="waitlist.html">Join the waitlist</a>
+</div>
+
+<!-- ============ HERO ============ -->
+<section class="hero" style="padding-bottom: 40px;">
+  <div class="container" style="grid-template-columns: 1fr; max-width: 640px; text-align: center;">
+    <div class="reveal">
+      <span class="hero-badge"><span class="dot"></span> Early access — limited spots</span>
+      <h1>Get <span class="grad">early access</span> to AI Workflow Dashboard</h1>
+      <p class="hero-sub" style="margin-left: auto; margin-right: auto;">
+        Build AI-powered workflows visually — triggers, model calls, routing, and actions on one canvas. Join now and be first in line when we open the doors.
+      </p>
+
+      <div style="max-width: 520px; margin: 0 auto; text-align: left;">
+        <form class="waitlist-form" data-waitlist data-source="waitlist-page" novalidate>
+          <div class="form-field">
+            <input class="input" type="email" name="email" placeholder="you@company.com" aria-label="Email address" required>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <input class="input" type="text" name="name" placeholder="First name (optional)" aria-label="First name">
+            </div>
+            <div class="form-field">
+              <input class="input" type="text" name="role" placeholder="Your role (optional)" aria-label="Your role">
+            </div>
+          </div>
+          <button class="btn btn-primary btn-lg" type="submit" style="width: 100%;">Join the waitlist</button>
+          <p class="form-error" role="alert"></p>
+          <p class="form-hint"><span class="tick">✓</span> Free during early access &nbsp;·&nbsp; <span class="tick">✓</span> No credit card &nbsp;·&nbsp; <span class="tick">✓</span> Founding rates for first members</p>
+        </form>
+        <div class="form-success">
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>You're on the list!</h3>
+          <p>We'll email <span class="success-email" style="color:var(--text)"></span> an invite as soon as early access opens. Keep an eye on your inbox — and your spam folder, just in case.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PERKS ============ -->
+<section class="section" style="padding-top: 48px;">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">What you get</span>
+      <h2>Members get in first — and pay less</h2>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">01</div>
+        <h3>First access</h3>
+        <p>Invites ship in waves — waitlist members are the first to build, in order of signup.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">02</div>
+        <h3>Founding pricing</h3>
+        <p>Lock in 50% off for your first 6 months after launch. Your spot in line is your discount.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">03</div>
+        <h3>Shape the roadmap</h3>
+        <p>Early feedback directly shapes what ships first. You build it, you steer it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MINI FAQ ============ -->
+<section class="section" style="padding-top: 0;">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">FAQ</span>
+      <h2>Quick answers</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item reveal">
+        <button class="faq-q" aria-expanded="false">How long until I get access?<span class="chev">＋</span></button>
+        <div class="faq-a"><p>We open the doors in waves, roughly every 1–2 weeks during early access. Earlier signups get in first, so joining now puts you near the front of the line.</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" aria-expanded="false">Is early access really free?<span class="chev">＋</span></button>
+        <div class="faq-a"><p>Yes — early access is free, no credit card required. You'll get a launch notice before any paid tier starts, and your founding discount applies automatically.</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" aria-expanded="false">What happens after I sign up?<span class="chev">＋</span></button>
+        <div class="faq-a"><p>You're on the list. We'll email you once per week max — launch invites, feature previews, and beta program announcements. Unsubscribe anytime.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer">
+  <div class="container">
+    <a class="logo" href="index.html" aria-label="AI Workflow Dashboard home">
+      <svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg-foot" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/>
+          </linearGradient>
+        </defs>
+        <path d="M6 20 L13 12 L19 18 L26 10" stroke="url(#lg-foot)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M19 18 L24 25" stroke="url(#lg-foot)" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="6" cy="20" r="4" fill="#0A0A0F" stroke="url(#lg-foot)" stroke-width="2.5"/>
+        <circle cx="13" cy="12" r="4" fill="#0A0A0F" stroke="url(#lg-foot)" stroke-width="2.5"/>
+        <circle cx="19" cy="18" r="4" fill="#0A0A0F" stroke="url(#lg-foot)" stroke-width="2.5"/>
+        <circle cx="26" cy="10" r="3.5" fill="#22D3EE"/>
+        <circle cx="24" cy="25" r="3" fill="#7C5CFF"/>
+      </svg>
+      AI Workflow Dashboard
+    </a>
+    <p>© <span data-year>2026</span> AI Workflow Dashboard. All rights reserved.</p>
+    <div class="footer-links">
+      <a href="index.html">Home</a>
+      <a href="promo.html">Launch promo</a>
+      <a href="mailto:hello@aiworkflowdashboard.com">Contact</a>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

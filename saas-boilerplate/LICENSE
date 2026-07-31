@@ -1,0 +1,47 @@
+# SaaS Boilerplate — Commercial License
+
+Copyright (c) 2026 [Your Name/Company]
+
+## Grant of License
+
+This license grants the purchaser ("Licensee") a non-exclusive, non-transferable,
+non-sublicensable right to use the SaaS Boilerplate software ("Software") to build,
+launch, and operate **one (1)** commercial SaaS product or web application.
+
+## Permitted Uses
+
+Licensee may:
+
+- Use the Software to create one commercial SaaS product
+- Modify the Software for use in that product
+- Deploy the product on any hosting platform
+- Charge end-users for access to the product built with the Software
+- Create and sell templates, themes, or plugins that extend the product,
+  provided they do not redistribute the core Software
+
+## Prohibited Uses
+
+Licensee may NOT:
+
+- Resell, redistribute, sublicense, or share the source code of the Software
+  itself (as opposed to the product built with it)
+- Use the Software to build a competing boilerplate, starter kit, or scaffolding tool
+- Allow multiple developers to use the same license — each developer requires
+  their own license (e.g., a team of 4 needs 4 licenses)
+- Remove or obscure copyright notices
+
+## Multi-Developer / Team
+
+For teams of more than one developer, a **Team License** is required (5 seats)
+or an **Enterprise License** (unlimited seats). Contact the author for pricing.
+
+## Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. THE AUTHOR
+SHALL NOT BE LIABLE FOR ANY CLAIMS, DAMAGES, OR LIABILITIES ARISING FROM
+THE USE OF THE SOFTWARE.
+
+## Updates
+
+This license includes all updates and patches released during the first
+**12 months** from the purchase date.

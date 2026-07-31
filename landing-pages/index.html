@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Workflow Dashboard — Build AI workflows visually</title>
+  <meta name="description" content="Design, run, and monitor AI-powered workflows with a visual builder, a multi-model gateway, and live execution monitoring. Join the waitlist for early access.">
+  <link rel="stylesheet" href="assets/design-system.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='32' y2='32' gradientUnits='userSpaceOnUse'%3E%3Cstop stop-color='%237C5CFF'/%3E%3Cstop offset='1' stop-color='%2322D3EE'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M6 20 L13 12 L19 18 L26 10' stroke='url(%23g)' stroke-width='2.5' stroke-linecap='round' fill='none'/%3E%3Cpath d='M19 18 L24 25' stroke='url(%23g)' stroke-width='2.5' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='6' cy='20' r='4' fill='%230A0A0F' stroke='url(%23g)' stroke-width='2.5'/%3E%3Ccircle cx='13' cy='12' r='4' fill='%230A0A0F' stroke='url(%23g)' stroke-width='2.5'/%3E%3Ccircle cx='19' cy='18' r='4' fill='%230A0A0F' stroke='url(%23g)' stroke-width='2.5'/%3E%3Ccircle cx='26' cy='10' r='3.5' fill='%2322D3EE'/%3E%3Ccircle cx='24' cy='25' r='3' fill='%237C5CFF'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<div class="page-bg" aria-hidden="true"></div>
+
+<!-- ============ NAV ============ -->
+<header class="nav">
+  <div class="container">
+    <a class="logo" href="index.html" aria-label="AI Workflow Dashboard home">
+      <svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg-nav" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/>
+          </linearGradient>
+        </defs>
+        <path d="M6 20 L13 12 L19 18 L26 10" stroke="url(#lg-nav)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M19 18 L24 25" stroke="url(#lg-nav)" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="6" cy="20" r="4" fill="#0A0A0F" stroke="url(#lg-nav)" stroke-width="2.5"/>
+        <circle cx="13" cy="12" r="4" fill="#0A0A0F" stroke="url(#lg-nav)" stroke-width="2.5"/>
+        <circle cx="19" cy="18" r="4" fill="#0A0A0F" stroke="url(#lg-nav)" stroke-width="2.5"/>
+        <circle cx="26" cy="10" r="3.5" fill="#22D3EE"/>
+        <circle cx="24" cy="25" r="3" fill="#7C5CFF"/>
+      </svg>
+      AI Workflow Dashboard
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-primary btn-sm" href="waitlist.html">Join the waitlist</a>
+      <button class="nav-burger" aria-label="Open menu" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 5.5h14M3 10h14M3 14.5h14"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="nav-mobile">
+  <a href="#features">Features</a>
+  <a href="#how">How it works</a>
+  <a href="#pricing">Pricing</a>
+  <a href="#faq">FAQ</a>
+  <a class="btn btn-primary" href="waitlist.html">Join the waitlist</a>
+</div>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="container">
+    <div class="reveal">
+      <span class="hero-badge"><span class="dot"></span> Early access — limited spots</span>
+      <h1>Build AI workflows <span class="grad">visually</span>. Run them anywhere.</h1>
+      <p class="hero-sub">Design, run, and monitor AI-powered automation with a drag-and-drop canvas, a multi-model gateway, and live execution monitoring — no glue code required.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary btn-lg" href="waitlist.html">Join the waitlist</a>
+        <a class="btn btn-ghost btn-lg" href="#how">See how it works</a>
+      </div>
+      <p class="hero-note"><span class="tick">✓</span> Free during early access &nbsp;·&nbsp; <span class="tick">✓</span> No credit card</p>
+    </div>
+
+    <div class="mockup reveal" aria-hidden="true">
+      <div class="mockup-bar">
+        <i></i><i></i><i></i>
+        <span class="mockup-url">app.aiworkflowdashboard.com</span>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-side">
+          <span class="on">● Workflows</span>
+          <span>Runs</span>
+          <span>Models</span>
+          <span>Queues</span>
+          <span>Settings</span>
+        </div>
+        <div class="mockup-canvas">
+          <div class="mockup-node">
+            <div class="t"><i></i> Webhook trigger</div>
+            <div class="s">POST /api/hooks/lead</div>
+            <div class="p"><i></i></div>
+          </div>
+          <div class="mockup-node">
+            <div class="t"><i class="cyan"></i> AI classify</div>
+            <div class="s">gpt-4o · ollama · gemini</div>
+            <div class="p"><i></i></div>
+          </div>
+          <div class="mockup-node">
+            <div class="t"><i class="green"></i> Route &amp; store</div>
+            <div class="s">notion.write · slack.post</div>
+            <div class="p"><i></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="mockup-log"><span class="ok">●</span> run #4821 completed in 1.8s — 3 nodes, 0 retries</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LOGOS ============ -->
+<section class="logos reveal">
+  <div class="container">
+    <p>Built for teams shipping AI automation</p>
+    <div class="logos-row">
+      <span><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="4"/></svg> Northwind</span>
+      <span><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/></svg> Vertex Labs</span>
+      <span><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3l3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"/></svg> Helios</span>
+      <span><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l12 8-12 8z"/></svg> Quantum Ops</span>
+      <span><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3"/></svg> DataMint</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Features</span>
+      <h2>Everything you need to ship AI automation</h2>
+      <p>One dashboard to design, run, and debug your AI workflows from trigger to output.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.6"/><circle cx="15.5" cy="8.5" r="1.6"/><circle cx="8.5" cy="15.5" r="1.6"/><circle cx="15.5" cy="15.5" r="1.6"/><path d="M8.5 10v3.9M15.5 10v3.9M10 8.5h3.9M10 15.5h3.9"/></svg></div>
+        <h3>Visual workflow builder</h3>
+        <p>Drag, connect, and configure nodes on a DAG canvas. Triggers, AI steps, routing, and integrations snap together in minutes.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+        <h3>Multi-model AI gateway</h3>
+        <p>Call Ollama, OpenAI, Anthropic, and Gemini from the same workflow. Swap providers per node with a single dropdown.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></div>
+        <h3>Live execution monitoring</h3>
+        <p>Watch every run in real time — node-by-node status, latency, tokens, and outputs, with full run history and drill-down.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.2"/></svg></div>
+        <h3>Queues &amp; retries</h3>
+        <p>Reliable delivery with job queues, automatic retries with backoff, and dead-letter handling — built in, not bolted on.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 16l3-6 4 4 3-7 2 9"/><circle cx="5" cy="20" r="1.4"/><circle cx="19" cy="20" r="1.4"/></svg></div>
+        <h3>Team workspaces</h3>
+        <p>Share workflows with your team. Roles, permissions, version history, and comments keep collaboration clean.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M17 15l3 3-3 3"/></svg></div>
+        <h3>API &amp; webhooks</h3>
+        <p>Trigger workflows from anywhere with REST endpoints and webhooks. Connect to 100+ tools and your own stack.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="section" id="how">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">How it works</span>
+      <h2>From idea to running workflow in three steps</h2>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">01</div>
+        <h3>Drag your nodes</h3>
+        <p>Start from a template or a blank canvas. Add triggers, AI calls, and actions — everything is a node.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">02</div>
+        <h3>Connect &amp; configure</h3>
+        <p>Draw the edges, pick your models, and set routing rules. Test any branch instantly without deploying.</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">03</div>
+        <h3>Run &amp; monitor</h3>
+        <p>Deploy in one click. Watch executions live, drill into failures, and iterate with full run history.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TESTIMONIALS ============ -->
+<section class="section">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Early users</span>
+      <h2>Teams already building on it</h2>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial-card reveal">
+        <div class="testimonial-stars">★★★★★</div>
+        <blockquote>“We replaced three scripts and a cron job with one visual workflow. The gateway swap alone saves us hours every week.”</blockquote>
+        <div class="testimonial-person">
+          <span class="testimonial-avatar" style="background:linear-gradient(135deg,#7C5CFF,#22D3EE)">AM</span>
+          <div>
+            <div class="n">Ada M.</div>
+            <div class="r">Head of Ops, Northwind</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card reveal">
+        <div class="testimonial-stars">★★★★★</div>
+        <blockquote>“Finally, a workflow tool that treats AI models as first-class steps. The run logs make debugging trivial.”</blockquote>
+        <div class="testimonial-person">
+          <span class="testimonial-avatar" style="background:linear-gradient(135deg,#22D3EE,#34D399)">DK</span>
+          <div>
+            <div class="n">David K.</div>
+            <div class="r">Founder, Vertex Labs</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card reveal">
+        <div class="testimonial-stars">★★★★★</div>
+        <blockquote>“Setup took ten minutes. Our lead-scoring pipeline went from idea to production in a single afternoon.”</blockquote>
+        <div class="testimonial-person">
+          <span class="testimonial-avatar" style="background:linear-gradient(135deg,#F59E0B,#F87171)">SO</span>
+          <div>
+            <div class="n">Sam O.</div>
+            <div class="r">CTO, Helios</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section class="section" id="pricing">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Pricing</span>
+      <h2>Simple pricing that scales with you</h2>
+      <p>Early access members lock in founding rates before launch.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card reveal">
+        <h3>Starter</h3>
+        <div class="price">$19<span>/mo</span></div>
+        <div class="per">For individuals and small projects</div>
+        <ul>
+          <li>5 active workflows</li>
+          <li>2 AI models, local gateway (Ollama)</li>
+          <li>10k executions / month</li>
+          <li>Community support</li>
+        </ul>
+        <a class="btn btn-ghost" href="waitlist.html">Join the waitlist</a>
+      </div>
+      <div class="pricing-card featured reveal">
+        <span class="pricing-tag">Most popular</span>
+        <h3>Team</h3>
+        <div class="price">$49<span>/mo</span></div>
+        <div class="per">For teams shipping production workflows</div>
+        <ul>
+          <li>Unlimited workflows</li>
+          <li>All models incl. OpenAI, Anthropic, Gemini</li>
+          <li>100k executions / month</li>
+          <li>Team workspaces &amp; roles</li>
+          <li>Priority support</li>
+        </ul>
+        <a class="btn btn-primary" href="waitlist.html">Join the waitlist</a>
+      </div>
+      <div class="pricing-card reveal">
+        <h3>Enterprise</h3>
+        <div class="price">Custom</div>
+        <div class="per">For orgs with advanced needs</div>
+        <ul>
+          <li>Everything in Team</li>
+          <li>Self-hosted options</li>
+          <li>SSO &amp; audit logs</li>
+          <li>Dedicated support &amp; SLAs</li>
+        </ul>
+        <a class="btn btn-ghost" href="waitlist.html">Talk to us</a>
+      </div>
+    </div>
+    <p class="pricing-note">Early access members get 50% off for the first 6 months after launch.</p>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="section" id="faq">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">FAQ</span>
+      <h2>Questions, answered</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item reveal">
+        <button class="faq-q" aria-expanded="false">What is AI Workflow Dashboard?<span class="chev">＋</span></button>
+        <div class="faq-a"><p>A visual platform for building AI-powered automation. You design workflows on a canvas, connect AI model calls and actions, then run and monitor them — all from one dashboard.</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" aria-expanded="false">Which AI models are supported?<span class="chev">＋</span></button>
+        <div class="faq-a"><p>Every workflow node can use any model through our gateway: local models via Ollama, plus OpenAI, Anthropic Claude, and Google Gemini. You can even switch models per node without touching your workflow logic.</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" aria-expanded="false">How does early access work?<span class="chev">＋</span></button>
+        <div class="faq-a"><p>Join the waitlist and we'll email you an invite in waves. Early access is free, and members lock in 50% off for the first 6 months after launch.</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" aria-expanded="false">Do I need to know how to code?<span class="chev">＋</span></button>
+        <div class="faq-a"><p>No. The builder is fully visual. If you do write code, every node exposes a script step and the whole platform has a REST API and webhooks.</p></div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-q" aria-expanded="false">Can I run my own models or self-host?<span class="chev">＋</span></button>
+        <div class="faq-a"><p>Yes. The gateway connects to local Ollama instances out of the box, and Enterprise plans include self-hosted deployment options.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<section class="section" style="padding-top: 0;">
+  <div class="container">
+    <div class="cta-band reveal">
+      <h2>Ready to build your first AI workflow?</h2>
+      <p>Join the waitlist — early access is free and founding rates are locked in for the first members.</p>
+      <div class="container" style="max-width: 520px; position: relative;">
+        <form class="waitlist-form" data-waitlist data-source="landing-cta" novalidate>
+          <div class="form-row">
+            <div class="form-field">
+              <input class="input" type="email" name="email" placeholder="you@company.com" aria-label="Email address" required>
+            </div>
+            <button class="btn btn-primary btn-lg" type="submit">Join the waitlist</button>
+          </div>
+          <p class="form-error" role="alert"></p>
+        </form>
+        <div class="form-success">
+          <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>You're on the list!</h3>
+          <p>We'll email <span class="success-email" style="color:var(--text)"></span> an invite as soon as early access opens. Talk soon.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer">
+  <div class="container">
+    <a class="logo" href="index.html" aria-label="AI Workflow Dashboard home">
+      <svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg-foot" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/>
+          </linearGradient>
+        </defs>
+        <path d="M6 20 L13 12 L19 18 L26 10" stroke="url(#lg-foot)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M19 18 L24 25" stroke="url(#lg-foot)" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="6" cy="20" r="4" fill="#0A0A0F" stroke="url(#lg-foot)" stroke-width="2.5"/>
+        <circle cx="13" cy="12" r="4" fill="#0A0A0F" stroke="url(#lg-foot)" stroke-width="2.5"/>
+        <circle cx="19" cy="18" r="4" fill="#0A0A0F" stroke="url(#lg-foot)" stroke-width="2.5"/>
+        <circle cx="26" cy="10" r="3.5" fill="#22D3EE"/>
+        <circle cx="24" cy="25" r="3" fill="#7C5CFF"/>
+      </svg>
+      AI Workflow Dashboard
+    </a>
+    <p>© <span data-year>2026</span> AI Workflow Dashboard. All rights reserved.</p>
+    <div class="footer-links">
+      <a href="waitlist.html">Waitlist</a>
+      <a href="promo.html">Launch promo</a>
+      <a href="mailto:hello@aiworkflowdashboard.com">Contact</a>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coach OS</title>
+<link rel="stylesheet" href="os-core.css">
+<style>
+.os-progress-bar { height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; margin: 4px 0; }
+.os-progress-fill { height: 100%; background: #2e7d32; border-radius: 4px; transition: width 0.3s; }
+.os-milestone { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.os-milestone-check { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #d0d0d0; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 12px; }
+.os-milestone-check.done { background: #2e7d32; color: #fff; border-color: #2e7d32; }
+</style>
+</head>
+<body>
+<div class="os-sidebar" id="sidebar"></div>
+<div class="os-main">
+  <div class="os-topbar">
+    <h1 id="screen-title">Dashboard</h1>
+    <div class="os-topbar-right">
+      <div id="search-container"></div>
+      <button class="os-btn os-btn-sm" onclick="exportData()">📥 Export</button>
+    </div>
+  </div>
+  <div class="os-content" id="content"></div>
+</div>
+
+<script src="os-core.js"></script>
+<script>
+OS.db.define('clients', {
+  fields: [
+    { key: 'name', label: 'Name', type: 'text' },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'phone', label: 'Phone', type: 'text' },
+    { key: 'goals', label: 'Coaching Goals', type: 'textarea', placeholder: 'What they want to achieve' },
+    { key: 'packageId', label: 'Package', type: 'select', options: () => OS.db.list('packages').map(p => ({ value: p.id, label: p.name })) },
+    { key: 'status', label: 'Status', type: 'select', options: ['Active', 'Paused', 'Completed', 'Lead'], default: 'Lead' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('packages', {
+  fields: [
+    { key: 'name', label: 'Package Name', type: 'text' },
+    { key: 'sessionsCount', label: 'Sessions Included', type: 'number', default: 12 },
+    { key: 'price', label: 'Price ($)', type: 'number' },
+    { key: 'durationMonths', label: 'Duration (months)', type: 'number', default: 3 },
+    { key: 'addOns', label: 'Add-ons', type: 'text', placeholder: 'e.g. Email support, Homework review' },
+    { key: 'description', label: 'Description', type: 'textarea' },
+  ]
+});
+
+OS.db.define('sessions', {
+  fields: [
+    { key: 'clientId', label: 'Client', type: 'select', options: () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'date', label: 'Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'duration', label: 'Duration (min)', type: 'number', default: 60 },
+    { key: 'type', label: 'Type', type: 'select', options: ['1:1 Coaching', 'Group', 'Check-in', 'Discovery Call', 'Review'] },
+    { key: 'status', label: 'Status', type: 'select', options: ['Scheduled', 'Completed', 'Cancelled', 'No Show'], default: 'Scheduled' },
+    { key: 'notes', label: 'Session Notes', type: 'textarea' },
+    { key: 'clientFeedback', label: 'Client Feedback', type: 'textarea' },
+  ]
+});
+
+OS.db.define('milestones', {
+  fields: [
+    { key: 'clientId', label: 'Client', type: 'select', options: () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'title', label: 'Milestone', type: 'text' },
+    { key: 'dueDate', label: 'Target Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'completedDate', label: 'Completed Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Pending', 'In Progress', 'Achieved'], default: 'Pending' },
+  ]
+});
+
+OS.db.define('invoices', {
+  fields: [
+    { key: 'clientId', label: 'Client', type: 'select', options: () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'packageId', label: 'Package', type: 'select', options: () => OS.db.list('packages').map(p => ({ value: p.id, label: p.name })) },
+    { key: 'total', label: 'Total ($)', type: 'number' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Pending', 'Paid', 'Installment', 'Overdue'], default: 'Pending' },
+    { key: 'dueDate', label: 'Due Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('resources', {
+  fields: [
+    { key: 'title', label: 'Title', type: 'text' },
+    { key: 'type', label: 'Type', type: 'select', options: ['Article', 'Video', 'Worksheet', 'Template', 'Link'] },
+    { key: 'url', label: 'URL', type: 'text' },
+    { key: 'clientId', label: 'Share with Client', type: 'select', options: () => [{ value: '', label: 'All Clients' }, ...OS.db.list('clients').map(c => ({ value: c.id, label: c.name }))] },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+seedDemoData();
+const screens = {};
+function nav(label, icon, key, fn) { screens[key] = fn; return { label, icon, key }; }
+const navItems = [
+  nav('Dashboard', '📊', 'dashboard', renderDashboard),
+  nav('Clients', '👤', 'clients', renderClients),
+  nav('Sessions', '📅', 'sessions', renderSessions),
+  nav('Progress', '📈', 'progress', renderProgress),
+  nav('Packages', '📦', 'packages', renderPackages),
+  nav('Invoices', '💰', 'invoices', renderInvoices),
+  nav('Resources', '📚', 'resources', renderResources),
+];
+
+let searchQuery = '';
+function renderNav() {
+  document.getElementById('sidebar').innerHTML = '';
+  const sidebar = document.getElementById('sidebar');
+  sidebar.appendChild($el('h2', {}, 'Coach OS'));
+  const navDiv = $el('div', { className: 'os-nav' });
+  for (const item of navItems) {
+    navDiv.appendChild($el('div', { className: 'os-nav-item', onClick: () => navigate(item.key), dataset: { screen: item.key } },
+      item.icon, $el('span', {}, item.label)));
+  }
+  sidebar.appendChild(navDiv);
+  sidebar.appendChild($el('div', { className: 'os-sidebar-footer' }, 'Coach OS v1'));
+}
+
+function navigate(screen) {
+  OS.state.currentScreen = screen;
+  document.querySelectorAll('.os-nav-item').forEach(el => el.classList.toggle('active', el.dataset.screen === screen));
+  const item = navItems.find(n => n.key === screen);
+  document.getElementById('screen-title').textContent = item ? item.label : 'Dashboard';
+  render(screen);
+}
+function render(screen) { (screens[screen] || screens.dashboard)(); }
+
+function renderDashboard() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const sessions = OS.db.list('sessions');
+  const activeClients = OS.db.list('clients', { status: 'Active' });
+  const thisWeek = sessions.filter(s => { const d = new Date(s.date); const now = new Date(); const wk = new Date(now); wk.setDate(now.getDate() - now.getDay()); return d >= wk && d.getTime() <= now.getTime() + 7*86400000; });
+  const completedSessions = sessions.filter(s => s.status === 'Completed');
+  const paid = OS.db.list('invoices').filter(i => i.status === 'Paid').reduce((s, i) => s + (parseFloat(i.total) || 0), 0);
+  const pending = OS.db.list('invoices').filter(i => i.status === 'Pending' || i.status === 'Overdue').reduce((s, i) => s + (parseFloat(i.total) || 0), 0);
+
+  OS.ui.renderCards(c, [
+    { label: 'Active Clients', value: activeClients.length, color: '#1565c0' },
+    { label: 'Sessions This Week', value: thisWeek.length, color: '#0f3460' },
+    { label: 'Total Sessions', value: completedSessions.length, color: '#2e7d32' },
+    { label: 'Revenue (Paid)', value: paid, prefix: '$', color: '#2e7d32' },
+    { label: 'Outstanding', value: pending, prefix: '$', color: '#c62828' },
+  ]);
+}
+
+function renderClients() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Clients'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addClient() }, '+ New Client'));
+  c.appendChild(header);
+  const clients = OS.db.search('clients', searchQuery);
+  const sessions = OS.db.list('sessions');
+  const data = clients.map(cl => ({
+    ...cl,
+    sessionCount: sessions.filter(s => s.clientId === cl.id && s.status === 'Completed').length,
+    pkg: cl.packageId ? (OS.db.read('packages', cl.packageId) || {}).name : '-',
+  }));
+  OS.ui.renderTable(c, data, [
+    { label: 'Name', key: 'name' },
+    { label: 'Package', key: 'pkg' },
+    { label: 'Sessions Done', key: 'sessionCount' },
+    { label: 'Status', render: r => `<span class="os-badge os-badge-${r.status === 'Active' ? 'active' : r.status === 'Completed' ? 'done' : 'pending'}">${r.status}</span>` },
+    { label: 'Goals', key: 'goals', render: r => r.goals ? r.goals.slice(0, 40) + '...' : '' },
+  ], {
+    onEdit: r => editClient(r),
+    onDelete: r => { OS.db.delete('clients', r.id); renderClients(); },
+  });
+}
+
+function addClient() {
+  const s = OS.db.schema('clients');
+  s.fields.find(f => f.key === 'packageId').options = () => OS.db.list('packages').map(p => ({ value: p.id, label: p.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, {}, d => { OS.db.create('clients', d); OS.ui.closeModal(); renderClients(); OS.ui.showToast('Client added', 'success'); });
+  OS.ui.showModal('New Client', container);
+}
+
+function editClient(client) {
+  const s = OS.db.schema('clients');
+  s.fields.find(f => f.key === 'packageId').options = () => OS.db.list('packages').map(p => ({ value: p.id, label: p.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, client, d => { OS.db.update('clients', client.id, d); OS.ui.closeModal(); renderClients(); });
+  OS.ui.showModal('Edit Client', container);
+}
+
+function renderSessions() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Sessions'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addSession() }, '+ Schedule Session'));
+  c.appendChild(header);
+
+  const sessions = OS.db.search('sessions', searchQuery);
+  const data = sessions.map(s => {
+    const cl = OS.db.read('clients', s.clientId);
+    return { ...s, clientName: cl ? cl.name : '-' };
+  });
+  OS.ui.renderTable(c, data, [
+    { label: 'Date', key: 'date' },
+    { label: 'Client', key: 'clientName' },
+    { label: 'Type', key: 'type' },
+    { label: 'Duration', render: r => `${r.duration}min` },
+    { label: 'Status', render: r => `<span class="os-badge os-badge-${r.status === 'Completed' ? 'done' : r.status === 'Scheduled' ? 'scheduled' : 'pending'}">${r.status}</span>` },
+  ], {
+    onEdit: r => editSession(r),
+    onDelete: r => { OS.db.delete('sessions', r.id); renderSessions(); },
+  });
+}
+
+function addSession() {
+  const s = OS.db.schema('sessions');
+  s.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, { date: new Date().toISOString().slice(0, 10), duration: 60, status: 'Scheduled' }, d => {
+    OS.db.create('sessions', d); OS.ui.closeModal(); renderSessions(); OS.ui.showToast('Session scheduled', 'success');
+  });
+  OS.ui.showModal('Schedule Session', container);
+}
+
+function editSession(session) {
+  const s = OS.db.schema('sessions');
+  s.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, session, d => { OS.db.update('sessions', session.id, d); OS.ui.closeModal(); renderSessions(); });
+  OS.ui.showModal('Edit Session', container);
+}
+
+function renderProgress() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  c.appendChild($el('h2', {}, 'Client Progress'));
+  const clients = OS.db.list('clients', { status: 'Active' });
+  if (!clients.length) { c.appendChild($el('div', { className: 'os-empty' }, 'No active clients yet.')); return; }
+  const sessions = OS.db.list('sessions');
+  const milestones = OS.db.list('milestones');
+
+  for (const cl of clients) {
+    const block = $el('div', { style: { background: '#fff', borderRadius: '8px', padding: '16px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' } });
+    block.appendChild($el('h3', { style: { marginBottom: '8px' } }, cl.name));
+    const clientSessions = sessions.filter(s => s.clientId === cl.id && s.status === 'Completed');
+    const pkg = cl.packageId ? OS.db.read('packages', cl.packageId) : null;
+    const totalSessions = pkg ? pkg.sessionsCount : 12;
+    const pct = Math.min(100, Math.round(clientSessions.length / totalSessions * 100));
+    block.appendChild($el('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' } },
+      $el('span', {}, `Sessions: ${clientSessions.length}/${totalSessions}`),
+      $el('span', { style: { fontWeight: 600 } }, `${pct}%`)));
+    const bar = $el('div', { className: 'os-progress-bar' });
+    bar.appendChild($el('div', { className: 'os-progress-fill', style: { width: pct + '%' } }));
+    block.appendChild(bar);
+
+    const clientMilestones = milestones.filter(m => m.clientId === cl.id);
+    if (clientMilestones.length) {
+      block.appendChild($el('h4', { style: { marginTop: '12px', marginBottom: '6px', fontSize: '13px', color: '#555' } }, 'Milestones'));
+      for (const m of clientMilestones) {
+        const row = $el('div', { className: 'os-milestone' });
+        const check = $el('div', { className: `os-milestone-check ${m.status === 'Achieved' ? 'done' : ''}`, onClick: () => {
+          const newStatus = m.status === 'Achieved' ? 'Pending' : 'Achieved';
+          const cd = newStatus === 'Achieved' ? new Date().toISOString().slice(0, 10) : '';
+          OS.db.update('milestones', m.id, { status: newStatus, completedDate: cd });
+          renderProgress();
+        }}, m.status === 'Achieved' ? '✓' : '');
+        row.appendChild(check);
+        row.appendChild($el('span', { style: { flex: 1, fontSize: '13px', textDecoration: m.status === 'Achieved' ? 'line-through' : 'none', color: m.status === 'Achieved' ? '#999' : '#333' } }, m.title));
+        if (m.dueDate) row.appendChild($el('span', { style: { fontSize: '11px', color: '#888' } }, m.dueDate));
+        block.appendChild(row);
+      }
+    }
+
+    const addMilestoneBtn = $el('button', { className: 'os-btn os-btn-xs', style: { marginTop: '8px' }, onClick: () => addMilestone(cl.id) }, '+ Milestone');
+    block.appendChild(addMilestoneBtn);
+    c.appendChild(block);
+  }
+}
+
+function addMilestone(clientId) {
+  const s = OS.db.schema('milestones');
+  s.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, { clientId }, d => { OS.db.create('milestones', d); OS.ui.closeModal(); renderProgress(); OS.ui.showToast('Milestone added', 'success'); });
+  OS.ui.showModal('New Milestone', container);
+}
+
+function renderPackages() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Coaching Packages'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addPackage() }, '+ New Package'));
+  c.appendChild(header);
+
+  const packages = OS.db.search('packages', searchQuery);
+  OS.ui.renderTable(c, packages, [
+    { label: 'Name', key: 'name' },
+    { label: 'Sessions', key: 'sessionsCount' },
+    { label: 'Price', render: r => `$${Number(r.price || 0).toLocaleString()}` },
+    { label: 'Duration', render: r => `${r.durationMonths || 3}mo` },
+    { label: 'Add-ons', key: 'addOns' },
+  ], {
+    onEdit: r => editPackage(r),
+    onDelete: r => { OS.db.delete('packages', r.id); renderPackages(); },
+  });
+}
+
+function addPackage() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('packages'), {}, d => { OS.db.create('packages', d); OS.ui.closeModal(); renderPackages(); OS.ui.showToast('Package created', 'success'); });
+  OS.ui.showModal('New Package', container);
+}
+
+function editPackage(pkg) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('packages'), pkg, d => { OS.db.update('packages', pkg.id, d); OS.ui.closeModal(); renderPackages(); });
+  OS.ui.showModal('Edit Package', container);
+}
+
+function renderInvoices() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Invoices & Payments'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addInvoice() }, '+ New Invoice'));
+  c.appendChild(header);
+
+  const invoices = OS.db.search('invoices', searchQuery);
+  const data = invoices.map(inv => {
+    const cl = OS.db.read('clients', inv.clientId);
+    return { ...inv, clientName: cl ? cl.name : '-' };
+  });
+  OS.ui.renderTable(c, data, [
+    { label: 'Client', key: 'clientName' },
+    { label: 'Total', render: r => `$${Number(r.total || 0).toLocaleString()}` },
+    { label: 'Status', render: r => `<span class="os-badge os-badge-${r.status === 'Paid' ? 'paid' : r.status === 'Overdue' ? 'overdue' : 'pending'}">${r.status}</span>` },
+    { label: 'Due', key: 'dueDate' },
+  ], {
+    onEdit: r => editInvoice(r),
+    onDelete: r => { OS.db.delete('invoices', r.id); renderInvoices(); },
+  });
+}
+
+function addInvoice() {
+  const s = OS.db.schema('invoices');
+  s.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  s.fields.find(f => f.key === 'packageId').options = () => OS.db.list('packages').map(p => ({ value: p.id, label: p.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, {}, d => { OS.db.create('invoices', d); OS.ui.closeModal(); renderInvoices(); OS.ui.showToast('Invoice created', 'success'); });
+  OS.ui.showModal('New Invoice', container);
+}
+
+function editInvoice(inv) {
+  const s = OS.db.schema('invoices');
+  s.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  s.fields.find(f => f.key === 'packageId').options = () => OS.db.list('packages').map(p => ({ value: p.id, label: p.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, inv, d => { OS.db.update('invoices', inv.id, d); OS.ui.closeModal(); renderInvoices(); });
+  OS.ui.showModal('Edit Invoice', container);
+}
+
+function renderResources() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Resources'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addResource() }, '+ Add Resource'));
+  c.appendChild(header);
+
+  const resources = OS.db.search('resources', searchQuery);
+  const data = resources.map(r => ({
+    ...r,
+    sharedWith: r.clientId ? (OS.db.read('clients', r.clientId) || {}).name : 'All Clients',
+  }));
+  OS.ui.renderTable(c, data, [
+    { label: 'Title', key: 'title' },
+    { label: 'Type', key: 'type' },
+    { label: 'Shared With', key: 'sharedWith' },
+    { label: 'URL', render: r => r.url ? `<a href="${r.url}" target="_blank" style="color:#1565c0">Link</a>` : '-' },
+  ], {
+    onEdit: r => editResource(r),
+    onDelete: r => { OS.db.delete('resources', r.id); renderResources(); },
+  });
+}
+
+function addResource() {
+  const s = OS.db.schema('resources');
+  s.fields.find(f => f.key === 'clientId').options = () => [{ value: '', label: 'All Clients' }, ...OS.db.list('clients').map(c => ({ value: c.id, label: c.name }))];
+  const container = $el('div');
+  OS.ui.renderForm(container, s, {}, d => { OS.db.create('resources', d); OS.ui.closeModal(); renderResources(); OS.ui.showToast('Resource added', 'success'); });
+  OS.ui.showModal('Add Resource', container);
+}
+
+function editResource(res) {
+  const s = OS.db.schema('resources');
+  s.fields.find(f => f.key === 'clientId').options = () => [{ value: '', label: 'All Clients' }, ...OS.db.list('clients').map(c => ({ value: c.id, label: c.name }))];
+  const container = $el('div');
+  OS.ui.renderForm(container, s, res, d => { OS.db.update('resources', res.id, d); OS.ui.closeModal(); renderResources(); });
+  OS.ui.showModal('Edit Resource', container);
+}
+
+function exportData() {
+  const schemas = ['clients', 'packages', 'sessions', 'milestones', 'invoices', 'resources'];
+  const data = {}; for (const s of schemas) data[s] = OS.db.list(s);
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `coach-os-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+  OS.ui.showToast('Data exported', 'success');
+}
+
+function seedDemoData() {
+  if (localStorage.getItem('os_coach_seeded')) return;
+  const p1 = OS.db.create('packages', { name: '12-Week Transformation', sessionsCount: 12, price: 2400, durationMonths: 3, addOns: 'WhatsApp support', description: 'Intensive 1:1 coaching' });
+  const p2 = OS.db.create('packages', { name: '6-Month Mastery', sessionsCount: 24, price: 4200, durationMonths: 6, addOns: 'Email support, Homework review', description: 'Deep transformation program' });
+  const p3 = OS.db.create('packages', { name: 'Single Session', sessionsCount: 1, price: 200, durationMonths: 0, addOns: '', description: 'One-off coaching call' });
+
+  const c1 = OS.db.create('clients', { name: 'Rachel Green', email: 'rachel@example.com', goals: 'Career transition into fashion', packageId: p1.id, status: 'Active', notes: 'Highly motivated' });
+  const c2 = OS.db.create('clients', { name: 'Monica Geller', email: 'monica@example.com', goals: 'Executive leadership skills', packageId: p2.id, status: 'Active', notes: 'Needs confidence building' });
+  const c3 = OS.db.create('clients', { name: 'Chandler Bing', email: 'chandler@example.com', goals: 'Public speaking & communication', packageId: p1.id, status: 'Active' });
+
+  const today = new Date();
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(today); d.setDate(d.getDate() - (i * 7));
+    OS.db.create('sessions', { clientId: [c1, c2, c3][i % 3].id, date: d.toISOString().slice(0, 10), duration: 60, type: '1:1 Coaching', status: i < 6 ? 'Completed' : 'Scheduled', notes: 'Great session, client made progress', clientFeedback: 'Very helpful!' });
+  }
+
+  OS.db.create('milestones', { clientId: c1.id, title: 'Complete career assessment', dueDate: '2026-08-01', status: 'Achieved', completedDate: '2026-07-15' });
+  OS.db.create('milestones', { clientId: c1.id, title: 'Build portfolio website', dueDate: '2026-09-01', status: 'In Progress' });
+  OS.db.create('milestones', { clientId: c2.id, title: 'Lead first team meeting', dueDate: '2026-08-15', status: 'Pending' });
+
+  OS.db.create('resources', { title: 'Goal Setting Worksheet', type: 'Worksheet', url: '#', notes: 'Use in first session' });
+  OS.db.create('resources', { title: 'Morning Routine Guide', type: 'Article', url: '#', clientId: c1.id });
+
+  localStorage.setItem('os_coach_seeded', '1');
+}
+
+OS.ui.renderSearch(document.getElementById('search-container'), 'Search...', q => { searchQuery = q; render(OS.state.currentScreen); });
+renderNav();
+navigate('dashboard');
+</script>
+</body>
+</html>

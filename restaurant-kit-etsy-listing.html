@@ -1,0 +1,175 @@
+﻿<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+<meta charset=\"UTF-8\">
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+<title>Restaurant Social Media Kit — Etsy Listing Preview</title>
+<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap\" rel=\"stylesheet\">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f5f5f5; color: #1a1a1a; font-family: 'Inter', sans-serif; }
+.etsy-header { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 12px 40px; display: flex; align-items: center; gap: 8px; }
+.etsy-header .logo { font-weight: 700; font-size: 22px; color: #f1641e; letter-spacing: -0.5px; }
+.etsy-header .tag { font-size: 11px; color: #757575; margin-left: auto; }
+.container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+@media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+/* Gallery */
+.gallery { position: sticky; top: 24px; align-self: start; }
+.main-image { background: #faf6f0; border-radius: 8px; overflow: hidden; aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; border: 1px solid #e0e0e0; margin-bottom: 12px; }
+.main-image .grid-preview { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 2px; width: 90%; height: 90%; }
+.main-image .grid-preview > div { border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #f0ebe4; }
+.thumbnails { display: flex; gap: 8px; }
+.thumbnails > div { width: 72px; height: 72px; border-radius: 6px; border: 2px solid transparent; cursor: pointer; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #faf6f0; }
+.thumbnails > div.active { border-color: #1a1a1a; }
+/* Listing Details */
+.listing h1 { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; line-height: 1.2; margin-bottom: 8px; }
+.listing .rating { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; font-size: 14px; }
+.listing .rating .stars { color: #e8b84b; letter-spacing: 2px; }
+.listing .rating .count { color: #757575; }
+.listing .price { font-size: 32px; font-weight: 700; margin-bottom: 20px; }
+.listing .price .note { font-size: 13px; font-weight: 400; color: #757575; }
+/* Color Swatches */
+.color-swatches { display: flex; gap: 8px; margin-bottom: 20px; }
+.color-swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #e0e0e0; cursor: pointer; position: relative; }
+.color-swatch:hover::after { content: attr(data-label); position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%); font-size: 9px; color: #757575; white-space: nowrap; }
+/* Section styles */
+.section-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #e8b84b; display: inline-block; }
+.desc { font-size: 14px; line-height: 1.6; color: #333; margin-bottom: 24px; }
+.features { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 24px; }
+.features > div { padding: 10px 14px; background: #faf6f0; border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.features > div span:first-child { font-size: 16px; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+.tag-list > span { padding: 4px 12px; background: #f0ebe4; border-radius: 14px; font-size: 11px; color: #555; }
+.pricing-table { display: flex; gap: 12px; margin-bottom: 24px; }
+.pricing-card { flex: 1; border: 2px solid #e0e0e0; border-radius: 10px; padding: 14px; text-align: center; }
+.pricing-card.featured { border-color: #c8553d; background: #fdf6f3; }
+.pricing-card .tier { font-size: 11px; font-weight: 600; color: #757575; text-transform: uppercase; letter-spacing: 1px; }
+.pricing-card .amt { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; margin: 4px 0; }
+.pricing-card .plat { font-size: 11px; color: #757575; }
+.cta { display: block; width: 100%; padding: 14px; background: #c8553d; color: #fff; border: none; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: background 0.2s; text-align: center; }
+.cta:hover { background: #a9442f; }
+.cta-secondary { background: #1a1a1a; margin-top: 8px; }
+.cta-secondary:hover { background: #333; }
+</style>
+</head>
+<body>
+<div class=\"etsy-header\">
+  <div class=\"logo\">Etsy</div>
+  <span style=\"font-size:13px;color:#757575;\">UK · Digital Products</span>
+  <span class=\"tag\">Preview — not a live listing</span>
+</div>
+<div class=\"container\">
+  <div class=\"gallery\">
+    <div class=\"main-image\">
+      <div class=\"grid-preview\">
+        <div>🍝</div><div>🍔</div><div>🥗</div>
+        <div>🍕</div><div>🥂</div><div>🍰</div>
+        <div>👨‍🍳</div><div>⭐</div><div>📍</div>
+      </div>
+    </div>
+    <div class=\"thumbnails\">
+      <div class=\"active\">🖼️</div>
+      <div>📱</div>
+      <div>💻</div>
+      <div>📋</div>
+    </div>
+  </div>
+  <div class=\"listing\">
+    <h1>Restaurant Social Media Templates | Canva Instagram Templates | Food Business Social Media Pack</h1>
+    <div class=\"rating\">
+      <span class=\"stars\">★★★★★</span>
+      <span class=\"count\">(0 reviews)</span>
+    </div>
+    <div class=\"price\">
+      .00
+      <span class=\"note\">+ Free delivery</span>
+    </div>
+
+    <div style=\"margin-bottom:16px;\">
+      <div style=\"font-size:12px;font-weight:600;margin-bottom:6px;\">Brand Palette:</div>
+      <div class=\"color-swatches\">
+        <div class=\"color-swatch\" style=\"background:#1a1a1a;\" data-label=\"Charcoal\"></div>
+        <div class=\"color-swatch\" style=\"background:#faf6f0;\" data-label=\"Cream\"></div>
+        <div class=\"color-swatch\" style=\"background:#c8553d;\" data-label=\"Terracotta\"></div>
+        <div class=\"color-swatch\" style=\"background:#6b8f5e;\" data-label=\"Olive\"></div>
+        <div class=\"color-swatch\" style=\"background:#e8b84b;\" data-label=\"Gold\"></div>
+      </div>
+    </div>
+
+    <div style=\"margin-bottom:16px;\">
+      <div style=\"font-size:12px;font-weight:600;margin-bottom:6px;\">Typography:</div>
+      <div style=\"display:flex;gap:16px;font-size:13px;\">
+        <span><span style=\"font-family:'Playfair Display',serif;font-weight:700;\">Playfair Display</span> — Headings</span>
+        <span><span style=\"font-family:'Inter',sans-serif;\">Inter</span> — Body</span>
+      </div>
+    </div>
+
+    <div class=\"section-title\">What's included</div>
+    <div class=\"features\">
+      <div><span>🖼️</span> 20 Square Posts (1080×1080)</div>
+      <div><span>📱</span> 12 Story Templates (1080×1920)</div>
+      <div><span>📋</span> 8 Carousel Slides (1080×1350)</div>
+      <div><span>📄</span> 1 Instruction PDF</div>
+      <div><span>🎨</span> 5-Brand Color Palette</div>
+      <div><span>🔤</span> 2 Premium Fonts</div>
+    </div>
+
+    <div class=\"section-title\">Categories</div>
+    <div style=\"display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:20px;\">
+      <div style=\"padding:8px 12px;background:#faf6f0;border-radius:6px;font-size:12px;\">🍽️ Menu &amp; Dish Spotlights</div>
+      <div style=\"padding:8px 12px;background:#faf6f0;border-radius:6px;font-size:12px;\">🏷️ Promotions &amp; Offers</div>
+      <div style=\"padding:8px 12px;background:#faf6f0;border-radius:6px;font-size:12px;\">🎉 Events &amp; Seasonal</div>
+      <div style=\"padding:8px 12px;background:#faf6f0;border-radius:6px;font-size:12px;\">👨‍🍳 Behind the Scenes</div>
+      <div style=\"padding:8px 12px;background:#faf6f0;border-radius:6px;font-size:12px;\">⭐ Testimonials &amp; Social Proof</div>
+      <div style=\"padding:8px 12px;background:#faf6f0;border-radius:6px;font-size:12px;\">📍 Hours &amp; Info</div>
+    </div>
+
+    <div class=\"section-title\">Description</div>
+    <div class=\"desc\">
+      <strong>Stop spending hours creating social media posts from scratch.</strong><br><br>
+      This Restaurant Social Media Kit gives you 40 professionally designed Canva templates — ready to customize with your own photos, menu items, and branding. Post consistently across Instagram and Facebook without hiring a designer.<br><br>
+      Edit in <strong>Canva Free</strong> — no paid account required. Change colors, photos, and text in minutes. Real copy prompts tell you exactly what to write.
+    </div>
+
+    <div class=\"section-title\">Pricing</div>
+    <div class=\"pricing-table\">
+      <div class=\"pricing-card featured\">
+        <div class=\"tier\">Entry</div>
+        <div class=\"amt\"></div>
+        <div class=\"plat\">Etsy / Gumroad</div>
+      </div>
+      <div class=\"pricing-card\">
+        <div class=\"tier\">Standard</div>
+        <div class=\"amt\"></div>
+        <div class=\"plat\">Creative Market</div>
+      </div>
+      <div class=\"pricing-card\">
+        <div class=\"tier\">Bundle</div>
+        <div class=\"amt\"></div>
+        <div class=\"plat\">All Platforms</div>
+      </div>
+    </div>
+
+    <div class=\"section-title\">Tags</div>
+    <div class=\"tag-list\">
+      <span>restaurant social media templates</span>
+      <span>canva instagram templates</span>
+      <span>food business marketing</span>
+      <span>restaurant instagram posts</span>
+      <span>canva template bundle</span>
+      <span>social media pack canva</span>
+      <span>cafe instagram templates</span>
+      <span>bakery social media kit</span>
+      <span>restaurant marketing templates</span>
+      <span>editable instagram templates</span>
+      <span>food photography template</span>
+      <span>small business canva</span>
+      <span>instagram story templates</span>
+    </div>
+
+    <button class=\"cta\" onclick=\"alert('Preview mode — listing not yet live.')\">Add to Cart (Preview)</button>
+    <button class=\"cta cta-secondary\" onclick=\"alert('Etsy listing coming soon.')\">View All 40 Templates →</button>
+  </div>
+</div>
+</body>
+</html>

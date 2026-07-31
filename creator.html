@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Creator OS</title>
+<link rel="stylesheet" href="os-core.css">
+<style>
+.os-format-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.os-format-video { background: #ffebee; color: #c62828; }
+.os-format-article { background: #e3f2fd; color: #1565c0; }
+.os-format-short { background: #e8f5e9; color: #2e7d32; }
+.os-format-podcast { background: #f3e5f5; color: #6a1b9a; }
+.os-platform-icon { font-size: 16px; margin-right: 4px; }
+.os-calendar-content { display: flex; gap: 16px; }
+.os-calendar-content .os-main-calendar { flex: 1; }
+.os-calendar-sidebar { width: 280px; flex-shrink: 0; }
+.os-deal-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 12px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="os-sidebar" id="sidebar"></div>
+<div class="os-main">
+  <div class="os-topbar">
+    <h1 id="screen-title">Dashboard</h1>
+    <div class="os-topbar-right">
+      <div id="search-container"></div>
+      <button class="os-btn os-btn-sm" onclick="exportData()">📥 Export</button>
+    </div>
+  </div>
+  <div class="os-content" id="content"></div>
+</div>
+
+<script src="os-core.js"></script>
+<script>
+const PLATFORMS = ['YouTube', 'TikTok', 'Instagram', 'Twitter/X', 'LinkedIn', 'Blog', 'Podcast', 'Newsletter'];
+const FORMATS = ['Video', 'Short', 'Article', 'Podcast', 'Infographic', 'Carousel', 'Thread'];
+
+OS.db.define('content', {
+  fields: [
+    { key: 'title', label: 'Title', type: 'text' },
+    { key: 'platform', label: 'Platform', type: 'select', options: PLATFORMS },
+    { key: 'format', label: 'Format', type: 'select', options: FORMATS },
+    { key: 'status', label: 'Status', type: 'select', options: ['Idea', 'Scripting', 'Filming', 'Editing', 'Ready', 'Published', 'Archived'], default: 'Idea' },
+    { key: 'dueDate', label: 'Due Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'publishedDate', label: 'Published Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+    { key: 'metricsViews', label: 'Views', type: 'number' },
+    { key: 'metricsLikes', label: 'Likes', type: 'number' },
+    { key: 'metricsComments', label: 'Comments', type: 'number' },
+  ]
+});
+
+OS.db.define('brandDeals', {
+  fields: [
+    { key: 'brand', label: 'Brand', type: 'text' },
+    { key: 'platform', label: 'Platform', type: 'select', options: PLATFORMS },
+    { key: 'payment', label: 'Payment ($)', type: 'number' },
+    { key: 'deliverables', label: 'Deliverables', type: 'textarea', placeholder: 'e.g. 2 videos, 4 posts' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Pitch', 'Negotiating', 'Signed', 'Delivered', 'Paid', 'Cancelled'], default: 'Pitch' },
+    { key: 'deadline', label: 'Deadline', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'paidDate', label: 'Paid Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('revenue', {
+  fields: [
+    { key: 'source', label: 'Source', type: 'select', options: ['Sponsorship', 'Ad Revenue', 'Affiliate', 'Merch', 'Digital Product', 'Service', 'Other'] },
+    { key: 'platform', label: 'Platform', type: 'select', options: PLATFORMS },
+    { key: 'amount', label: 'Amount ($)', type: 'number' },
+    { key: 'date', label: 'Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'brand', label: 'Brand / Partner', type: 'text' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('tasks', {
+  fields: [
+    { key: 'title', label: 'Task', type: 'text' },
+    { key: 'contentId', label: 'Content', type: 'select', options: () => OS.db.list('content').map(c => ({ value: c.id, label: c.title })) },
+    { key: 'stage', label: 'Stage', type: 'select', options: ['Ideate', 'Script', 'Film', 'Edit', 'Publish', 'Promote'], default: 'Ideate' },
+    { key: 'assignee', label: 'Assignee', type: 'text' },
+    { key: 'due', label: 'Due Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Pending', 'In Progress', 'Done'], default: 'Pending' },
+  ]
+});
+
+OS.db.define('collaborators', {
+  fields: [
+    { key: 'name', label: 'Name', type: 'text' },
+    { key: 'type', label: 'Type', type: 'select', options: ['Collaborator', 'Brand', 'Agency', 'Guest', 'Supplier'] },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'platform', label: 'Primary Platform', type: 'select', options: PLATFORMS },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+seedDemoData();
+const screens = {};
+function nav(label, icon, key, fn) { screens[key] = fn; return { label, icon, key }; }
+const navItems = [
+  nav('Dashboard', '📊', 'dashboard', renderDashboard),
+  nav('Content', '📝', 'content', renderContent),
+  nav('Calendar', '📅', 'calendar', renderCalendar),
+  nav('Brand Deals', '🤝', 'brandDeals', renderBrandDeals),
+  nav('Revenue', '💰', 'revenue', renderRevenue),
+  nav('Tasks', '✅', 'tasks', renderTasks),
+  nav('Collaborators', '👥', 'collaborators', renderCollaborators),
+];
+
+let searchQuery = '';
+function renderNav() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.innerHTML = '';
+  sidebar.appendChild($el('h2', {}, 'Creator OS'));
+  const navDiv = $el('div', { className: 'os-nav' });
+  for (const item of navItems) navDiv.appendChild($el('div', { className: 'os-nav-item', onClick: () => navigate(item.key), dataset: { screen: item.key } }, item.icon, $el('span', {}, item.label)));
+  sidebar.appendChild(navDiv);
+  sidebar.appendChild($el('div', { className: 'os-sidebar-footer' }, 'Creator OS v1'));
+}
+
+function navigate(screen) {
+  OS.state.currentScreen = screen;
+  document.querySelectorAll('.os-nav-item').forEach(el => el.classList.toggle('active', el.dataset.screen === screen));
+  const item = navItems.find(n => n.key === screen);
+  document.getElementById('screen-title').textContent = item ? item.label : 'Dashboard';
+  render(screen);
+}
+function render(screen) { (screens[screen] || screens.dashboard)(); }
+
+function renderDashboard() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const content = OS.db.list('content');
+  const published = content.filter(c => c.status === 'Published');
+  const inProgress = content.filter(c => ['Scripting', 'Filming', 'Editing'].includes(c.status));
+  const dueThisWeek = content.filter(c => {
+    if (!c.dueDate || c.status === 'Published') return false;
+    const d = new Date(c.dueDate); const now = new Date(); const wk = new Date(now); wk.setDate(now.getDate() + 7);
+    return d >= now && d <= wk;
+  });
+  const totalViews = published.reduce((s, c) => s + (parseInt(c.metricsViews) || 0), 0);
+  const totalRevenue = OS.db.totals('revenue', 'amount');
+  const activeDeals = OS.db.list('brandDeals').filter(d => ['Signed', 'Negotiating'].includes(d.status));
+  const pendingPayment = OS.db.list('brandDeals').filter(d => d.status === 'Delivered').reduce((s, d) => s + (parseFloat(d.payment) || 0), 0);
+
+  OS.ui.renderCards(c, [
+    { label: 'Published', value: published.length, color: '#2e7d32' },
+    { label: 'In Progress', value: inProgress.length, color: '#1565c0' },
+    { label: 'Due This Week', value: dueThisWeek.length, color: '#e65100' },
+    { label: 'Total Views', value: totalViews.toLocaleString(), color: '#0f3460' },
+    { label: 'Revenue', value: totalRevenue, prefix: '$', color: '#2e7d32' },
+    { label: 'Pending Payment', value: pendingPayment, prefix: '$', color: '#c62828' },
+    { label: 'Active Brand Deals', value: activeDeals.length, color: '#6a1b9a' },
+  ]);
+}
+
+function renderContent() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Content Library'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addContent() }, '+ New Content'));
+  c.appendChild(header);
+
+  const content = OS.db.search('content', searchQuery);
+  OS.ui.renderTable(c, content, [
+    { label: 'Title', key: 'title' },
+    { label: 'Platform', render: r => `<span class="os-platform-icon">${platformEmoji(r.platform)}</span> ${r.platform}` },
+    { label: 'Format', render: r => `<span class="os-format-badge os-format-${r.format?.toLowerCase()}">${r.format}</span>` },
+    { label: 'Status', render: r => `<span class="os-badge ${r.status === 'Published' ? 'os-badge-published' : r.status === 'Ready' ? 'os-badge-paid' : r.status === 'Idea' ? 'os-badge-draft' : 'os-badge-active'}">${r.status}</span>` },
+    { label: 'Due', key: 'dueDate' },
+    { label: 'Views', key: 'metricsViews', render: r => r.metricsViews ? Number(r.metricsViews).toLocaleString() : '-' },
+  ], {
+    onEdit: r => editContent(r),
+    onDelete: r => { OS.db.delete('content', r.id); renderContent(); },
+  });
+}
+
+function platformEmoji(p) {
+  const emojis = { 'YouTube': '▶️', 'TikTok': '🎵', 'Instagram': '📸', 'Twitter/X': '🐦', 'LinkedIn': '💼', 'Blog': '📝', 'Podcast': '🎙️', 'Newsletter': '📧' };
+  return emojis[p] || '📱';
+}
+
+function addContent() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('content'), {}, d => {
+    OS.db.create('content', d); OS.ui.closeModal(); renderContent(); OS.ui.showToast('Content added', 'success');
+  });
+  OS.ui.showModal('New Content', container);
+}
+function editContent(item) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('content'), item, d => { OS.db.update('content', item.id, d); OS.ui.closeModal(); renderContent(); });
+  OS.ui.showModal('Edit Content', container);
+}
+
+function renderCalendar() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  c.appendChild($el('h2', { style: { marginBottom: '16px' } }, 'Content Calendar'));
+
+  const now = new Date();
+  const year = now.getFullYear(); const month = now.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDay = firstDay.getDay();
+  const daysInMonth = lastDay.getDate();
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  const content = OS.db.list('content');
+  const calendar = $el('div', { className: 'os-calendar' });
+  const header = $el('div', { className: 'os-calendar-header' });
+  header.appendChild($el('h3', {}, `${monthNames[month]} ${year}`));
+  calendar.appendChild(header);
+
+  const grid = $el('div', { className: 'os-calendar-grid' });
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  for (const dn of dayNames) grid.appendChild($el('div', { className: 'os-calendar-day-header' }, dn));
+
+  for (let i = 0; i < startDay; i++) grid.appendChild($el('div', { className: 'os-calendar-day other-month' }));
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayEl = $el('div', { className: 'os-calendar-day' });
+    dayEl.appendChild($el('div', { className: 'os-calendar-day-number' }, String(day)));
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    for (const item of content) {
+      if (item.dueDate === dateStr && item.status !== 'Published') {
+        dayEl.appendChild($el('div', { className: 'os-calendar-event', style: { background: '#fff3e0', color: '#e65100' }, onclick: () => editContent(item) }, `📝 ${item.title.slice(0, 20)}`));
+      }
+      if (item.publishedDate === dateStr) {
+        dayEl.appendChild($el('div', { className: 'os-calendar-event', style: { background: '#e8f5e9', color: '#2e7d32' }, onclick: () => editContent(item) }, `✅ ${item.title.slice(0, 20)}`));
+      }
+    }
+    grid.appendChild(dayEl);
+  }
+
+  calendar.appendChild(grid);
+  c.appendChild(calendar);
+}
+
+function renderBrandDeals() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Brand Deals'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addBrandDeal() }, '+ New Deal'));
+  c.appendChild(header);
+
+  const deals = OS.db.search('brandDeals', searchQuery);
+  const totalPipeline = deals.filter(d => !['Paid', 'Cancelled'].includes(d.status)).reduce((s, d) => s + (parseFloat(d.payment) || 0), 0);
+
+  OS.ui.renderCards(c, [
+    { label: 'Active Deals', value: deals.filter(d => !['Paid', 'Cancelled'].includes(d.status)).length, color: '#1565c0' },
+    { label: 'Pipeline Value', value: totalPipeline, prefix: '$', color: '#0f3460' },
+    { label: 'Paid Out', value: deals.filter(d => d.status === 'Paid').reduce((s, d) => s + (parseFloat(d.payment) || 0), 0), prefix: '$', color: '#2e7d32' },
+  ]);
+
+  OS.ui.renderTable(c, deals, [
+    { label: 'Brand', key: 'brand' },
+    { label: 'Platform', key: 'platform' },
+    { label: 'Payment', render: r => `$${Number(r.payment || 0).toLocaleString()}` },
+    { label: 'Status', render: r => {
+      const colors = { Pitch: 'os-badge-draft', Negotiating: 'os-badge-pending', Signed: 'os-badge-active', Delivered: 'os-badge-qualified', Paid: 'os-badge-paid', Cancelled: 'os-badge-closed-lost' };
+      return `<span class="os-badge ${colors[r.status] || 'os-badge-pending'}">${r.status}</span>`;
+    }},
+    { label: 'Deadline', key: 'deadline' },
+  ], {
+    onEdit: r => editBrandDeal(r),
+    onDelete: r => { OS.db.delete('brandDeals', r.id); renderBrandDeals(); },
+  });
+}
+
+function addBrandDeal() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('brandDeals'), {}, d => { OS.db.create('brandDeals', d); OS.ui.closeModal(); renderBrandDeals(); OS.ui.showToast('Deal created', 'success'); });
+  OS.ui.showModal('New Brand Deal', container);
+}
+function editBrandDeal(deal) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('brandDeals'), deal, d => { OS.db.update('brandDeals', deal.id, d); OS.ui.closeModal(); renderBrandDeals(); });
+  OS.ui.showModal('Edit Brand Deal', container);
+}
+
+function renderRevenue() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Revenue'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addRevenue() }, '+ Add Revenue'));
+  c.appendChild(header);
+
+  const revenue = OS.db.search('revenue', searchQuery);
+  const total = revenue.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+  const bySource = OS.db.sumBy('revenue', 'amount', 'source');
+  const byPlatform = OS.db.sumBy('revenue', 'amount', 'platform');
+
+  OS.ui.renderCards(c, [
+    { label: 'Total Revenue', value: total, prefix: '$', color: '#2e7d32' },
+    { label: 'Transactions', value: revenue.length, color: '#1565c0' },
+  ]);
+
+  c.appendChild($el('h3', { style: { marginTop: '20px', marginBottom: '8px' } }, 'By Source'));
+  renderSimpleTable(c, Object.entries(bySource).map(([k, v]) => ({ Source: k, Amount: `$${v.toLocaleString()}` })));
+
+  c.appendChild($el('h3', { style: { marginTop: '20px', marginBottom: '8px' } }, 'By Platform'));
+  renderSimpleTable(c, Object.entries(byPlatform).map(([k, v]) => ({ Platform: k, Amount: `$${v.toLocaleString()}` })));
+
+  c.appendChild($el('h3', { style: { marginTop: '20px', marginBottom: '8px' } }, 'All Entries'));
+  OS.ui.renderTable(c, revenue, [
+    { label: 'Date', key: 'date' },
+    { label: 'Source', key: 'source' },
+    { label: 'Platform', key: 'platform' },
+    { label: 'Amount', render: r => `$${Number(r.amount || 0).toLocaleString()}` },
+    { label: 'Brand', key: 'brand' },
+  ], {
+    onDelete: r => { OS.db.delete('revenue', r.id); renderRevenue(); },
+  });
+}
+
+function addRevenue() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('revenue'), { date: new Date().toISOString().slice(0, 10) }, d => { OS.db.create('revenue', d); OS.ui.closeModal(); renderRevenue(); OS.ui.showToast('Revenue added', 'success'); });
+  OS.ui.showModal('Add Revenue', container);
+}
+
+function renderTasks() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Production Tasks'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addTask() }, '+ New Task'));
+  c.appendChild(header);
+
+  const tasks = OS.db.search('tasks', searchQuery);
+  const data = tasks.map(t => {
+    const ct = t.contentId ? OS.db.read('content', t.contentId) : null;
+    return { ...t, contentTitle: ct ? ct.title : '-' };
+  });
+
+  OS.ui.renderTable(c, data, [
+    { label: 'Task', key: 'title' },
+    { label: 'Content', key: 'contentTitle' },
+    { label: 'Stage', render: r => `<span class="os-badge os-badge-${r.stage?.toLowerCase() === 'publish' ? 'published' : 'active'}">${r.stage}</span>` },
+    { label: 'Status', render: r => `<span class="os-badge ${r.status === 'Done' ? 'os-badge-paid' : r.status === 'In Progress' ? 'os-badge-active' : 'os-badge-pending'}">${r.status}</span>` },
+    { label: 'Assignee', key: 'assignee' },
+    { label: 'Due', key: 'due' },
+  ], {
+    onEdit: r => editTask(r),
+    onDelete: r => { OS.db.delete('tasks', r.id); renderTasks(); },
+  });
+}
+
+function addTask() {
+  const s = OS.db.schema('tasks');
+  s.fields.find(f => f.key === 'contentId').options = () => OS.db.list('content').map(c => ({ value: c.id, label: c.title }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, {}, d => { OS.db.create('tasks', d); OS.ui.closeModal(); renderTasks(); OS.ui.showToast('Task created', 'success'); });
+  OS.ui.showModal('New Task', container);
+}
+function editTask(task) {
+  const s = OS.db.schema('tasks');
+  s.fields.find(f => f.key === 'contentId').options = () => OS.db.list('content').map(c => ({ value: c.id, label: c.title }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, task, d => { OS.db.update('tasks', task.id, d); OS.ui.closeModal(); renderTasks(); });
+  OS.ui.showModal('Edit Task', container);
+}
+
+function renderCollaborators() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Collaborators'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addCollaborator() }, '+ Add'));
+  c.appendChild(header);
+
+  const collabs = OS.db.search('collaborators', searchQuery);
+  OS.ui.renderTable(c, collabs, [
+    { label: 'Name', key: 'name' },
+    { label: 'Type', render: r => `<span class="os-badge ${r.type === 'Brand' ? 'os-badge-proposal' : r.type === 'Collaborator' ? 'os-badge-qualified' : 'os-badge-pending'}">${r.type}</span>` },
+    { label: 'Email', key: 'email' },
+    { label: 'Platform', key: 'platform' },
+  ], {
+    onEdit: r => editCollaborator(r),
+    onDelete: r => { OS.db.delete('collaborators', r.id); renderCollaborators(); },
+  });
+}
+
+function addCollaborator() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('collaborators'), {}, d => { OS.db.create('collaborators', d); OS.ui.closeModal(); renderCollaborators(); OS.ui.showToast('Added', 'success'); });
+  OS.ui.showModal('Add Collaborator', container);
+}
+function editCollaborator(col) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('collaborators'), col, d => { OS.db.update('collaborators', col.id, d); OS.ui.closeModal(); renderCollaborators(); });
+  OS.ui.showModal('Edit Collaborator', container);
+}
+
+function renderSimpleTable(container, data) {
+  if (!data.length) return;
+  const keys = Object.keys(data[0]);
+  const table = $el('table', { className: 'os-table' });
+  const thead = $el('thead'); thead.appendChild($el('tr', {}, ...keys.map(k => $el('th', {}, k)))); table.appendChild(thead);
+  const tbody = $el('tbody');
+  for (const row of data) tbody.appendChild($el('tr', {}, ...keys.map(k => $el('td', {}, String(row[k])))));
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function exportData() {
+  const schemas = ['content', 'brandDeals', 'revenue', 'tasks', 'collaborators'];
+  const data = {}; for (const s of schemas) data[s] = OS.db.list(s);
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `creator-os-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+  OS.ui.showToast('Data exported', 'success');
+}
+
+function seedDemoData() {
+  if (localStorage.getItem('os_creator_seeded')) return;
+  OS.db.create('content', { title: 'How I Built This', platform: 'YouTube', format: 'Video', status: 'Editing', dueDate: '2026-07-28', notes: 'B-roll needed', metricsViews: 0 });
+  OS.db.create('content', { title: 'Top 5 Tips for Creators', platform: 'TikTok', format: 'Short', status: 'Published', publishedDate: '2026-07-18', metricsViews: 45200, metricsLikes: 3200, metricsComments: 184 });
+  OS.db.create('content', { title: 'My Weekly Routine', platform: 'Instagram', format: 'Carousel', status: 'Scripting', dueDate: '2026-07-25' });
+  OS.db.create('content', { title: 'Creator Economy Report', platform: 'Newsletter', format: 'Article', status: 'Idea', dueDate: '2026-08-01' });
+  OS.db.create('content', { title: 'Interview with Founder', platform: 'Podcast', format: 'Podcast', status: 'Editing', dueDate: '2026-07-30' });
+  OS.db.create('content', { title: 'Behind the Scenes', platform: 'YouTube', format: 'Short', status: 'Published', publishedDate: '2026-07-15', metricsViews: 18500, metricsLikes: 1200 });
+
+  OS.db.create('brandDeals', { brand: 'TechGadget Co', platform: 'YouTube', payment: 5000, deliverables: '2 videos, 1 mention', status: 'Signed', deadline: '2026-08-15' });
+  OS.db.create('brandDeals', { brand: 'Fashion Brand X', platform: 'Instagram', payment: 2500, deliverables: '3 posts, 2 stories', status: 'Negotiating', deadline: '2026-08-01' });
+  OS.db.create('brandDeals', { brand: 'SaaS Tool Inc', platform: 'LinkedIn', payment: 3000, deliverables: '1 article, 3 posts', status: 'Delivered', deadline: '2026-07-20' });
+
+  OS.db.create('revenue', { source: 'Sponsorship', platform: 'YouTube', amount: 5000, date: '2026-07-15', brand: 'TechGadget Co' });
+  OS.db.create('revenue', { source: 'Ad Revenue', platform: 'YouTube', amount: 1240, date: '2026-07-01', brand: 'YouTube' });
+  OS.db.create('revenue', { source: 'Affiliate', platform: 'Blog', amount: 380, date: '2026-07-10', brand: 'Amazon' });
+
+  OS.db.create('tasks', { title: 'Film intro segment', contentId: OS.db.list('content')[0].id, stage: 'Film', assignee: 'Self', due: '2026-07-22', status: 'Pending' });
+  OS.db.create('tasks', { title: 'Write newsletter draft', contentId: OS.db.list('content')[3].id, stage: 'Script', assignee: 'Self', due: '2026-07-25', status: 'In Progress' });
+  OS.db.create('tasks', { title: 'Edit podcast audio', contentId: OS.db.list('content')[4].id, stage: 'Edit', assignee: 'Audio Editor', due: '2026-07-28', status: 'Pending' });
+
+  OS.db.create('collaborators', { name: 'Alex Rivera', type: 'Collaborator', email: 'alex@example.com', platform: 'YouTube', notes: 'Video editor' });
+  OS.db.create('collaborators', { name: 'Nike', type: 'Brand', email: 'partnerships@nike.com', platform: 'Instagram' });
+
+  localStorage.setItem('os_creator_seeded', '1');
+}
+
+OS.ui.renderSearch(document.getElementById('search-container'), 'Search...', q => { searchQuery = q; render(OS.state.currentScreen); });
+renderNav();
+navigate('dashboard');
+</script>
+</body>
+</html>

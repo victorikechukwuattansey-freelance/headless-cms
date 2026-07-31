@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Sales Pipeline – Google Sheets CRM Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0f172a;
+  font-family: 'Inter', -apple-system, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+.stage {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.spreadsheet-wrapper {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center center;
+  will-change: transform;
+}
+.spreadsheet {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 1140px;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+  overflow: hidden;
+  font-size: 13px;
+}
+/* Google Sheets style header */
+.gs-header {
+  background: #0f9d58;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+}
+.gs-header .logo-icon {
+  width: 20px; height: 20px;
+  background: #fff;
+  border-radius: 4px;
+  display: flex;
+  align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #0f9d58;
+}
+.gs-header .doc-name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.gs-header .doc-name span { opacity: 0.7; font-weight: 400; }
+.gs-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+  gap: 4px;
+  font-size: 12px;
+  color: #5f6368;
+}
+.gs-toolbar .tb-btn {
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.gs-toolbar .tb-btn:hover { background: #e8eaed; }
+.gs-toolbar .sep { width: 1px; height: 20px; background: #dadce0; margin: 0 4px; }
+.gs-formula-bar {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 12px;
+  color: #5f6368;
+}
+.gs-formula-bar .fx-label {
+  background: #f1f3f4;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #3c4043;
+}
+.gs-formula-bar .fx-input {
+  flex: 1;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-family: 'Inter', monospace;
+  font-size: 12px;
+  outline: none;
+  color: #3c4043;
+}
+.gs-formula-bar .fx-input:focus { border-color: #1a73e8; }
+
+/* Table styles */
+.sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.sheet-table thead tr {
+  background: #f8f9fa;
+}
+.sheet-table th {
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #c0c0c0;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #3c4043;
+  text-align: left;
+  white-space: nowrap;
+  position: relative;
+  letter-spacing: 0.01em;
+}
+.sheet-table th:last-child { border-right: none; }
+.sheet-table th .resize-handle {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+}
+.sheet-table th .resize-handle:hover { background: #1a73e8; }
+.sheet-table td {
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e8e8e8;
+  padding: 7px 8px;
+  font-size: 13px;
+  color: #202124;
+  vertical-align: middle;
+  transition: background 0.4s ease, color 0.4s ease, box-shadow 0.3s ease;
+  position: relative;
+  height: 34px;
+}
+.sheet-table td:last-child { border-right: none; }
+.sheet-table td.row-num {
+  width: 36px;
+  text-align: center;
+  color: #5f6368;
+  font-size: 11px;
+  font-weight: 500;
+  background: #f8f9fa;
+  border-right: 1px solid #c0c0c0;
+  min-width: 36px;
+}
+.sheet-table tr:last-child td { border-bottom: 1px solid #c0c0c0; }
+
+/* Column widths */
+.col-date { width: 88px; }
+.col-name { width: 130px; }
+.col-phone { width: 130px; }
+.col-req { width: 160px; }
+.col-budget { width: 90px; }
+.col-urgency { width: 80px; }
+.col-score { width: 80px; }
+.col-status { width: 100px; }
+.col-action { width: 130px; }
+
+/* Dropdown styling */
+.dropdown-cell {
+  cursor: pointer;
+  position: relative;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+.dropdown-cell::after {
+  content: '\25BC';
+  font-size: 8px;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #5f6368;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.dropdown-cell:hover::after { opacity: 1; }
+.dropdown-cell .dd-value {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.4s ease;
+}
+
+/* Dropdown menu */
+.dropdown-menu {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 4px 0;
+  min-width: 120px;
+  opacity: 0;
+  transform: scale(0.95) translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.dropdown-menu.active {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: all;
+}
+.dropdown-menu .dd-option {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #202124;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+.dropdown-menu .dd-option:hover { background: #f1f3f4; }
+.dropdown-menu .dd-option .dd-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Status pills */
+.status-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: all 0.4s ease;
+}
+
+/* Score cell */
+.score-cell {
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  transition: all 0.4s ease;
+}
+.score-empty {
+  color: #9aa0a6;
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+/* Cursor */
+.cursor-overlay {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  transition: transform 0.45s cubic-bezier(0.25, 0.1, 0.25, 1);
+  will-change: transform;
+}
+.cursor-arrow {
+  width: 22px;
+  height: 22px;
+}
+.cursor-arrow svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3)); }
+
+/* Click ripple */
+.click-ripple {
+  position: fixed;
+  z-index: 9998;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: rgba(26, 115, 232, 0.35);
+  transform: scale(0);
+  pointer-events: none;
+}
+.click-ripple.animate {
+  animation: rippleAnim 0.5s ease-out forwards;
+}
+@keyframes rippleAnim {
+  0% { transform: scale(0); opacity: 1; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+/* Highlight pulse */
+.highlight-pulse {
+  animation: pulseGlow 1.2s ease-in-out 3;
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: inset 0 0 0 2px transparent; }
+  50% { box-shadow: inset 0 0 0 2px #1a73e8, 0 0 12px rgba(26,115,232,0.3); }
+}
+
+/* New row insertion */
+.new-row {
+  animation: rowSlideIn 0.5s ease-out forwards;
+}
+@keyframes rowSlideIn {
+  0% { opacity: 0; transform: translateX(-20px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* Score counting animation */
+@keyframes countPop {
+  0% { transform: scale(1.3); }
+  60% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+.score-pop {
+  animation: countPop 0.4s ease-out;
+}
+
+/* Tooltip / label */
+.step-label {
+  position: fixed;
+  z-index: 1001;
+  background: #1a1a2e;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  max-width: 280px;
+  line-height: 1.5;
+}
+.step-label.active { opacity: 1; transform: translateY(0); }
+.step-label .label-arrow {
+  position: absolute;
+  width: 0; height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #1a1a2e;
+  bottom: -6px; left: 50%;
+  transform: translateX(-50%);
+}
+.step-label.label-below .label-arrow {
+  top: -6px; bottom: auto;
+  border-top: none;
+  border-bottom: 6px solid #1a1a2e;
+}
+
+/* Progress bar */
+.progress-bar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 100;
+}
+.progress-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+.progress-dot.active { background: #0f9d58; transform: scale(1.3); }
+.progress-dot.done { background: #0f9d58; opacity: 0.5; }
+
+/* Final headline */
+.final-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 23, 42, 0.88);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s ease;
+}
+.final-overlay.active { opacity: 1; pointer-events: all; }
+.final-overlay h1 {
+  color: #fff;
+  font-size: 42px;
+  font-weight: 700;
+  text-align: center;
+  max-width: 720px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  transform: translateY(20px);
+  opacity: 0;
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
+}
+.final-overlay.active h1 {
+  transform: translateY(0);
+  opacity: 1;
+}
+.final-overlay .subtitle {
+  color: #94a3b8;
+  font-size: 18px;
+  margin-top: 16px;
+  transform: translateY(20px);
+  opacity: 0;
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.6s;
+}
+.final-overlay.active .subtitle {
+  transform: translateY(0);
+  opacity: 1;
+}
+.final-overlay .brand-marker {
+  margin-top: 32px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #0f9d58;
+  font-weight: 600;
+  font-size: 15px;
+  transform: translateY(20px);
+  opacity: 0;
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.9s;
+}
+.final-overlay.active .brand-marker {
+  transform: translateY(0);
+  opacity: 1;
+}
+.final-overlay .brand-marker .icon {
+  width: 28px; height: 28px;
+  background: #0f9d58;
+  border-radius: 6px;
+  display: flex;
+  align-items: center; justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* Replay button */
+.replay-btn {
+  position: absolute;
+  bottom: 60px;
+  right: 30px;
+  z-index: 300;
+  background: rgba(255,255,255,0.95);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a2e;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.replay-btn.visible { opacity: 1; }
+.replay-btn:hover { background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+/* Color utility classes */
+.bg-green { background: #e6f4ea; color: #137333; }
+.bg-yellow { background: #fef7e0; color: #b06000; }
+.bg-red { background: #fce8e6; color: #c5221f; }
+.bg-blue { background: #e8f0fe; color: #1a73e8; }
+.bg-purple { background: #f3e8ff; color: #7c3aed; }
+.bg-orange { background: #fff3e0; color: #e65100; }
+.bg-gray { background: #f1f3f4; color: #5f6368; }
+
+.text-green { color: #137333; }
+.text-yellow { color: #b06000; }
+.text-red { color: #c5221f; }
+.text-blue { color: #1a73e8; }
+
+/* Score colors */
+.score-high { color: #137333; }
+.score-mid { color: #b06000; }
+.score-low { color: #c5221f; }
+
+/* Formula highlight */
+.formula-glow td {
+  box-shadow: inset 0 0 0 2px #1a73e8 !important;
+}
+
+/* Notification badge */
+.notif {
+  position: absolute;
+  top: 8px; right: 12px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all 0.3s ease;
+}
+.notif.active { opacity: 1; transform: translateY(0); }
+
+/* Glow effect for formula bar */
+.fx-glow {
+  animation: fxPulse 1.5s ease-in-out infinite;
+}
+@keyframes fxPulse {
+  0%, 100% { border-color: #1a73e8; box-shadow: 0 0 0 0 rgba(26,115,232,0.2); }
+  50% { border-color: #1a73e8; box-shadow: 0 0 0 4px rgba(26,115,232,0.1); }
+}
+
+/* Ambient glow */
+.ambient-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(60px);
+  opacity: 0.15;
+}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="spreadsheet-wrapper" id="spreadsheetWrapper">
+    <div class="spreadsheet" id="spreadsheet">
+      <!-- Header -->
+      <div class="gs-header">
+        <div class="logo-icon">G</div>
+        <div class="doc-name">Sales CRM Pipeline <span>– Lead Scoring Dashboard</span></div>
+      </div>
+      <!-- Toolbar -->
+      <div class="gs-toolbar">
+        <span class="tb-btn">File</span><span class="tb-btn">Edit</span><span class="tb-btn">View</span><span class="tb-btn">Insert</span><span class="tb-btn">Format</span><span class="tb-btn">Data</span><span class="tb-btn">Tools</span><span class="tb-btn">Extensions</span><span class="tb-btn">Help</span>
+        <span class="sep"></span>
+        <span style="font-size:11px;color:#5f6368;margin-left:auto;">Last edit: 2 minutes ago</span>
+      </div>
+      <!-- Formula bar -->
+      <div class="gs-formula-bar">
+        <span class="fx-label">fx</span>
+        <input class="fx-input" id="fxInput" readonly value="=IF(BudgetFit&Urgency="", "", (BudgetFitScore + UrgencyScore)*10)" spellcheck="false">
+      </div>
+      <!-- Table -->
+      <table class="sheet-table" id="sheetTable">
+        <thead>
+          <tr>
+            <th style="width:36px;text-align:center;">#</th>
+            <th class="col-date">Date</th>
+            <th class="col-name">Lead Name</th>
+            <th class="col-phone">Phone Number</th>
+            <th class="col-req">Requirement</th>
+            <th class="col-budget">Budget Fit</th>
+            <th class="col-urgency">Urgency</th>
+            <th class="col-score">Lead Score</th>
+            <th class="col-status">Status</th>
+            <th class="col-action">Next Action</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <!-- Rows inserted by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Cursor -->
+  <div class="cursor-overlay" id="cursor">
+    <div class="cursor-arrow">
+      <svg viewBox="0 0 22 22" fill="none">
+        <path d="M3 2L19 13L12 14.5L15 20L13 21L10 15.5L6.5 19L5 17.5L8.5 14L3 12.5Z" fill="#1a1a2e" stroke="#fff" stroke-width="0.8"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Click ripple -->
+  <div class="click-ripple" id="clickRipple"></div>
+
+  <!-- Step label -->
+  <div class="step-label" id="stepLabel">
+    <span id="stepLabelText"></span>
+    <div class="label-arrow"></div>
+  </div>
+
+  <!-- Progress dots -->
+  <div class="progress-bar" id="progressBar"></div>
+
+  <!-- Final overlay -->
+  <div class="final-overlay" id="finalOverlay">
+    <h1>Automated Lead Scoring &amp;<br>Smart Sales Pipeline in Google Sheets</h1>
+    <div class="subtitle">No manual scoring. Instant prioritization. Color-coded pipeline.</div>
+    <div class="brand-marker">
+      <div class="icon">G</div>
+      Sheets CRM Template
+    </div>
+  </div>
+
+  <!-- Replay button -->
+  <button class="replay-btn" id="replayBtn">↻ Replay Demo</button>
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const LEADS = [
+  { date: '2026-07-20', name: 'Sarah Chen', phone: '+1 (555) 123-4567', req: 'ERP Software Implementation', budget: 'High', urgency: 'Hot', score: 100, status: 'Quote Sent', action: 'Schedule demo' },
+  { date: '2026-07-19', name: 'Marcus Johnson', phone: '+1 (555) 987-6543', req: 'Cloud Migration Services', budget: 'Medium', urgency: 'Warm', score: 60, status: 'Contacted', action: 'Send proposal' },
+  { date: '2026-07-18', name: 'Emily Rodriguez', phone: '+1 (555) 456-7890', req: 'Data Analytics Platform', budget: 'High', urgency: 'Cold', score: 60, status: 'New', action: 'Initial call' },
+  { date: '2026-07-17', name: 'David Kim', phone: '+1 (555) 234-5678', req: 'Cybersecurity Audit', budget: 'Low', urgency: 'Hot', score: 40, status: 'Quote Sent', action: 'Follow up' },
+  { date: '2026-07-20', name: 'Lisa Thompson', phone: '+1 (555) 345-6789', req: 'AI Chatbot Integration', budget: '', urgency: '', score: null, status: 'New', action: 'Qualify lead' },
+  { date: '2026-07-20', name: 'James Wilson', phone: '+1 (555) 567-8901', req: 'CRM Migration', budget: '', urgency: '', score: null, status: 'New', action: 'Research' },
+];
+
+const NEW_LEADS = [
+  { date: '2026-07-20', name: 'Alex Brown', phone: '+1 (555) 789-0123', req: 'E-commerce Platform Redesign', budget: 'High', urgency: 'Hot', score: 100, status: 'New', action: 'Product demo' },
+  { date: '2026-07-20', name: 'Maria Garcia', phone: '+1 (555) 901-2345', req: 'Salesforce Integration', budget: 'Medium', urgency: 'Warm', score: 60, status: 'New', action: 'Discovery call' },
+];
+
+const BUDGET_OPTS = ['High', 'Medium', 'Low'];
+const URGENCY_OPTS = ['Hot', 'Warm', 'Cold'];
+const STATUS_OPTS = ['New', 'Contacted', 'Quote Sent', 'Paid', 'Lost'];
+
+const STATUS_COLORS = {
+  'New': { bg: '#e8f0fe', text: '#1a73e8' },
+  'Contacted': { bg: '#f3e8ff', text: '#7c3aed' },
+  'Quote Sent': { bg: '#fff3e0', text: '#e65100' },
+  'Paid': { bg: '#e6f4ea', text: '#137333' },
+  'Lost': { bg: '#fce8e6', text: '#c5221f' },
+};
+
+const BUDGET_COLORS = {
+  'High': { bg: '#e6f4ea', text: '#137333' },
+  'Medium': { bg: '#fef7e0', text: '#b06000' },
+  'Low': { bg: '#fce8e6', text: '#c5221f' },
+};
+
+const URGENCY_COLORS = {
+  'Hot': { bg: '#fce8e6', text: '#c5221f' },
+  'Warm': { bg: '#fef7e0', text: '#b06000' },
+  'Cold': { bg: '#e8f0fe', text: '#1a73e8' },
+};
+
+function calcScore(budget, urgency) {
+  if (!budget || !urgency) return null;
+  const b = { 'High': 50, 'Medium': 30, 'Low': 10 };
+  const u = { 'Hot': 50, 'Warm': 30, 'Cold': 10 };
+  return (b[budget] || 0) + (u[urgency] || 0);
+}
+
+function scoreColor(score) {
+  if (score === null || score === undefined) return '';
+  if (score >= 80) return '#137333';
+  if (score >= 50) return '#b06000';
+  return '#c5221f';
+}
+
+function scoreBg(score) {
+  if (score === null || score === undefined) return '';
+  if (score >= 80) return '#e6f4ea';
+  if (score >= 50) return '#fef7e0';
+  return '#fce8e6';
+}
+
+// ============================================================
+// STATE
+// ============================================================
+let leads = [];
+let running = false;
+let cancelled = false;
+
+// ============================================================
+// DOM REFS
+// ============================================================
+const tbody = document.getElementById('tableBody');
+const cursor = document.getElementById('cursor');
+const clickRipple = document.getElementById('clickRipple');
+const stepLabel = document.getElementById('stepLabel');
+const stepLabelText = document.getElementById('stepLabelText');
+const progressBar = document.getElementById('progressBar');
+const finalOverlay = document.getElementById('finalOverlay');
+const replayBtn = document.getElementById('replayBtn');
+const fxInput = document.getElementById('fxInput');
+const wrapper = document.getElementById('spreadsheetWrapper');
+const stage = document.getElementById('stage');
+
+let activeDropdown = null;
+let dropdownResolve = null;
+let dropdownCloseHandler = null;
+
+// ============================================================
+// RENDER
+// ============================================================
+function render() {
+  tbody.innerHTML = '';
+  leads.forEach((lead, idx) => {
+    const tr = document.createElement('tr');
+    tr.dataset.index = idx;
+    tr.id = `row-${idx}`;
+
+    const score = lead.score !== null && lead.score !== undefined ? lead.score : '';
+    const sc = scoreColor(lead.score);
+    const sbg = scoreBg(lead.score);
+
+    const budgetStyle = lead.budget ? `color:${BUDGET_COLORS[lead.budget].text};` : '';
+    const urgencyStyle = lead.urgency ? `color:${URGENCY_COLORS[lead.urgency].text};` : '';
+    const statusStyle = lead.status ? STATUS_COLORS[lead.status] : { bg: '#f1f3f4', text: '#5f6368' };
+
+    tr.innerHTML = `
+      <td class="row-num">${idx + 1}</td>
+      <td class="col-date">${lead.date}</td>
+      <td class="col-name"><strong>${lead.name}</strong></td>
+      <td class="col-phone">${lead.phone}</td>
+      <td class="col-req">${lead.req}</td>
+      <td class="col-budget dropdown-cell ${lead.budget ? 'has-value' : ''}" data-row="${idx}" data-field="budget">
+        ${lead.budget ? `<span class="dd-value" style="background:${BUDGET_COLORS[lead.budget].bg};color:${BUDGET_COLORS[lead.budget].text}">${lead.budget}</span>` : '<span class="dd-value" style="color:#9aa0a6">—</span>'}
+      </td>
+      <td class="col-urgency dropdown-cell ${lead.urgency ? 'has-value' : ''}" data-row="${idx}" data-field="urgency">
+        ${lead.urgency ? `<span class="dd-value" style="background:${URGENCY_COLORS[lead.urgency].bg};color:${URGENCY_COLORS[lead.urgency].text}">${lead.urgency}</span>` : '<span class="dd-value" style="color:#9aa0a6">—</span>'}
+      </td>
+      <td class="col-score score-cell" style="${sc ? `color:${sc};background:${sbg}` : ''}">
+        ${score !== '' ? `<span class="score-val">${score}</span>` : '<span class="score-empty">—</span>'}
+      </td>
+      <td class="col-status">
+        <span class="status-pill" style="background:${statusStyle.bg};color:${statusStyle.text}">${lead.status}</span>
+      </td>
+      <td class="col-action">${lead.action}</td>
+    `;
+    tbody.appendChild(tr);
+
+    // Click handlers for dropdown cells
+    const budgetCell = tr.querySelector('.col-budget');
+    const urgencyCell = tr.querySelector('.col-urgency');
+    budgetCell.addEventListener('click', (e) => openDropdown(e, idx, 'budget'));
+    urgencyCell.addEventListener('click', (e) => openDropdown(e, idx, 'urgency'));
+  });
+}
+
+function updateRow(rowIdx) {
+  const lead = leads[rowIdx];
+  const tr = document.getElementById(`row-${rowIdx}`);
+  if (!tr) return;
+  const score = lead.score !== null && lead.score !== undefined ? lead.score : '';
+  const sc = scoreColor(lead.score);
+  const sbg = scoreBg(lead.score);
+
+  const budgetSpan = tr.querySelector('.col-budget .dd-value');
+  if (budgetSpan) {
+    if (lead.budget) {
+      budgetSpan.textContent = lead.budget;
+      budgetSpan.style.background = BUDGET_COLORS[lead.budget].bg;
+      budgetSpan.style.color = BUDGET_COLORS[lead.budget].text;
+    } else {
+      budgetSpan.textContent = '—';
+      budgetSpan.style.background = '';
+      budgetSpan.style.color = '#9aa0a6';
+    }
+  }
+  tr.querySelector('.col-budget').classList.toggle('has-value', !!lead.budget);
+
+  const urgencySpan = tr.querySelector('.col-urgency .dd-value');
+  if (urgencySpan) {
+    if (lead.urgency) {
+      urgencySpan.textContent = lead.urgency;
+      urgencySpan.style.background = URGENCY_COLORS[lead.urgency].bg;
+      urgencySpan.style.color = URGENCY_COLORS[lead.urgency].text;
+    } else {
+      urgencySpan.textContent = '—';
+      urgencySpan.style.background = '';
+      urgencySpan.style.color = '#9aa0a6';
+    }
+  }
+  tr.querySelector('.col-urgency').classList.toggle('has-value', !!lead.urgency);
+
+  const scoreCell = tr.querySelector('.col-score');
+  if (score !== '') {
+    scoreCell.innerHTML = `<span class="score-val">${score}</span>`;
+    scoreCell.style.color = sc;
+    scoreCell.style.background = sbg;
+  } else {
+    scoreCell.innerHTML = '<span class="score-empty">—</span>';
+    scoreCell.style.color = '';
+    scoreCell.style.background = '';
+  }
+
+  const statusPill = tr.querySelector('.status-pill');
+  if (statusPill && lead.status) {
+    const s = STATUS_COLORS[lead.status];
+    statusPill.style.background = s.bg;
+    statusPill.style.color = s.text;
+  }
+
+  // Update fx bar
+  updateFxBar(lead);
+}
+
+function updateFxBar(lead) {
+  if (lead.budget && lead.urgency) {
+    const bScore = { 'High': 5, 'Medium': 3, 'Low': 1 };
+    const uScore = { 'Hot': 5, 'Warm': 3, 'Cold': 1 };
+    fxInput.value = `=IF(BudgetFit&Urgency="","", (${bScore[lead.budget]} + ${uScore[lead.urgency]}) × 10 = ${lead.score})`;
+  } else if (lead.budget || lead.urgency) {
+    fxInput.value = '=IF(BudgetFit&Urgency="","", (BudgetFitScore + UrgencyScore) × 10)';
+  } else {
+    fxInput.value = '=IF(BudgetFit&Urgency="","", (BudgetFitScore + UrgencyScore) × 10)';
+  }
+}
+
+// ============================================================
+// DROPDOWN
+// ============================================================
+function openDropdown(e, rowIdx, field) {
+  if (activeDropdown) closeDropdown();
+  if (dropdownCloseHandler) {
+    document.removeEventListener('click', dropdownCloseHandler);
+    dropdownCloseHandler = null;
+  }
+  const cell = e.currentTarget;
+  const rect = cell.getBoundingClientRect();
+  const options = field === 'budget' ? BUDGET_OPTS : URGENCY_OPTS;
+  const colors = field === 'budget' ? BUDGET_COLORS : URGENCY_COLORS;
+
+  const menu = document.createElement('div');
+  menu.className = 'dropdown-menu';
+  menu.style.left = rect.left + 'px';
+  menu.style.top = (rect.bottom + 4) + 'px';
+
+  options.forEach(opt => {
+    const div = document.createElement('div');
+    div.className = 'dd-option';
+    div.innerHTML = `<span class="dd-dot" style="background:${colors[opt].text}"></span>${opt}`;
+    div.addEventListener('click', () => {
+      closeDropdown();
+      selectOption(rowIdx, field, opt);
+    });
+    menu.appendChild(div);
+  });
+
+  document.body.appendChild(menu);
+  requestAnimationFrame(() => menu.classList.add('active'));
+  activeDropdown = menu;
+
+  // Close on click outside (delay to let current event bubble complete)
+  setTimeout(() => {
+    const closeHandler = (ev) => {
+      if (!menu.contains(ev.target)) {
+        closeDropdown();
+        document.removeEventListener('click', closeHandler);
+        if (dropdownCloseHandler === closeHandler) dropdownCloseHandler = null;
+      }
+    };
+    document.addEventListener('click', closeHandler);
+    dropdownCloseHandler = closeHandler;
+  }, 0);
+}
+
+function closeDropdown() {
+  if (activeDropdown) {
+    activeDropdown.classList.remove('active');
+    const menu = activeDropdown;
+    setTimeout(() => { if (menu && menu.parentNode) menu.parentNode.removeChild(menu); }, 200);
+    activeDropdown = null;
+  }
+  if (dropdownCloseHandler) {
+    document.removeEventListener('click', dropdownCloseHandler);
+    dropdownCloseHandler = null;
+  }
+}
+
+function selectOption(rowIdx, field, value) {
+  const lead = leads[rowIdx];
+  lead[field] = value;
+
+  // Recalculate score
+  const newScore = calcScore(lead.budget, lead.urgency);
+  if (newScore !== null) {
+    lead.score = newScore;
+  }
+
+  updateRow(rowIdx);
+
+  if (dropdownResolve) {
+    dropdownResolve({ rowIdx, field, value });
+    dropdownResolve = null;
+  }
+}
+
+// ============================================================
+// CURSOR
+// ============================================================
+function moveCursor(x, y, instant = false) {
+  cursor.style.transform = `translate(${x - 11}px, ${y - 11}px)`;
+  if (instant) {
+    cursor.style.transition = 'none';
+    requestAnimationFrame(() => { cursor.style.transition = ''; });
+  }
+}
+
+function cursorClick(x, y) {
+  clickRipple.style.left = (x - 10) + 'px';
+  clickRipple.style.top = (y - 10) + 'px';
+  clickRipple.classList.remove('animate');
+  void clickRipple.offsetWidth;
+  clickRipple.classList.add('animate');
+}
+
+function getCellCenter(rowIdx, colClass) {
+  const tr = document.getElementById(`row-${rowIdx}`);
+  if (!tr) return null;
+  const cell = tr.querySelector(`.${colClass}`);
+  if (!cell) return null;
+  const r = cell.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+function getHeaderCenter(colClass) {
+  const th = document.querySelector(`.sheet-table th.${colClass}`);
+  if (!th) return null;
+  const r = th.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+function getStageRect() {
+  return stage.getBoundingClientRect();
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+const delay = ms => new Promise(r => setTimeout(r, ms));
+
+async function showLabel(text, x, y, below = false, duration = 2500) {
+  stepLabelText.textContent = text;
+  stepLabel.className = 'step-label' + (below ? ' label-below' : '');
+  stepLabel.style.left = (x - 140) + 'px';
+  stepLabel.style.top = (y + (below ? 24 : -80)) + 'px';
+  stepLabel.classList.add('active');
+  await delay(duration);
+  stepLabel.classList.remove('active');
+  await delay(400);
+}
+
+async function showLabelAt(text, targetX, targetY, offsetX = 0, offsetY = -60, duration = 2500) {
+  stepLabelText.textContent = text;
+  stepLabel.className = 'step-label';
+  stepLabel.style.left = (targetX + offsetX - 140) + 'px';
+  stepLabel.style.top = (targetY + offsetY) + 'px';
+  stepLabel.classList.add('active');
+  await delay(duration);
+  stepLabel.classList.remove('active');
+  await delay(400);
+}
+
+function setZoom(scale, x = 0.5, y = 0.5) {
+  wrapper.style.transform = `scale(${scale})`;
+  wrapper.style.transformOrigin = `${x * 100}% ${y * 100}%`;
+}
+
+function animateScore(rowIdx, from, to, steps = 10) {
+  return new Promise(async (resolve) => {
+    const tr = document.getElementById(`row-${rowIdx}`);
+    if (!tr) { resolve(); return; }
+    const cell = tr.querySelector('.col-score');
+    if (!cell) { resolve(); return; }
+    for (let i = 0; i <= steps; i++) {
+      const val = Math.round(from + (to - from) * (i / steps));
+      cell.innerHTML = `<span class="score-val score-pop">${val}</span>`;
+      const sc = scoreColor(val);
+      const sbg = scoreBg(val);
+      cell.style.color = sc;
+      cell.style.background = sbg;
+      await delay(60);
+    }
+    resolve();
+  });
+}
+
+async function simulateType(cellSelector, text, rowIdx) {
+  const tr = document.getElementById(`row-${rowIdx}`);
+  if (!tr) return;
+  const cell = tr.querySelector(cellSelector);
+  if (!cell) return;
+  cell.textContent = '';
+  for (const ch of text) {
+    cell.textContent += ch;
+    await delay(30);
+  }
+}
+
+function highlightRow(rowIdx) {
+  const tr = document.getElementById(`row-${rowIdx}`);
+  if (!tr) return;
+  tr.querySelectorAll('td').forEach(td => td.classList.add('highlight-pulse'));
+  setTimeout(() => {
+    tr.querySelectorAll('td').forEach(td => td.classList.remove('highlight-pulse'));
+  }, 3600);
+}
+
+async function waitForDropdown() {
+  return new Promise(resolve => {
+    dropdownResolve = resolve;
+  });
+}
+
+// ============================================================
+// ADD NEW ROW
+// ============================================================
+function addLead(lead) {
+  leads.push(lead);
+  const idx = leads.length - 1;
+  const tr = document.createElement('tr');
+  tr.dataset.index = idx;
+  tr.id = `row-${idx}`;
+  tr.className = 'new-row';
+
+  const s = STATUS_COLORS[lead.status];
+
+  tr.innerHTML = `
+    <td class="row-num">${idx + 1}</td>
+    <td class="col-date">${lead.date}</td>
+    <td class="col-name"><strong>${lead.name}</strong></td>
+    <td class="col-phone">${lead.phone}</td>
+    <td class="col-req">${lead.req}</td>
+    <td class="col-budget dropdown-cell" data-row="${idx}" data-field="budget">
+      <span class="dd-value" style="color:#9aa0a6">—</span>
+    </td>
+    <td class="col-urgency dropdown-cell" data-row="${idx}" data-field="urgency">
+      <span class="dd-value" style="color:#9aa0a6">—</span>
+    </td>
+    <td class="col-score score-cell">
+      <span class="score-empty">—</span>
+    </td>
+    <td class="col-status">
+      <span class="status-pill" style="background:${s.bg};color:${s.text}">${lead.status}</span>
+    </td>
+    <td class="col-action">${lead.action}</td>
+  `;
+  tbody.appendChild(tr);
+
+  const budgetCell = tr.querySelector('.col-budget');
+  const urgencyCell = tr.querySelector('.col-urgency');
+  budgetCell.addEventListener('click', (e) => openDropdown(e, idx, 'budget'));
+  urgencyCell.addEventListener('click', (e) => openDropdown(e, idx, 'urgency'));
+
+  return idx;
+}
+
+// ============================================================
+// PROGRESS BAR
+// ============================================================
+let totalSteps = 0;
+function initProgress(n) {
+  totalSteps = n;
+  progressBar.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'progress-dot';
+    dot.dataset.step = i;
+    progressBar.appendChild(dot);
+  }
+}
+
+function setProgress(idx) {
+  const dots = progressBar.querySelectorAll('.progress-dot');
+  dots.forEach((d, i) => {
+    d.className = 'progress-dot';
+    if (i < idx) d.classList.add('done');
+    if (i === idx) d.classList.add('active');
+  });
+}
+
+// ============================================================
+// MAIN DEMO SEQUENCE
+// ============================================================
+async function runDemo() {
+  if (running) return;
+  running = true;
+  cancelled = false;
+  replayBtn.classList.remove('visible');
+  finalOverlay.classList.remove('active');
+
+  // Reset state
+  leads = LEADS.map(l => ({ ...l }));
+  render();
+  setZoom(1, 0.5, 0.5);
+  moveCursor(0, 0, true);
+  stepLabel.classList.remove('active');
+
+  await delay(800);
+
+  const steps = [
+    'Overview',
+    'Formula',
+    'Budget Dropdown',
+    'Score Calculates',
+    'Urgency Dropdown',
+    'Score to 100',
+    'Colors Activate',
+    'New Lead Added',
+    'Second Lead',
+    'Status Colors',
+    'Final View',
+  ];
+  initProgress(steps.length);
+
+  // STEP 0: Overview
+  setProgress(0);
+  setZoom(1, 0.5, 0.5);
+  await delay(600);
+  const sr = getStageRect();
+  moveCursor(sr.left + sr.width / 2, sr.top + 40);
+  await showLabel('Sales CRM Pipeline with automated lead scoring', sr.left + sr.width / 2, sr.top + 50, true, 2000);
+
+  // STEP 1: Formula highlight
+  setProgress(1);
+  const fxRect = fxInput.getBoundingClientRect();
+  moveCursor(fxRect.left + fxRect.width / 2, fxRect.top + fxRect.height / 2);
+  fxInput.classList.add('fx-glow');
+  await showLabel('Lead Score formula: auto-calculates when Budget & Urgency are set', fxRect.left + fxRect.width / 2, fxRect.top - 50, false, 2500);
+  fxInput.classList.remove('fx-glow');
+
+  // STEP 2: Click Budget Fit dropdown for Lisa Thompson (row 4, 0-indexed)
+  setProgress(2);
+  const budget4 = getCellCenter(4, 'col-budget');
+  if (budget4) {
+    moveCursor(budget4.x, budget4.y - 5);
+    await delay(600);
+    cursorClick(budget4.x, budget4.y);
+    await showLabel('Select Budget Fit: High, Medium, or Low', budget4.x, budget4.y - 50, false, 1800);
+
+    // Click the cell to open dropdown
+    const cell4 = document.getElementById('row-4')?.querySelector('.col-budget');
+    if (cell4) cell4.click();
+    await delay(400);
+
+    // Select "High"
+    const highOpt = document.querySelector('.dropdown-menu .dd-option:nth-child(1)');
+    if (highOpt) {
+      const optRect = highOpt.getBoundingClientRect();
+      moveCursor(optRect.left + optRect.width / 2, optRect.top + optRect.height / 2);
+      await delay(300);
+      cursorClick(optRect.left + optRect.width / 2, optRect.top + optRect.height / 2);
+      highOpt.click();
+    }
+    await delay(500);
+  }
+
+  // STEP 3: Score shows partial (60)
+  setProgress(3);
+  if (leads[4].budget === 'High' && !leads[4].urgency) {
+    // Score should show 50 once budget is set... wait our calc needs both, so it's blank
+    // Let's check - our formula needs both. So let's simulate showing "calculating..."
+    const tr4 = document.getElementById('row-4');
+    const scoreCell4 = tr4?.querySelector('.col-score');
+    if (scoreCell4) {
+      scoreCell4.innerHTML = '<span style="color:#9aa0a6;font-size:11px;">⏳</span>';
+    }
+    await delay(800);
+    const scorePos = getCellCenter(4, 'col-score');
+    if (scorePos) {
+      await showLabel('Score waits for all inputs... set Urgency next', scorePos.x, scorePos.y - 50, false, 1500);
+    }
+  }
+
+  // STEP 4: Click Urgency dropdown
+  setProgress(4);
+  const urgency4 = getCellCenter(4, 'col-urgency');
+  if (urgency4) {
+    moveCursor(urgency4.x, urgency4.y - 5);
+    await delay(600);
+    cursorClick(urgency4.x, urgency4.y);
+
+    const cellU4 = document.getElementById('row-4')?.querySelector('.col-urgency');
+    if (cellU4) cellU4.click();
+    await delay(400);
+
+    // Select "Hot"
+    const hotOpt = document.querySelector('.dropdown-menu .dd-option:nth-child(1)');
+    if (hotOpt) {
+      const optRect = hotOpt.getBoundingClientRect();
+      moveCursor(optRect.left + optRect.width / 2, optRect.top + optRect.height / 2);
+      await delay(300);
+      cursorClick(optRect.left + optRect.width / 2, optRect.top + optRect.height / 2);
+      hotOpt.click();
+    }
+    await delay(400);
+  }
+
+  // STEP 5: Score animates to 100
+  setProgress(5);
+  if (leads[4].score === 100) {
+    await animateScore(4, 0, 100, 15);
+    await delay(300);
+    const scorePos2 = getCellCenter(4, 'col-score');
+    if (scorePos2) {
+      await showLabel('Lead Score: 100 — High + Hot = Top Priority!', scorePos2.x, scorePos2.y - 55, false, 2200);
+    }
+  }
+
+  // STEP 6: Colors activate - highlight the color changes
+  setProgress(6);
+  await showLabel('Conditional formatting activates automatically', sr.left + sr.width / 2, sr.top + 60, true, 1800);
+
+  // Flash the Budget Fit green and Urgency red
+  const tr4 = document.getElementById('row-4');
+  if (tr4) {
+    const bCell = tr4.querySelector('.col-budget');
+    const uCell = tr4.querySelector('.col-urgency');
+    if (bCell) bCell.style.transition = 'background 0.6s ease, color 0.6s ease';
+    if (uCell) uCell.style.transition = 'background 0.6s ease, color 0.6s ease';
+    await delay(200);
+  }
+
+  // Also show Lisa's row status
+  await delay(1200);
+
+  // STEP 7: Add new lead - Alex Brown
+  setProgress(7);
+  await showLabel('Adding new leads — score auto-calculates', sr.left + sr.width / 2, sr.top + 60, true, 1500);
+
+  const alexIdx = addLead(NEW_LEADS[0]);
+  await delay(800);
+
+  // Set Alex's budget and urgency via dropdowns
+  const budgetA = getCellCenter(alexIdx, 'col-budget');
+  if (budgetA) {
+    moveCursor(budgetA.x, budgetA.y);
+    await delay(500);
+    cursorClick(budgetA.x, budgetA.y);
+    const cellBA = document.getElementById(`row-${alexIdx}`)?.querySelector('.col-budget');
+    if (cellBA) cellBA.click();
+    await delay(300);
+    const highOpt2 = document.querySelector('.dropdown-menu .dd-option:nth-child(1)');
+    if (highOpt2) {
+      const optRect = highOpt2.getBoundingClientRect();
+      moveCursor(optRect.left + optRect.width / 2, optRect.top + optRect.height / 2);
+      await delay(200);
+      cursorClick(optRect.left + optRect.width / 2, optRect.top + optRect.height / 2);
+      highOpt2.click();
+    }
+    await delay(300);
+  }
+
+  const urgencyA = getCellCenter(alexIdx, 'col-urgency');
+  if (urgencyA) {
+    moveCursor(urgencyA.x, urgencyA.y);
+    await delay(500);
+    cursorClick(urgencyA.x, urgencyA.y);
+    const cellUA = document.getElementById(`row-${alexIdx}`)?.querySelector('.col-urgency');
+    if (cellUA) cellUA.click();
+    await delay(300);
+    const hotOpt2 = document.querySelector('.dropdown-menu .dd-option:nth-child(1)');
+    if (hotOpt2) {
+      const optRect = hotOpt2.getBoundingClientRect();
+      moveCursor(optRect.left + optRect.width / 2, optRect.top + optRect.height / 2);
+      await delay(200);
+      cursorClick(optRect.left + optRect.width / 2, optRect.top + optRect.height / 2);
+      hotOpt2.click();
+    }
+    await delay(400);
+  }
+
+  if (leads[alexIdx].score === 100) {
+    await animateScore(alexIdx, 0, 100, 12);
+    await delay(300);
+    highlightRow(alexIdx);
+  }
+
+  // STEP 8: Add Maria Garcia
+  setProgress(8);
+  await delay(600);
+  const mariaIdx = addLead(NEW_LEADS[1]);
+  await delay(600);
+
+  // Auto-set Maria's values for speed
+  leads[mariaIdx].budget = 'Medium';
+  leads[mariaIdx].urgency = 'Warm';
+  leads[mariaIdx].score = 60;
+  updateRow(mariaIdx);
+  await delay(400);
+
+  // Show score
+  if (leads[mariaIdx].score === 60) {
+    await animateScore(mariaIdx, 0, 60, 8);
+    await delay(200);
+  }
+
+  // STEP 9: Show status colors cycling
+  setProgress(9);
+  await showLabel('Status updates with automatic color coding', sr.left + sr.width / 2, sr.top + 60, true, 1800);
+
+  // Cycle through statuses on Sarah Chen (row 0)
+  const statusCycle = ['Contacted', 'Quote Sent', 'Paid'];
+  for (const st of statusCycle) {
+    leads[0].status = st;
+    updateRow(0);
+    // Flash the status pill
+    const row0 = document.getElementById('row-0');
+    if (row0) {
+      const pill = row0.querySelector('.status-pill');
+      if (pill) {
+        pill.style.transform = 'scale(1.1)';
+        setTimeout(() => { pill.style.transform = ''; }, 300);
+      }
+    }
+    await delay(600);
+  }
+
+  // STEP 10: Final overview
+  setProgress(10);
+  setZoom(0.75, 0.5, 0.5);
+  await delay(400);
+  moveCursor(sr.left + sr.width / 2, sr.top + sr.height / 2);
+  await delay(800);
+
+  // Show final overlay
+  finalOverlay.classList.add('active');
+  await delay(1500);
+
+  // Show replay button
+  replayBtn.classList.add('visible');
+  running = false;
+}
+
+// ============================================================
+// INIT
+// ============================================================
+replayBtn.addEventListener('click', () => {
+  runDemo();
+});
+
+// Start
+runDemo();
+</script>
+</body>
+</html>

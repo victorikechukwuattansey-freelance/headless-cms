@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bolt GPS Copilot v2 — Abuja</title>
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#e6edf3}
+.app{max-width:1300px;margin:0 auto;padding:12px;display:grid;gap:10px}
+.copilot-bar{background:linear-gradient(135deg,#161b22,#1c2333);border:1px solid #30363d;padding:12px 18px;border-radius:10px;display:flex;align-items:center;gap:12px}
+.copilot-bar .msg{flex:1;font-size:13px;line-height:1.4;color:#8b949e}
+.copilot-bar .badge{padding:3px 12px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border:1px solid;white-space:nowrap}
+.badge-surge{background:#0f2d1a;color:#3fb950;border-color:#3fb950}
+.badge-leak{background:#2d0f0f;color:#f85149;border-color:#f85149}
+.badge-standby{background:#2d1f0f;color:#d29922;border-color:#d29922}
+.row{display:grid;grid-template-columns:280px 1fr 240px;gap:10px}
+@media(max-width:900px){.row{grid-template-columns:1fr}}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}
+.card-hdr{padding:10px 14px;border-bottom:1px solid #21262d;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:#8b949e;display:flex;align-items:center;justify-content:space-between}
+.card-bd{padding:10px 14px;font-size:13px}
+.stat{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px}
+.stat .lbl{color:#8b949e}
+.stat .val{font-weight:600}
+.grn{color:#3fb950}.red{color:#f85149}.org{color:#d29922}
+.hr{border:none;border-top:1px solid #21262d;margin:6px 0}
+.net-v{font-size:24px;font-weight:700;margin:2px 0}
+.net-l{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.3px}
+.rec-l{display:flex;flex-direction:column;gap:4px}
+.rec-i{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:#0d1117}
+.rec-i .rk{font-size:11px;color:#8b949e;width:16px}
+.rec-i .nm{flex:1;font-size:12px;font-weight:500}
+.rec-i .sc{font-size:11px;font-weight:600;padding:1px 8px;border-radius:10px}
+.rec-i .ds{font-size:10px;color:#8b949e}
+.sc-hot{background:#0f2d1a;color:#3fb950}
+.sc-gd{background:#1a2d0f;color:#7ee787}
+.sc-ok{background:#2d1f0f;color:#d29922}
+.sc-pr{background:#2d0f0f;color:#f85149}
+#map{height:460px}
+.chart{display:flex;align-items:flex-end;height:50px;gap:3px;margin-top:6px}
+.chart-b{flex:1;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}
+.ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.btn{padding:6px 14px;border:1px solid #30363d;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;background:#21262d;color:#e6edf3;transition:all .15s}
+.btn:hover{background:#30363d}
+.btn-pri{background:#238636;border-color:#238636;color:#fff}
+.btn-pri:hover{background:#2ea043}
+.btn-dgr{background:#da3633;border-color:#da3633;color:#fff}
+.btn-dgr:hover{background:#f85149}
+.tog{display:flex;align-items:center;gap:4px;font-size:11px;color:#8b949e;cursor:pointer}
+.tog input{cursor:pointer;accent-color:#238636}
+.sum-g{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.sum-i{text-align:center;padding:8px;background:#0d1117;border-radius:6px}
+.sum-i .nm{font-size:20px;font-weight:700}
+.sum-i .lb{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.2px}
+.trip-l{margin-top:8px;max-height:120px;overflow-y:auto;font-size:11px;color:#8b949e}
+.trip-l div{padding:2px 0;border-bottom:1px solid #21262d}
+.goal-i{background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:3px 8px;font-size:12px;color:#e6edf3;width:90px}
+.goal-i:focus{outline:none;border-color:#238636}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#0d1117}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="copilot-bar">
+    <span style="font-size:22px">🤖</span>
+    <span class="msg" id="cp-msg">Initialising copilot...</span>
+    <span class="badge badge-surge" id="cp-badge">SURGE</span>
+  </div>
+
+  <div class="row">
+    <!-- LEFT: Dashboard -->
+    <div class="card">
+      <div class="card-hdr">Dashboard <span id="dash-hdr" style="font-weight:400;color:#8b949e">—</span></div>
+      <div class="card-bd">
+        <div class="stat"><span class="lbl">📍 Zone</span><span class="val" id="st-zone">—</span></div>
+        <div class="stat"><span class="lbl">⛽ Fuel</span><span class="val" id="st-fuel">—</span></div>
+        <div class="stat"><span class="lbl">🛵 Trips</span><span class="val" id="st-trips">0</span></div>
+        <div id="st-rain" style="display:none" class="stat"><span class="lbl">🌧️ Rain</span><span class="val grn">Active (+15%)</span></div>
+        <hr class="hr">
+        <div class="stat"><span class="lbl">💰 Gross</span><span class="val grn" id="st-gross">₦0</span></div>
+        <div class="stat"><span class="lbl">💸 Fuel cost</span><span class="val red" id="st-fuelcost">₦0</span></div>
+        <div class="net-v grn" id="st-net">₦0</div>
+        <div class="net-l">Net earnings</div>
+        <div class="stat" style="margin-top:6px"><span class="lbl">₦/hr</span><span class="val" id="st-perhr">₦0</span></div>
+        <hr class="hr">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:11px;color:#8b949e">🎯 Goal</span>
+          <input class="goal-i" id="goal-input" type="number" value="30000">
+        </div>
+        <div style="height:6px;background:#21262d;border-radius:3px;overflow:hidden">
+          <div id="goal-bar" style="height:100%;width:0%;background:#d29922;border-radius:3px;transition:width .3s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#8b949e;margin-top:2px">
+          <span id="goal-cur">₦0</span>
+          <span id="goal-pct">0%</span>
+        </div>
+        <hr class="hr">
+        <div style="font-size:10px;color:#8b949e;margin-bottom:4px">Last 12 rides</div>
+        <div class="chart" id="chart"></div>
+      </div>
+    </div>
+
+    <!-- CENTER: Map -->
+    <div class="card" style="padding:0"><div id="map"></div></div>
+
+    <!-- RIGHT: Recommendations -->
+    <div class="card">
+      <div class="card-hdr">🏆 Zone Rankings</div>
+      <div class="card-bd">
+        <div class="rec-l" id="rankings"></div>
+        <hr class="hr">
+        <div style="font-size:10px;color:#8b949e;margin-bottom:4px">Factors</div>
+        <div style="font-size:11px;display:flex;flex-wrap:wrap;gap:4px">
+          <span class="tog"><input type="checkbox" id="rain-cb"> 🌧️ Rain</span>
+          <span class="tog"><input type="checkbox" id="voice-cb"> 🔊 Voice</span>
+          <span id="day-display" style="font-size:11px;color:#8b949e">—</span>
+        </div>
+        <hr class="hr">
+        <div style="font-size:10px;color:#8b949e;margin-bottom:4px">Suburbs</div>
+        <div id="suburbs" style="display:flex;flex-wrap:wrap;gap:3px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM: Controls -->
+  <div class="card">
+    <div class="card-bd">
+      <div class="ctrl">
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-pri" id="btn-ride">🚗 Ride</button>
+          <button class="btn" id="btn-auto">▶ Auto</button>
+          <button class="btn" id="btn-end">🏁 End Shift</button>
+          <button class="btn btn-dgr" id="btn-reset">Reset</button>
+        </div>
+        <span id="shift-status" style="font-size:11px;color:#8b949e;margin-left:auto">🟢 Shift active (since 6:00)</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <span class="tog"><input type="checkbox" id="gps-cb"> 📡 Real GPS</span>
+        <span id="stats-line" style="font-size:11px;color:#8b949e">0 moves · 0 rides logged</span>
+      </div>
+      <div id="shift-summary" style="display:none"></div>
+      <div id="trip-log" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ──────────────────────────────────────
+const ZONES = [
+  {name:'Airport',lat:9.0068,lng:7.2632,boost:1.45,peak:[[5,9],[16,20]],pop:3,traffic:.3},
+  {name:'Maitama',lat:9.0833,lng:7.5248,boost:1.35,peak:[[7,10],[17,21]],pop:5,traffic:.6},
+  {name:'Asokoro',lat:9.0750,lng:7.4950,boost:1.35,peak:[[7,10],[17,21]],pop:4,traffic:.5},
+  {name:'Wuse 2',lat:9.0765,lng:7.4632,boost:1.30,peak:[[7,10],[17,21]],pop:5,traffic:.7},
+  {name:'Garki',lat:9.0400,lng:7.4900,boost:1.25,peak:[[8,11],[16,19]],pop:4,traffic:.6},
+  {name:'Jabi',lat:9.0667,lng:7.4142,boost:1.25,peak:[[8,11],[16,20]],pop:3,traffic:.5},
+  {name:'CBD',lat:9.0579,lng:7.4951,boost:1.20,peak:[[7,10],[16,19]],pop:4,traffic:.8},
+  {name:'Utako',lat:9.0600,lng:7.4400,boost:1.15,peak:[[8,10],[16,19]],pop:3,traffic:.4},
+  {name:'Gwarinpa',lat:9.1000,lng:7.4200,boost:1.10,peak:[[6,9],[16,19]],pop:4,traffic:.4},
+  {name:'Kubwa',lat:9.1200,lng:7.3200,boost:1.05,peak:[[6,8],[17,19]],pop:3,traffic:.3},
+  {name:'Lugbe',lat:8.9900,lng:7.3800,boost:1.00,peak:[[6,8],[17,19]],pop:2,traffic:.2},
+  {name:'Nyanya',lat:8.9400,lng:7.5300,boost:0.95,peak:[[6,8],[17,19]],pop:2,traffic:.3},
+  {name:'Mararaba',lat:8.9100,lng:7.5600,boost:0.90,peak:[[6,8],[17,19]],pop:1,traffic:.2},
+];
+const FC=1370, SF=70, BF=3000, DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function $(id){return document.getElementById(id)}
+function dist(a,b){return Math.hypot(a.lat-b.lat,a.lng-b.lng)}
+function rnd(zone,sd=.01){return{lat:zone.lat+(Math.random()-.5)*sd,lng:zone.lng+(Math.random()-.5)*sd}}
+function wrz(){let t=ZONES.reduce((s,z)=>s+z.boost,0),r=Math.random()*t;for(const z of ZONES){r-=z.boost;if(r<=0)return z}return ZONES[0]}
+
+// ─── STATE ─────────────────────────────────────
+const S={
+  loc:{lat:9.057,lng:7.495},
+  ear:0,trips:0,fuel:SF,hr:6,cpSt:'SURGE',cpMsg:'Initialising copilot...',
+  log:[],path:[{lat:9.057,lng:7.495}],
+  gps:false,watch:null,dow:new Date().getDay(),rain:false,goal:30000,
+  shift:true,shiftStart:6,ap:false,apTimer:null,hist:[],sp:false,
+};
+
+function score(z){
+  let s=z.boost*100;
+  const pk=z.peak?.some(([a,b])=>S.hr>=a&&S.hr<b);
+  if(pk)s+=25;
+  const d=dist(S.loc,z),ds=Math.max(0,30-d*2000);s+=ds;
+  if(pk)s-=z.traffic*15;
+  if(S.fuel<25)s-=d*5000;
+  const w=S.dow===0||S.dow===6;
+  if(w){if(z.name==='Airport')s+=15;if(z.name==='Maitama'||z.name==='Asokoro')s+=10;if(z.name==='CBD')s-=10}
+  if(S.rain){s+=10;if(z.pop>=4)s+=10}
+  return Math.round(s);
+}
+
+function ranks(){return ZONES.map(z=>({...z,_s:score(z),_d:dist(S.loc,z)})).sort((a,b)=>b._s-a._s)}
+function curZone(){let b=ZONES[0],m=dist(S.loc,b);for(const z of ZONES){const d=dist(S.loc,z);if(d<m){m=d;b=z}}return b}
+function isPk(){for(const z of ZONES)if(z.peak?.some(([a,b])=>S.hr>=a&&S.hr<b))return 1;return 0}
+
+function advice(){
+  const z=curZone(),r=ranks(),t=r[0],hv=z.boost>=1.35,lf=S.fuel<25,hrs=Math.max(S.hr-S.shiftStart,1),ph=S.earnings/hrs,pk=isPk(),pr=S.goal>0?S.earnings/S.goal*100:0;
+  if(lf&&t._d>.02)return `⛽ Fuel critical! Nearest zone: <b>${t.name}</b> (${Math.round(t._d*111)}km)`;
+  if(S.fuel<10)return '⛽ CRITICAL: fuel near empty. End shift now.';
+  if(pk&&t.name!==z.name)return `📈 Peak — relocate to <b>${t.name}</b> (${t._s}pts, ${t.boost}x)`;
+  if(hv&&S.cpSt!=='SURGE')return `🚀 High demand at <b>${z.name}</b> — stay and accept fares`;
+  if(S.cpSt==='LEAK')return `🔴 Low demand. Best zone: <b>${t.name}</b> (${t.boost}x, ${t._s}pts)`;
+  if(ph<3000)return `⚠️ Low ₦/hr (₦${ph.toLocaleString()}). Move toward <b>${t.name}</b>`;
+  if(pr<50&&S.hr>12)return `🎯 ${Math.round(pr)}% of goal — pick up pace in <b>${t.name}</b>`;
+  if(S.rain&&z.pop<4)return `🌧️ Rain — move to denser zone (<b>${r.find(x=>x.pop>=4)?.name||'Maitama'}</b>)`;
+  if(!pk&&S.hr>10&&S.hr<16)return `🟡 Midday slump — conserve fuel until ${t.peak?.[0]?.[0]||16}:00`;
+  if(pr>=100)return `🎉 Goal done! (₦${S.ear.toLocaleString()}/${S.goal.toLocaleString()})`;
+  return `🟢 Stable at <b>${z.name}</b> (${z.boost}x). Top: ${t.name} (${t._s}pts)`;
+}
+
+function speak(t){if(S.sp&&window.speechSynthesis){const u=new SpeechSynthesisUtterance(t.replace(/<[^>]*>/g,''));u.rate=1.1;u.volume=.8;speechSynthesis.speak(u)}}
+
+// ─── MAP (initialized once) ────────────────────
+let map, mk, poly, zonesInit=0;
+
+function initMap(){
+  if(map)return;
+  map=L.map('map',{zoomControl:true}).setView([S.loc.lat,S.loc.lng],12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+  for(const z of ZONES){
+    const r=10+z.boost*5,cl=z.boost>=1.35?'#f85149':z.boost>=1.2?'#d29922':'#8b949e';
+    const m=L.circleMarker([z.lat,z.lng],{radius:r,color:cl,fillColor:cl,fillOpacity:.12,weight:1.5}).addTo(map);
+    m.bindTooltip(`<b>${z.name}</b> ${z.boost}x`,{direction:'top',offset:[0,-r]});
+  }
+  mk=L.marker([S.loc.lat,S.loc.lng],{icon:L.divIcon({
+    html:'<div style="background:#238636;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)">YOU</div>',
+    className:'',iconSize:[28,28],iconAnchor:[14,14]
+  })}).addTo(map);
+}
+
+function updateMap(){
+  if(!mk)return;
+  mk.setLatLng([S.loc.lat,S.loc.lng]);
+  if(poly){poly.setLatLngs(S.path);return}
+  if(S.path.length>1)poly=L.polyline(S.path,{color:'#238636',weight:2.5,opacity:.5}).addTo(map);
+  map.setView([S.loc.lat,S.loc.lng],12,{animate:true,duration:.3});
+}
+
+function rePath(){if(poly){poly.remove();poly=null}`;updateMap()}
+
+// ─── UPDATE (targeted DOM binding) ─────────────
+let prevMsg='';
+function update(){
+  const z=curZone(),r=ranks(),fc=Math.max(SF-S.fuel,0)*FC,net=S.ear-fc;
+  const hrs=Math.max(S.hr-S.shiftStart,1),ph=S.ear/hrs,pk=isPk(),pr=S.goal>0?Math.min(100,S.ear/S.goal*100):0;
+  const cm=advice();
+
+  // Copilot bar
+  if(cm!==prevMsg){prevMsg=cm;$('cp-msg').innerHTML=cm;$('cp-badge').textContent=S.cpSt;$('cp-badge').className='badge badge-'+S.cpSt.toLowerCase()}
+
+  // Dashboard
+  $('dash-hdr').textContent=`${DAYS[S.dow]} ${S.hr}:00 ${pk?'📈':'🟡'}`;
+  $('st-zone').innerHTML=`${z.name} <span style="color:#8b949e;font-weight:400">(${z.boost}x)</span>`;
+  $('st-fuel').textContent=`${S.fuel.toFixed(1)}L`;
+  $('st-fuel').className='val '+(S.fuel<25?'red':S.fuel<40?'org':'grn');
+  $('st-trips').textContent=S.trips;
+  $('st-rain').style.display=S.rain?'':'none';
+  $('st-gross').textContent=`₦${S.ear.toLocaleString()}`;
+  $('st-fuelcost').textContent=`₦${fc.toLocaleString()}`;
+  const netEl=$('st-net');netEl.textContent=`₦${net.toLocaleString()}`;netEl.className='net-v '+(net>=0?'grn':'red');
+  const phEl=$('st-perhr');phEl.textContent=`₦${ph.toLocaleString()}`;phEl.className='val '+(ph<3000?'red':'grn');
+
+  // Goal
+  $('goal-cur').textContent=`₦${S.ear.toLocaleString()}`;
+  $('goal-pct').textContent=`${Math.round(pr)}%`;
+  $('goal-bar').style.width=`${pr}%`;$('goal-bar').style.background=pr>=100?'#3fb950':'#d29922';
+
+  // Chart
+  let ch='';
+  if(S.hist.length){
+    const mx=Math.max(...S.hist.slice(-12),1);
+    for(const v of S.hist.slice(-12)){const h=Math.max(2,(v/mx)*46);ch+=`<div class="chart-b" style="height:${h}px;background:${v>BF*1.2?'#3fb950':'#238636'}"></div>`}
+  }else ch='<div style="color:#8b949e;font-size:11px;padding:12px 0">No rides yet</div>';
+  $('chart').innerHTML=ch;
+
+  // Rankings
+  $('rankings').innerHTML=r.slice(0,6).map((z,i)=>{
+    const c=z._s>=130?'sc-hot':z._s>=110?'sc-gd':z._s>=90?'sc-ok':'sc-pr';
+    return `<div class="rec-i"><span class="rk">#${i+1}</span><span class="nm">${z.name}</span><span class="ds">${(z._d*111).toFixed(1)}km</span><span class="sc ${c}">${z._s}</span></div>`;
+  }).join('');
+  $('suburbs').innerHTML=r.slice(6).map(z=>`<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#0d1117;color:#8b949e">${z.name} ${z._s}</span>`).join('');
+  $('day-display').textContent=`📅 ${DAYS[S.dow]}`;
+
+  // Controls area
+  $('shift-status').innerHTML=S.shift?`🟢 Shift active (since ${S.shiftStart}:00)`:'🔴 Shift ended';
+  $('stats-line').textContent=`${S.path.length} moves · ${S.log.length} rides logged`;
+  $('btn-auto').textContent=S.ap?'⏹ Stop Auto':'▶ Auto';
+  $('btn-auto').className='btn'+(S.ap?' btn-dgr':'');
+
+  // Shift summary (shown only when shift is ended)
+  const ss=$('shift-summary');
+  if(!S.shift){
+    ss.style.display='';
+    ss.innerHTML=`<div class="sum-g">
+      <div class="sum-i"><div class="nm grn">₦${S.ear.toLocaleString()}</div><div class="lb">Gross</div></div>
+      <div class="sum-i"><div class="nm ${net>=0?'grn':'red'}">₦${net.toLocaleString()}</div><div class="lb">Net</div></div>
+      <div class="sum-i"><div class="nm">${S.trips}</div><div class="lb">Trips</div></div>
+      <div class="sum-i"><div class="nm">₦${ph.toLocaleString()}</div><div class="lb">₦/hr</div></div>
+      <div class="sum-i"><div class="nm">${Math.round(pr)}%</div><div class="lb">Goal</div></div>
+      <div class="sum-i"><div class="nm">${S.hr-S.shiftStart}h</div><div class="lb">Duration</div></div>
+    </div>`;
+  }else ss.style.display='none';
+
+  // Trip log
+  const tl=$('trip-log');
+  if(S.log.length){tl.style.display='';tl.innerHTML=`<div class="trip-l">${S.log.map(e=>`<div>${e}</div>`).join('')}</div><div style="font-size:10px;color:#8b949e;margin-top:4px">Last ${Math.min(S.log.length,30)} rides</div>`}
+  else tl.style.display='none';
+
+  updateMap();
+}
+
+// ─── EVENTS ────────────────────────────────────
+$('btn-ride').onclick=()=>{if(!S.shift||S.hr>=23){S.cpSt='STANDBY';S.cpMsg=S.hr>=23?'🛑 Late night — demand drops. End shift.':'Shift ended.';update();return}
+  S.hr=S.hr>=24?6:S.hr+1;const z=curZone();
+  const bc=z.boost>1.25?.85:.45,rn=S.rain?.12:0,wp=(S.dow===0||S.dow===6)?-.08:0,rc=Math.min(.95,Math.max(.2,bc+rn+wp));
+  if(Math.random()<rc){const i=Math.round(BF*z.boost*(S.rain?1.15:1));S.ear+=i;S.trips++;S.fuel=Math.max(S.fuel-2.3,0);S.cpSt='SURGE';S.hist.push(i);const n=wrz();S.loc=rnd(n);S.path.push({...S.loc});S.log.unshift(`₦${i.toLocaleString()} → ${n.name} (${n.boost}x)`);if(S.log.length>30)S.log.length=30}else{S.fuel=Math.max(S.fuel-.9,0);S.cpSt='LEAK'}
+  S.cpMsg=advice();update();
+};
+
+$('btn-auto').onclick=()=>{S.ap=!S.ap;if(S.apTimer){clearInterval(S.apTimer);S.apTimer=null}if(S.ap)S.apTimer=setInterval(()=>$('btn-ride').click(),3000);update()};
+$('btn-end').onclick=()=>{S.shift=0;S.cpMsg='🏁 Shift ended. Review summary below.';if(S.apTimer){clearInterval(S.apTimer);S.apTimer=null;S.ap=0}update()};
+$('btn-reset').onclick=()=>{S.ear=0;S.trips=0;S.fuel=SF;S.hr=6;S.shiftStart=6;S.cpSt='SURGE';S.cpMsg='Reset. Start your shift.';S.log=[];S.path=[{lat:9.057,lng:7.495}];S.loc={lat:9.057,lng:7.495};S.hist=[];S.shift=1;if(poly){poly.remove();poly=null}update()};
+$('gps-cb').onchange=function(){S.gps=this.checked;if(this.checked&&navigator.geolocation){S.watch=navigator.geolocation.watchPosition(p=>{S.loc={lat:p.coords.latitude,lng:p.coords.longitude};update()},()=>{},{enableHighAccuracy:true})}else if(S.watch!==null){navigator.geolocation.clearWatch(S.watch);S.watch=null}};
+$('rain-cb').onchange=function(){S.rain=this.checked;S.cpMsg=advice();update()};
+$('voice-cb').onchange=function(){S.sp=this.checked;if(this.checked)speak('Voice enabled')};
+$('goal-input').onchange=function(){S.goal=Number(this.value)||30000;update()};
+
+// ─── COPILOT LOOP ─────────────────────────────
+setInterval(()=>{if(!S.shift)return;S.cpMsg=advice();if(S.cpMsg!==prevMsg){update();speak(S.cpMsg)}},8000);
+
+// ─── BOOT ──────────────────────────────────────
+initMap();
+update();
+</script>
+</body>
+</html>

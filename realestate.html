@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real Estate OS</title>
+<link rel="stylesheet" href="os-core.css">
+<style>
+.os-property-card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 16px; margin-bottom: 12px; display: flex; gap: 16px; align-items: flex-start; }
+.os-property-img { width: 120px; height: 90px; background: #f0f0f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 24px; flex-shrink: 0; }
+.os-property-info { flex: 1; }
+.os-property-info h4 { font-size: 15px; margin-bottom: 4px; }
+.os-property-info .detail { font-size: 12px; color: #888; }
+.os-property-price { font-size: 18px; font-weight: 700; color: #2e7d32; }
+</style>
+</head>
+<body>
+<div class="os-sidebar" id="sidebar"></div>
+<div class="os-main">
+  <div class="os-topbar">
+    <h1 id="screen-title">Dashboard</h1>
+    <div class="os-topbar-right">
+      <div id="search-container"></div>
+      <button class="os-btn os-btn-sm" onclick="exportData()">📥 Export</button>
+    </div>
+  </div>
+  <div class="os-content" id="content"></div>
+</div>
+
+<script src="os-core.js"></script>
+<script>
+const BUYER_STAGES = [
+  { key: 'searching', label: 'Searching', icon: '🔍' },
+  { key: 'tours', label: 'Taking Tours', icon: '🏠' },
+  { key: 'offer', label: 'Making Offer', icon: '📝' },
+  { key: 'under-contract', label: 'Under Contract', icon: '📑' },
+  { key: 'closed-buyer', label: 'Closed', icon: '✅' },
+];
+const SELLER_STAGES = [
+  { key: 'listing-prep', label: 'Listing Prep', icon: '📋' },
+  { key: 'listed', label: 'Listed', icon: '🏷️' },
+  { key: 'showings', label: 'Showings', icon: '👋' },
+  { key: 'offer-received', label: 'Offer Received', icon: '📝' },
+  { key: 'under-contract-seller', label: 'Under Contract', icon: '📑' },
+  { key: 'closed-seller', label: 'Closed', icon: '✅' },
+];
+
+OS.db.define('clients', {
+  fields: [
+    { key: 'name', label: 'Name', type: 'text' },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'phone', label: 'Phone', type: 'text' },
+    { key: 'type', label: 'Type', type: 'select', options: ['Buyer', 'Seller', 'Both'] },
+    { key: 'budget', label: 'Budget ($)', type: 'number' },
+    { key: 'criteria', label: 'Criteria / Property Details', type: 'textarea', placeholder: 'Location, size, features, etc.' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Active', 'Paused', 'Closed', 'Cold'], default: 'Active' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('deals', {
+  fields: [
+    { key: 'title', label: 'Deal Title', type: 'text' },
+    { key: 'clientId', label: 'Client', type: 'select', options: () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'propertyId', label: 'Property', type: 'select', options: () => OS.db.list('properties').map(p => ({ value: p.id, label: p.address })) },
+    { key: 'side', label: 'Side', type: 'select', options: ['Buyer', 'Seller'] },
+    { key: 'stage', label: 'Stage', type: 'text', default: 'searching' },
+    { key: 'value', label: 'Price ($)', type: 'number' },
+    { key: 'commissionPct', label: 'Commission (%)', type: 'number', default: 3 },
+    { key: 'brokerSplit', label: 'Broker Split (%)', type: 'number', default: 30 },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('properties', {
+  fields: [
+    { key: 'address', label: 'Address', type: 'text' },
+    { key: 'type', label: 'Type', type: 'select', options: ['House', 'Apartment', 'Condo', 'Townhouse', 'Land', 'Commercial'] },
+    { key: 'price', label: 'List Price ($)', type: 'number' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Active', 'Pending', 'Sold', 'Expired', 'Off Market'], default: 'Active' },
+    { key: 'bedrooms', label: 'Bedrooms', type: 'number' },
+    { key: 'bathrooms', label: 'Bathrooms', type: 'number' },
+    { key: 'sqft', label: 'Square Feet', type: 'number' },
+    { key: 'features', label: 'Features', type: 'text', placeholder: 'Pool, Garage, etc.' },
+    { key: 'ownerId', label: 'Owner (Seller)', type: 'select', options: () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('showings', {
+  fields: [
+    { key: 'propertyId', label: 'Property', type: 'select', options: () => OS.db.list('properties').map(p => ({ value: p.id, label: p.address })) },
+    { key: 'clientId', label: 'Client (Buyer)', type: 'select', options: () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name })) },
+    { key: 'date', label: 'Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'feedback', label: 'Buyer Feedback', type: 'textarea' },
+    { key: 'status', label: 'Status', type: 'select', options: ['Scheduled', 'Done', 'Cancelled'], default: 'Scheduled' },
+  ]
+});
+
+OS.db.define('commissions', {
+  fields: [
+    { key: 'dealId', label: 'Deal', type: 'select', options: () => OS.db.list('deals').map(d => ({ value: d.id, label: d.title })) },
+    { key: 'salePrice', label: 'Sale Price ($)', type: 'number' },
+    { key: 'commissionPct', label: 'Commission %', type: 'number', default: 3 },
+    { key: 'brokerSplitPct', label: 'Broker Split %', type: 'number', default: 30 },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+OS.db.define('market', {
+  fields: [
+    { key: 'address', label: 'Address', type: 'text' },
+    { key: 'type', label: 'Type', type: 'select', options: ['House', 'Apartment', 'Condo', 'Townhouse', 'Land', 'Commercial'] },
+    { key: 'salePrice', label: 'Sale Price ($)', type: 'number' },
+    { key: 'saleDate', label: 'Sale Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+    { key: 'daysOnMarket', label: 'Days on Market', type: 'number' },
+    { key: 'notes', label: 'Notes', type: 'textarea' },
+  ]
+});
+
+seedDemoData();
+const screens = {};
+function nav(label, icon, key, fn) { screens[key] = fn; return { label, icon, key }; }
+const navItems = [
+  nav('Dashboard', '📊', 'dashboard', renderDashboard),
+  nav('Pipeline', '💼', 'pipeline', renderPipeline),
+  nav('Properties', '🏠', 'properties', renderProperties),
+  nav('Clients', '👤', 'clients', renderClients),
+  nav('Showings', '👋', 'showings', renderShowings),
+  nav('Commissions', '💰', 'commissions', renderCommissions),
+  nav('Market', '📈', 'market', renderMarket),
+];
+
+let searchQuery = '';
+function renderNav() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.innerHTML = '';
+  sidebar.appendChild($el('h2', {}, 'Real Estate OS'));
+  const navDiv = $el('div', { className: 'os-nav' });
+  for (const item of navItems) navDiv.appendChild($el('div', { className: 'os-nav-item', onClick: () => navigate(item.key), dataset: { screen: item.key } }, item.icon, $el('span', {}, item.label)));
+  sidebar.appendChild(navDiv);
+  sidebar.appendChild($el('div', { className: 'os-sidebar-footer' }, 'Real Estate OS v1'));
+}
+
+function navigate(screen) {
+  OS.state.currentScreen = screen;
+  document.querySelectorAll('.os-nav-item').forEach(el => el.classList.toggle('active', el.dataset.screen === screen));
+  const item = navItems.find(n => n.key === screen);
+  document.getElementById('screen-title').textContent = item ? item.label : 'Dashboard';
+  render(screen);
+}
+function render(screen) { (screens[screen] || screens.dashboard)(); }
+
+function renderDashboard() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const activeListings = OS.db.list('properties', { status: 'Active' });
+  const pendingDeals = OS.db.list('deals').filter(d => !d.stage.startsWith('closed'));
+  const closedDeals = OS.db.list('deals').filter(d => d.stage.startsWith('closed'));
+  const totalCommission = closedDeals.reduce((s, d) => {
+    const v = parseFloat(d.value) || 0; const cp = parseFloat(d.commissionPct) || 3; const bs = parseFloat(d.brokerSplit) || 0;
+    return s + (v * cp / 100) * (1 - bs / 100);
+  }, 0);
+  const upcomingShowings = OS.db.list('showings', { status: 'Scheduled' });
+
+  OS.ui.renderCards(c, [
+    { label: 'Active Listings', value: activeListings.length, color: '#1565c0' },
+    { label: 'Pending Deals', value: pendingDeals.length, color: '#0f3460' },
+    { label: 'Earned Commission', value: totalCommission, prefix: '$', color: '#2e7d32' },
+    { label: 'Upcoming Showings', value: upcomingShowings.length, color: '#6a1b9a' },
+  ]);
+
+  if (pendingDeals.length) {
+    c.appendChild($el('h3', { style: { marginTop: '20px', marginBottom: '12px' } }, 'Active Deals'));
+    OS.ui.renderTable(c, pendingDeals, [
+      { label: 'Deal', key: 'title' },
+      { label: 'Price', render: r => `$${Number(r.value || 0).toLocaleString()}` },
+      { label: 'Side', render: r => `<span class="os-badge ${r.side === 'Buyer' ? 'os-badge-lead' : 'os-badge-proposal'}">${r.side}</span>` },
+    ]);
+  }
+}
+
+function renderPipeline() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Pipeline'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addDeal() }, '+ New Deal'));
+  c.appendChild(header);
+
+  c.appendChild($el('h3', { style: { marginBottom: '8px', marginTop: '4px' } }, 'Buyers'));
+  const buyerDeals = OS.db.list('deals').filter(d => d.side === 'Buyer');
+  const buyerByStage = {}; for (const s of BUYER_STAGES) buyerByStage[s.key] = buyerDeals.filter(d => d.stage === s.key);
+  OS.ui.renderKanban(c, buyerByStage, BUYER_STAGES, (item, newStage) => { OS.db.update('deals', item.id, { stage: newStage }); renderPipeline(); OS.ui.showToast('Moved', 'success'); }, (item) => editDeal(item));
+
+  c.appendChild($el('h3', { style: { marginTop: '20px', marginBottom: '8px' } }, 'Sellers'));
+  const sellerDeals = OS.db.list('deals').filter(d => d.side === 'Seller');
+  const sellerByStage = {}; for (const s of SELLER_STAGES) sellerByStage[s.key] = sellerDeals.filter(d => d.stage === s.key);
+  OS.ui.renderKanban(c, sellerByStage, SELLER_STAGES, (item, newStage) => { OS.db.update('deals', item.id, { stage: newStage }); renderPipeline(); OS.ui.showToast('Moved', 'success'); }, (item) => editDeal(item));
+}
+
+function addDeal() {
+  const s = OS.db.schema('deals');
+  s.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  s.fields.find(f => f.key === 'propertyId').options = () => OS.db.list('properties').map(p => ({ value: p.id, label: p.address }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, { commissionPct: 3, brokerSplit: 30 }, d => { OS.db.create('deals', d); OS.ui.closeModal(); renderPipeline(); OS.ui.showToast('Deal added', 'success'); });
+  OS.ui.showModal('New Deal', container);
+}
+
+function editDeal(deal) {
+  const s = OS.db.schema('deals');
+  s.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  s.fields.find(f => f.key === 'propertyId').options = () => OS.db.list('properties').map(p => ({ value: p.id, label: p.address }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, deal, d => { OS.db.update('deals', deal.id, d); OS.ui.closeModal(); renderPipeline(); });
+  OS.ui.showModal('Edit Deal', container);
+}
+
+function renderProperties() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Properties'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addProperty() }, '+ New Listing'));
+  c.appendChild(header);
+
+  const properties = OS.db.search('properties', searchQuery);
+  for (const p of properties) {
+    const card = $el('div', { className: 'os-property-card' });
+    card.appendChild($el('div', { className: 'os-property-img' }, '🏠'));
+    const info = $el('div', { className: 'os-property-info' });
+    info.appendChild($el('h4', {}, p.address));
+    info.appendChild($el('div', { className: 'os-property-price' }, `$${Number(p.price || 0).toLocaleString()}`));
+    info.appendChild($el('div', { className: 'detail' }, `${p.bedrooms || '-'}bd / ${p.bathrooms || '-'}ba / ${p.sqft || '-'}sqft`));
+    info.appendChild($el('div', { className: 'detail', style: { marginTop: '4px' } },
+      `Status: `, $el('span', { className: `os-badge ${p.status === 'Active' ? 'os-badge-active' : p.status === 'Sold' ? 'os-badge-paid' : 'os-badge-pending'}` }, p.status)));
+    info.appendChild($el('div', { style: { marginTop: '8px', display: 'flex', gap: '8px' } },
+      $el('button', { className: 'os-btn os-btn-xs', onClick: () => editProperty(p) }, 'Edit'),
+      $el('button', { className: 'os-btn os-btn-xs os-btn-danger', onClick: () => { OS.db.delete('properties', p.id); renderProperties(); } }, 'Delete')));
+    card.appendChild(info);
+    c.appendChild(card);
+  }
+}
+
+function addProperty() {
+  const s = OS.db.schema('properties');
+  s.fields.find(f => f.key === 'ownerId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, {}, d => { OS.db.create('properties', d); OS.ui.closeModal(); renderProperties(); OS.ui.showToast('Property added', 'success'); });
+  OS.ui.showModal('New Property', container);
+}
+
+function editProperty(prop) {
+  const s = OS.db.schema('properties');
+  s.fields.find(f => f.key === 'ownerId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, prop, d => { OS.db.update('properties', prop.id, d); OS.ui.closeModal(); renderProperties(); });
+  OS.ui.showModal('Edit Property', container);
+}
+
+function renderClients() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Clients'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addClient() }, '+ New Client'));
+  c.appendChild(header);
+  const clients = OS.db.search('clients', searchQuery);
+  OS.ui.renderTable(c, clients, [
+    { label: 'Name', key: 'name' },
+    { label: 'Type', render: r => `<span class="os-badge ${r.type === 'Buyer' ? 'os-badge-lead' : r.type === 'Seller' ? 'os-badge-proposal' : 'os-badge-qualified'}">${r.type}</span>` },
+    { label: 'Budget', render: r => r.budget ? `$${Number(r.budget).toLocaleString()}` : '-' },
+    { label: 'Status', render: r => `<span class="os-badge os-badge-${r.status === 'Active' ? 'active' : 'pending'}">${r.status}</span>` },
+    { label: 'Phone', key: 'phone' },
+  ], {
+    onEdit: r => editClient(r),
+    onDelete: r => { OS.db.delete('clients', r.id); renderClients(); },
+  });
+}
+
+function addClient() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('clients'), {}, d => { OS.db.create('clients', d); OS.ui.closeModal(); renderClients(); OS.ui.showToast('Client added', 'success'); });
+  OS.ui.showModal('New Client', container);
+}
+function editClient(cl) {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('clients'), cl, d => { OS.db.update('clients', cl.id, d); OS.ui.closeModal(); renderClients(); });
+  OS.ui.showModal('Edit Client', container);
+}
+
+function renderShowings() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Showings'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addShowing() }, '+ Schedule Showing'));
+  c.appendChild(header);
+
+  const showings = OS.db.search('showings', searchQuery);
+  const data = showings.map(s => {
+    const p = OS.db.read('properties', s.propertyId); const cl = OS.db.read('clients', s.clientId);
+    return { ...s, propAddr: p ? p.address : '-', clientName: cl ? cl.name : '-' };
+  });
+  OS.ui.renderTable(c, data, [
+    { label: 'Date', key: 'date' },
+    { label: 'Property', key: 'propAddr' },
+    { label: 'Buyer', key: 'clientName' },
+    { label: 'Status', render: r => `<span class="os-badge os-badge-${r.status === 'Done' ? 'done' : r.status === 'Scheduled' ? 'scheduled' : 'pending'}">${r.status}</span>` },
+    { label: 'Feedback', key: 'feedback', render: r => r.feedback ? r.feedback.slice(0, 50) + '...' : '-' },
+  ], {
+    onEdit: r => editShowing(r),
+    onDelete: r => { OS.db.delete('showings', r.id); renderShowings(); },
+  });
+}
+
+function addShowing() {
+  const s = OS.db.schema('showings');
+  s.fields.find(f => f.key === 'propertyId').options = () => OS.db.list('properties').map(p => ({ value: p.id, label: p.address }));
+  s.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, { date: new Date().toISOString().slice(0, 10), status: 'Scheduled' }, d => { OS.db.create('showings', d); OS.ui.closeModal(); renderShowings(); OS.ui.showToast('Showing scheduled', 'success'); });
+  OS.ui.showModal('Schedule Showing', container);
+}
+function editShowing(sh) {
+  const s = OS.db.schema('showings');
+  s.fields.find(f => f.key === 'propertyId').options = () => OS.db.list('properties').map(p => ({ value: p.id, label: p.address }));
+  s.fields.find(f => f.key === 'clientId').options = () => OS.db.list('clients').map(c => ({ value: c.id, label: c.name }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, sh, d => { OS.db.update('showings', sh.id, d); OS.ui.closeModal(); renderShowings(); });
+  OS.ui.showModal('Edit Showing', container);
+}
+
+function renderCommissions() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Commissions'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addCommission() }, '+ Record Commission'));
+  c.appendChild(header);
+
+  const commissions = OS.db.search('commissions', searchQuery);
+  let totalEarned = 0;
+  const data = commissions.map(cr => {
+    const sp = parseFloat(cr.salePrice) || 0; const cp = parseFloat(cr.commissionPct) || 3; const bs = parseFloat(cr.brokerSplitPct) || 0;
+    const gross = sp * cp / 100; const net = gross * (1 - bs / 100); totalEarned += net;
+    return { ...cr, grossCommission: gross, netCommission: net, display: `$${net.toLocaleString()}` };
+  });
+
+  c.appendChild($el('div', { style: { fontSize: '24px', fontWeight: 700, color: '#2e7d32', marginBottom: '16px' } }, `Total Earned: $${totalEarned.toLocaleString()}`));
+
+  OS.ui.renderTable(c, data, [
+    { label: 'Property', render: r => { const d = OS.db.read('deals', r.dealId); return d ? d.title : '-'; } },
+    { label: 'Sale Price', render: r => `$${Number(r.salePrice || 0).toLocaleString()}` },
+    { label: 'Commission %', key: 'commissionPct', render: r => `${r.commissionPct}%` },
+    { label: 'Gross', render: r => `$${r.grossCommission.toLocaleString()}` },
+    { label: 'Broker Split', key: 'brokerSplitPct', render: r => `${r.brokerSplitPct}%` },
+    { label: 'You Earn', key: 'display' },
+  ], {
+    onDelete: r => { OS.db.delete('commissions', r.id); renderCommissions(); },
+  });
+}
+
+function addCommission() {
+  const s = OS.db.schema('commissions');
+  s.fields.find(f => f.key === 'dealId').options = () => OS.db.list('deals').map(d => ({ value: d.id, label: d.title }));
+  const container = $el('div');
+  OS.ui.renderForm(container, s, { commissionPct: 3, brokerSplitPct: 30 }, d => { OS.db.create('commissions', d); OS.ui.closeModal(); renderCommissions(); OS.ui.showToast('Commission recorded', 'success'); });
+  OS.ui.showModal('Record Commission', container);
+}
+
+function renderMarket() {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  const header = $el('div', { className: 'os-section-header' });
+  header.appendChild($el('h2', {}, 'Market Tracker'));
+  header.appendChild($el('button', { className: 'os-btn os-btn-primary', onClick: () => addMarketEntry() }, '+ Add Comps'));
+  c.appendChild(header);
+
+  const entries = OS.db.search('market', searchQuery);
+  const avgPrice = entries.length ? entries.reduce((s, e) => s + (parseFloat(e.salePrice) || 0), 0) / entries.length : 0;
+  const avgDays = entries.length ? entries.reduce((s, e) => s + (parseFloat(e.daysOnMarket) || 0), 0) / entries.length : 0;
+
+  OS.ui.renderCards(c, [
+    { label: 'Recent Sales', value: entries.length, color: '#1565c0' },
+    { label: 'Avg Sale Price', value: avgPrice, prefix: '$', color: '#2e7d32' },
+    { label: 'Avg Days on Market', value: avgDays.toFixed(0), sub: 'days', color: '#0f3460' },
+  ]);
+
+  OS.ui.renderTable(c, entries, [
+    { label: 'Address', key: 'address' },
+    { label: 'Type', key: 'type' },
+    { label: 'Sale Price', render: r => `$${Number(r.salePrice || 0).toLocaleString()}` },
+    { label: 'Sale Date', key: 'saleDate' },
+    { label: 'Days on Market', key: 'daysOnMarket' },
+  ], {
+    onDelete: r => { OS.db.delete('market', r.id); renderMarket(); },
+  });
+}
+
+function addMarketEntry() {
+  const container = $el('div');
+  OS.ui.renderForm(container, OS.db.schema('market'), {}, d => { OS.db.create('market', d); OS.ui.closeModal(); renderMarket(); OS.ui.showToast('Entry added', 'success'); });
+  OS.ui.showModal('Add Comps Entry', container);
+}
+
+function exportData() {
+  const schemas = ['clients', 'deals', 'properties', 'showings', 'commissions', 'market'];
+  const data = {}; for (const s of schemas) data[s] = OS.db.list(s);
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `realestate-os-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+  OS.ui.showToast('Data exported', 'success');
+}
+
+function seedDemoData() {
+  if (localStorage.getItem('os_re_seeded')) return;
+  const c1 = OS.db.create('clients', { name: 'John & Sarah Buyer', email: 'john@example.com', phone: '555-0101', type: 'Buyer', budget: 450000, criteria: '3bd/2ba, good schools, North side', status: 'Active' });
+  const c2 = OS.db.create('clients', { name: 'Mary Seller', email: 'mary@example.com', phone: '555-0102', type: 'Seller', criteria: '4bd/3ba, pool, downtown', status: 'Active' });
+  const c3 = OS.db.create('clients', { name: 'Tom Investor', email: 'tom@example.com', phone: '555-0103', type: 'Buyer', budget: 600000, criteria: 'Multi-unit or fixer-upper', status: 'Active' });
+
+  const p1 = OS.db.create('properties', { address: '123 Main St', type: 'House', price: 425000, status: 'Active', bedrooms: 3, bathrooms: 2, sqft: 1800, features: 'Garage, Updated kitchen', ownerId: c2.id });
+  const p2 = OS.db.create('properties', { address: '456 Oak Ave', type: 'House', price: 550000, status: 'Active', bedrooms: 4, bathrooms: 3, sqft: 2400, features: 'Pool, Large lot', ownerId: c2.id });
+  OS.db.create('properties', { address: '789 Pine Rd', type: 'Condo', price: 280000, status: 'Active', bedrooms: 2, bathrooms: 1, sqft: 950, features: 'Balcony, Gym' });
+  OS.db.create('properties', { address: '321 Elm St', type: 'Townhouse', price: 375000, status: 'Pending', bedrooms: 3, bathrooms: 2.5, sqft: 1500, features: 'Parking, Yard' });
+
+  OS.db.create('deals', { title: 'Buyer: 123 Main St', clientId: c1.id, propertyId: p1.id, side: 'Buyer', stage: 'tours', value: 425000, commissionPct: 3, brokerSplit: 30 });
+  OS.db.create('deals', { title: 'Seller: 456 Oak Ave', clientId: c2.id, propertyId: p2.id, side: 'Seller', stage: 'listed', value: 550000, commissionPct: 3, brokerSplit: 30 });
+
+  OS.db.create('showings', { propertyId: p1.id, clientId: c1.id, date: '2026-07-25', feedback: 'Loved the kitchen, concerned about commute', status: 'Scheduled' });
+
+  localStorage.setItem('os_re_seeded', '1');
+}
+
+OS.ui.renderSearch(document.getElementById('search-container'), 'Search...', q => { searchQuery = q; render(OS.state.currentScreen); });
+renderNav();
+navigate('dashboard');
+</script>
+</body>
+</html>

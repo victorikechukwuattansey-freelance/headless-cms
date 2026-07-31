@@ -1,0 +1,29 @@
+{
+  "name": "@saas/auth",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@auth/core": "^0.34.0",
+    "@auth/prisma-adapter": "^2.5.0",
+    "@saas/config": "workspace:*",
+    "@saas/database": "workspace:*",
+    "@saas/utils": "workspace:*",
+    "bcryptjs": "^2.4.3",
+    "next": "^15.0.0",
+    "next-auth": "^5.0.0-beta.19"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./middleware": "./src/middleware.ts"
+  }
+}

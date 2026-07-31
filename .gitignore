@@ -1,0 +1,32 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Dependencies & build output
+node_modules/
+.turbo/
+dist/
+.next/
+build/
+out/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+
+# Prisma generated client (regenerate with `prisma generate`)
+ai-workflow-dashboard/packages/database/generated/
+
+# Obsidian vault — personal knowledge, kept local
+Brain/
+.obsidian/
+
+# Session/tool artifacts
+.playwright-mcp/
+.belt/
+
+# OS
+Thumbs.db
+.DS_Store

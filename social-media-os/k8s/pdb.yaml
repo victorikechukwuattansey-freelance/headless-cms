@@ -1,0 +1,63 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: smos-api-pdb
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: social-media-os
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: social-media-os
+      app.kubernetes.io/component: api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: smos-web-pdb
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: social-media-os
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: social-media-os
+      app.kubernetes.io/component: web
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: smos-postgres-pdb
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/component: postgres
+    app.kubernetes.io/part-of: social-media-os
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: social-media-os
+      app.kubernetes.io/component: postgres
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: smos-redis-pdb
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/part-of: social-media-os
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: social-media-os
+      app.kubernetes.io/component: redis

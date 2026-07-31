@@ -1,0 +1,214 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: smos-api
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: social-media-os
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: social-media-os
+      app.kubernetes.io/component: api
+  endpoints:
+    - port: metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      path: /metrics
+    - port: http
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /health
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: smos-web
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: social-media-os
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: social-media-os
+      app.kubernetes.io/component: web
+  endpoints:
+    - port: http
+      interval: 15s
+      scrapeTimeout: 10s
+      path: /api/metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: smos-postgres
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/component: postgres
+    app.kubernetes.io/part-of: social-media-os
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: social-media-os
+      app.kubernetes.io/component: postgres
+  endpoints:
+    - port: metrics
+      interval: 15s
+      scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: smos-redis
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/part-of: social-media-os
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: social-media-os
+      app.kubernetes.io/component: redis
+  endpoints:
+    - port: metrics
+      interval: 15s
+      scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: smos-alerts
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/part-of: social-media-os
+    release: prometheus
+spec:
+  groups:
+    - name: smos-api
+      rules:
+        - alert: HighErrorRate
+          expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "API high error rate ({{ $value | humanizePercentage }})"
+            description: "API error rate is above 5% for the last 5 minutes."
+
+        - alert: HighLatency
+          expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "API high latency ({{ $value }}s p95)"
+            description: "API p95 latency is above 2 seconds for the last 5 minutes."
+
+        - alert: LowAvailability
+          expr: avg(up{app.kubernetes.io/component="api"}) < 0.8
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "API availability below 80%"
+            description: "Less than 80% of API instances are up."
+
+    - name: smos-database
+      rules:
+        - alert: PostgresConnectionExhausted
+          expr: pg_stat_database_numbackends > 150
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL connections nearing limit"
+            description: "Database connections at {{ $value }} (limit 200)."
+
+        - alert: PostgresReplicationLag
+          expr: pg_replication_lag_seconds > 30
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL replication lag"
+            description: "Replication lag is {{ $value }} seconds."
+
+    - name: smos-redis
+      rules:
+        - alert: RedisMemoryHigh
+          expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis memory usage above 80%"
+            description: "Redis memory at {{ $value | humanizePercentage }} of max."
+
+    - name: smos-infra
+      rules:
+        - alert: DiskSpaceLow
+          expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Disk space below 10%"
+            description: "Disk space at {{ $value | humanizePercentage }} available."
+
+        - alert: HighCPUUsage
+          expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CPU usage above 85%"
+            description: "CPU at {{ $value }}% utilization."
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: smos-prometheus
+  namespace: smos
+  labels:
+    app.kubernetes.io/name: social-media-os
+    app.kubernetes.io/part-of: social-media-os
+    release: prometheus
+spec:
+  serviceAccountName: prometheus
+  serviceMonitorSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: social-media-os
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 8Gi
+  retention: 30d
+  retentionSize: 50GB
+  storage:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 100Gi
+  alerting:
+    alertmanagers:
+      - name: alertmanager
+        namespace: smos
+        port: web
+  rules:
+    - smos-alerts

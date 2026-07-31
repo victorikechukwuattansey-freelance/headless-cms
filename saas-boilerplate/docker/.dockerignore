@@ -1,0 +1,15 @@
+node_modules/
+**/node_modules/
+.git/
+.github/
+.gitignore
+.next/
+dist/
+turbo/
+.turbo/
+*.tsbuildinfo
+.env
+.env.*
+*.md
+coverage/
+.DS_Store

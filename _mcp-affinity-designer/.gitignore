@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Claude Code settings are tracked for project consistency
+# Claude Code設定はプロジェクトの一貫性のため追跡される
+# .claude/ directory is intentionally tracked
