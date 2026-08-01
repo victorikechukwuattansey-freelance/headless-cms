@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" role="img" aria-labelledby="t d">
+  <title id="t">Bathroom renovation before and after</title>
+  <desc id="d">An outdated beige bathroom on the left, a modern tiled bathroom with a walk-in shower on the right.</desc>
+  <rect width="400" height="460" fill="#ddd6c8"/>
+  <rect x="400" width="400" height="460" fill="#f0e7d8"/>
+  <rect y="340" width="400" height="120" fill="#c2b7a4"/>
+  <rect x="400" y="340" width="400" height="120" fill="#7d8b7f"/>
+  <rect x="30" y="150" width="110" height="190" fill="#b9b2a5"/>
+  <rect x="420" y="150" width="110" height="190" fill="#5f7161"/>
+  <rect x="190" y="90" width="120" height="250" fill="#cfc7b6"/>
+  <rect x="580" y="90" width="130" height="250" fill="#8b5e3c"/>
+  <rect x="595" y="105" width="100" height="220" fill="#dce8e2" opacity="0.55"/>
+  <rect x="220" y="330" width="60" height="10" fill="#8f887a"/>
+  <rect x="610" y="330" width="70" height="10" fill="#6e4829"/>
+  <line x1="400" y1="0" x2="400" y2="460" stroke="#fff" stroke-width="4" opacity="0.7"/>
+  <text x="60" y="430" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#6b655a">BEFORE</text>
+  <text x="460" y="430" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#4a3b2c">AFTER</text>
+</svg>

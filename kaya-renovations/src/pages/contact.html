@@ -1,0 +1,127 @@
+{{header}}
+
+<section class="bg-sand">
+  <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6 md:py-24">
+    <p class="text-sm font-semibold uppercase tracking-widest text-wood">Contact</p>
+    <h1 class="mt-4 max-w-2xl text-4xl font-bold leading-tight text-ink sm:text-5xl">Let's talk about your project.</h1>
+    <p class="mt-5 max-w-xl text-lg text-ink-soft">Send the form below, or reach us directly — we reply within one business day and arrange free site visits within 48 hours.</p>
+  </div>
+</section>
+
+<section class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+  <div class="grid gap-10 lg:grid-cols-5">
+    <form id="quote-form" class="rounded-xl border border-sand bg-white p-6 shadow-sm sm:p-8 lg:col-span-3" novalidate>
+      <h2 class="text-xl font-bold text-ink">Request a free quote</h2>
+      <p class="mt-1 text-sm text-ink-soft">All fields marked * are required.</p>
+      <div class="mt-6 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label for="name" class="text-sm font-semibold text-ink">Full name *</label>
+          <input id="name" name="name" type="text" required autocomplete="name" class="mt-1 w-full rounded-lg border border-sand bg-cream px-3 py-2.5 text-sm outline-none focus:border-wood">
+        </div>
+        <div>
+          <label for="phone" class="text-sm font-semibold text-ink">Phone / WhatsApp *</label>
+          <input id="phone" name="phone" type="tel" required autocomplete="tel" class="mt-1 w-full rounded-lg border border-sand bg-cream px-3 py-2.5 text-sm outline-none focus:border-wood">
+        </div>
+        <div class="sm:col-span-2">
+          <label for="email" class="text-sm font-semibold text-ink">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" class="mt-1 w-full rounded-lg border border-sand bg-cream px-3 py-2.5 text-sm outline-none focus:border-wood">
+        </div>
+        <div>
+          <label for="service" class="text-sm font-semibold text-ink">Service needed *</label>
+          <select id="service" name="service" required class="mt-1 w-full rounded-lg border border-sand bg-cream px-3 py-2.5 text-sm outline-none focus:border-wood">
+            <option value="">Choose a service</option>
+            <option>Kitchen &amp; bathroom renovation</option>
+            <option>Roofing &amp; waterproofing</option>
+            <option>Tiling &amp; flooring</option>
+            <option>Interior painting</option>
+            <option>Home extension</option>
+            <option>Not sure yet</option>
+          </select>
+        </div>
+        <div>
+          <label for="budget" class="text-sm font-semibold text-ink">Approximate budget</label>
+          <select id="budget" name="budget" class="mt-1 w-full rounded-lg border border-sand bg-cream px-3 py-2.5 text-sm outline-none focus:border-wood">
+            <option value="">Select range</option>
+            <option>Under ₦1M</option>
+            <option>₦1M – ₦3M</option>
+            <option>₦3M – ₦5M</option>
+            <option>₦5M – ₦10M</option>
+            <option>Over ₦10M</option>
+          </select>
+        </div>
+        <div class="sm:col-span-2">
+          <label for="message" class="text-sm font-semibold text-ink">Tell us about the project *</label>
+          <textarea id="message" name="message" rows="5" required class="mt-1 w-full rounded-lg border border-sand bg-cream px-3 py-2.5 text-sm outline-none focus:border-wood"></textarea>
+        </div>
+      </div>
+      <button type="submit" class="mt-6 rounded-full bg-moss px-8 py-3 font-semibold text-cream transition hover:bg-moss-dark">Send request</button>
+      <p id="form-note" class="mt-4 hidden rounded-lg bg-sand p-3 text-sm text-ink-soft">Thank you — your request is ready in your email app. Prefer WhatsApp? <a href="https://wa.me/2348001234567?text=Hello%20Kaya%20Renovations%2C%20I'd%20like%20a%20quote." class="font-semibold text-wood-dark underline">Message us here instead.</a></p>
+    </form>
+
+    <div class="lg:col-span-2">
+      <div class="rounded-xl bg-ink p-6 text-cream sm:p-8">
+        <h2 class="text-xl font-bold">Reach us directly</h2>
+        <ul class="mt-5 space-y-4 text-sm">
+          <li><span class="block text-xs font-semibold uppercase tracking-widest text-cream/50">Phone</span><a href="tel:+2348001234567" class="mt-1 inline-block hover:text-cream/80">+234 800 123 4567</a></li>
+          <li><span class="block text-xs font-semibold uppercase tracking-widest text-cream/50">Email</span><a href="mailto:hello@kayarenovations.ng" class="mt-1 inline-block hover:text-cream/80">hello@kayarenovations.ng</a></li>
+          <li><span class="block text-xs font-semibold uppercase tracking-widest text-cream/50">Office</span><span class="mt-1 block">14 Adeola Odeku Street, Ikeja, Lagos</span></li>
+          <li><span class="block text-xs font-semibold uppercase tracking-widest text-cream/50">Hours</span><span class="mt-1 block">Mon – Sat, 8:00 – 18:00</span></li>
+        </ul>
+        <a href="https://wa.me/2348001234567?text=Hello%20Kaya%20Renovations%2C%20I'd%20like%20a%20free%20quote." class="mt-6 block rounded-full bg-cream px-6 py-3 text-center font-semibold text-ink transition hover:bg-sand">Chat on WhatsApp</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="bg-sand py-16">
+  <div class="mx-auto max-w-3xl px-4 sm:px-6">
+    <h2 class="text-2xl font-bold text-ink">Frequently asked questions</h2>
+    <div class="mt-6 space-y-3">
+      <details class="rounded-xl border border-sand bg-white p-5">
+        <summary class="cursor-pointer font-semibold text-ink">Are your quotes really fixed?</summary>
+        <p class="mt-3 text-sm leading-relaxed text-ink-soft">Yes. The only thing that changes the price is a change to the agreed scope, and we always get your written approval before spending anything extra. Our "done-on-time, on-price" promise is part of every contract.</p>
+      </details>
+      <details class="rounded-xl border border-sand bg-white p-5">
+        <summary class="cursor-pointer font-semibold text-ink">Do we need to move out during the work?</summary>
+        <p class="mt-3 text-sm leading-relaxed text-ink-soft">For most kitchens, bathrooms and repaints — no. We contain dust, protect floors and work around you. For full extensions and major structural work, we'll advise on which parts of the house need to be vacated and for how long, before you commit.</p>
+      </details>
+      <details class="rounded-xl border border-sand bg-white p-5">
+        <summary class="cursor-pointer font-semibold text-ink">How is payment structured?</summary>
+        <p class="mt-3 text-sm leading-relaxed text-ink-soft">30% to start, 30% at the midpoint, 30% at completion, and 10% held for 30 days after handover while you check the work. For larger extensions we agree a phased payment plan linked to milestones.</p>
+      </details>
+      <details class="rounded-xl border border-sand bg-white p-5">
+        <summary class="cursor-pointer font-semibold text-ink">Can we choose our own materials?</summary>
+        <p class="mt-3 text-sm leading-relaxed text-ink-soft">Absolutely — and many clients do. We'll advise on quality and compatibility, buy with you or from you, and give you the receipts. We never mark up materials you source yourself.</p>
+      </details>
+      <details class="rounded-xl border border-sand bg-white p-5">
+        <summary class="cursor-pointer font-semibold text-ink">Which areas do you cover?</summary>
+        <p class="mt-3 text-sm leading-relaxed text-ink-soft">We work across Lagos: Ikeja, Surulere, Lekki, Victoria Island, Yaba, Gbagada, Magodo and beyond. Projects outside Lagos are considered case by case.</p>
+      </details>
+      <details class="rounded-xl border border-sand bg-white p-5">
+        <summary class="cursor-pointer font-semibold text-ink">How long does a typical kitchen renovation take?</summary>
+        <p class="mt-3 text-sm leading-relaxed text-ink-soft">3–4 weeks including design, demolition, services and finishing. You'll get a day-by-day schedule in writing before we start, and we report against it every week.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<script>
+  const form = document.getElementById('quote-form');
+  const note = document.getElementById('form-note');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const data = new FormData(form);
+    const subject = encodeURIComponent('Quote request: ' + (data.get('service') || 'Renovation'));
+    const body = encodeURIComponent(
+      'Name: ' + data.get('name') + '\n' +
+      'Phone: ' + data.get('phone') + '\n' +
+      'Email: ' + (data.get('email') || '-') + '\n' +
+      'Service: ' + (data.get('service') || '-') + '\n' +
+      'Budget: ' + (data.get('budget') || '-') + '\n\n' +
+      data.get('message')
+    );
+    window.location.href = 'mailto:hello@kayarenovations.ng?subject=' + subject + '&body=' + body;
+    note.hidden = false;
+  });
+</script>
+{{footer}}

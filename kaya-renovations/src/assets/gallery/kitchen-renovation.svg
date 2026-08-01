@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" role="img" aria-labelledby="t d">
+  <title id="t">Kitchen renovation before and after</title>
+  <desc id="d">A dated grey kitchen on the left, a warm renovated kitchen with wooden cabinets on the right.</desc>
+  <rect width="400" height="460" fill="#d6d2c8"/>
+  <rect x="400" width="400" height="460" fill="#f3ecdd"/>
+  <rect y="330" width="400" height="130" fill="#b3ad9f"/>
+  <rect x="400" y="330" width="400" height="130" fill="#a9845f"/>
+  <rect x="40" y="150" width="200" height="180" fill="#aeb3b0"/>
+  <rect x="40" y="210" width="200" height="120" fill="#98a09c"/>
+  <rect x="430" y="150" width="200" height="180" fill="#8b5e3c"/>
+  <rect x="430" y="210" width="200" height="120" fill="#5f7161"/>
+  <rect x="280" y="120" width="80" height="210" fill="#c9c4b8"/>
+  <rect x="660" y="120" width="80" height="210" fill="#8b5e3c"/>
+  <rect x="320" y="70" width="160" height="260" fill="#e8e2d5" opacity="0.35"/>
+  <rect x="40" y="80" width="60" height="70" fill="#eef0ec"/>
+  <rect x="430" y="80" width="60" height="70" fill="#f6f1e6"/>
+  <line x1="400" y1="0" x2="400" y2="460" stroke="#fff" stroke-width="4" opacity="0.7"/>
+  <text x="60" y="430" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#6b655a">BEFORE</text>
+  <text x="460" y="430" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#4a3b2c">AFTER</text>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" role="img" aria-labelledby="t d">
+  <title id="t">Bedroom repaint before and after</title>
+  <desc id="d">A dull, stained wall on the left, a calm sage-green bedroom on the right.</desc>
+  <rect width="400" height="460" fill="#cfccc4"/>
+  <rect x="400" width="400" height="460" fill="#e9efe7"/>
+  <rect y="340" width="400" height="120" fill="#a79f90"/>
+  <rect x="400" y="340" width="400" height="120" fill="#a8845c"/>
+  <rect x="40" y="120" width="160" height="100" fill="#8e8b83"/>
+  <rect x="60" y="220" width="160" height="120" fill="#97948c"/>
+  <rect x="430" y="120" width="160" height="100" fill="#6b7f5e"/>
+  <rect x="450" y="220" width="160" height="120" fill="#5f7161"/>
+  <rect x="250" y="200" width="90" height="90" fill="#b5b0a2"/>
+  <rect x="640" y="200" width="90" height="90" fill="#f3ecdd"/>
+  <line x1="250" y1="240" x2="340" y2="240" stroke="#9a948a" stroke-width="3"/>
+  <line x1="640" y1="240" x2="730" y2="240" stroke="#5f7161" stroke-width="3"/>
+  <line x1="265" y1="225" x2="265" y2="255" stroke="#9a948a" stroke-width="3"/>
+  <line x1="655" y1="225" x2="655" y2="255" stroke="#5f7161" stroke-width="3"/>
+  <line x1="400" y1="0" x2="400" y2="460" stroke="#fff" stroke-width="4" opacity="0.7"/>
+  <text x="60" y="430" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#6b655a">BEFORE</text>
+  <text x="460" y="430" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#4a3b2c">AFTER</text>
+</svg>

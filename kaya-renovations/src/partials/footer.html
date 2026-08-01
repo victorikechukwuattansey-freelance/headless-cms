@@ -1,0 +1,57 @@
+  </main>
+
+  <footer class="mt-16 bg-ink text-cream">
+    <div class="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-4">
+      <div>
+        <p class="font-display text-lg font-bold">Kaya Renovations</p>
+        <p class="mt-3 text-sm leading-relaxed text-cream/70">Family-run home renovation contractor in Lagos. Kitchens, bathrooms, roofs and more — done right, guaranteed for 2 years.</p>
+      </div>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-cream/50">Quick links</p>
+        <ul class="mt-3 space-y-2 text-sm">
+          <li><a class="text-cream/80 hover:text-cream" href="about.html">About us</a></li>
+          <li><a class="text-cream/80 hover:text-cream" href="services.html">Services &amp; pricing</a></li>
+          <li><a class="text-cream/80 hover:text-cream" href="gallery.html">Project gallery</a></li>
+          <li><a class="text-cream/80 hover:text-cream" href="process.html">How we work</a></li>
+          <li><a class="text-cream/80 hover:text-cream" href="tips.html">Renovation tips</a></li>
+          <li><a class="text-cream/80 hover:text-cream" href="contact.html">Contact</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-cream/50">Services</p>
+        <ul class="mt-3 space-y-2 text-sm text-cream/80">
+          <li>Kitchen &amp; bathroom renovation</li>
+          <li>Roofing &amp; waterproofing</li>
+          <li>Tiling &amp; flooring</li>
+          <li>Interior painting</li>
+          <li>Home extensions</li>
+        </ul>
+      </div>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-cream/50">Contact</p>
+        <ul class="mt-3 space-y-2 text-sm text-cream/80">
+          <li>14 Adeola Odeku Street, Ikeja, Lagos</li>
+          <li><a class="hover:text-cream" href="tel:+2348001234567">+234 800 123 4567</a></li>
+          <li><a class="hover:text-cream" href="mailto:hello@kayarenovations.ng">hello@kayarenovations.ng</a></li>
+          <li>Mon–Sat, 8:00 – 18:00</li>
+        </ul>
+      </div>
+    </div>
+    <div class="border-t border-cream/10 py-4 text-center text-xs text-cream/50">
+      &copy; <span id="year">2026</span> Kaya Home Renovations. Licensed &amp; insured. All rights reserved.
+    </div>
+  </footer>
+
+  <script>
+    const btn = document.getElementById('menu-btn');
+    const menu = document.getElementById('mobile-menu');
+    btn.addEventListener('click', () => {
+      const open = menu.hidden;
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+      btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    });
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

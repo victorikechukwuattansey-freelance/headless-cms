@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{page-title}} | Kaya Home Renovations</title>
+  <meta name="description" content="{{page-description}}">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-moss focus:px-4 focus:py-2 focus:text-cream">Skip to content</a>
+
+  <header class="sticky top-0 z-40 border-b border-sand bg-cream/95 backdrop-blur">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <a href="index.html" class="flex items-center gap-2">
+        <span class="grid h-9 w-9 place-items-center rounded-full bg-wood font-display text-lg font-bold text-cream">K</span>
+        <span class="font-display text-lg font-bold leading-tight text-ink">
+          Kaya Renovations<br>
+          <span class="text-xs font-normal uppercase tracking-widest text-ink-soft">Home &amp; property care</span>
+        </span>
+      </a>
+
+      <nav aria-label="Main" class="hidden items-center gap-1 md:flex">
+        <a class="nav-link"{{active-home}} href="index.html">Home</a>
+        <a class="nav-link"{{active-about}} href="about.html">About</a>
+        <a class="nav-link"{{active-services}} href="services.html">Services</a>
+        <a class="nav-link"{{active-gallery}} href="gallery.html">Gallery</a>
+        <a class="nav-link"{{active-process}} href="process.html">Process</a>
+        <a class="nav-link"{{active-tips}} href="tips.html">Tips</a>
+        <a class="nav-link"{{active-contact}} href="contact.html">Contact</a>
+      </nav>
+
+      <a href="contact.html" class="hidden rounded-full bg-moss px-4 py-2 text-sm font-semibold text-cream transition hover:bg-moss-dark md:inline-block">Get a quote</a>
+
+      <button id="menu-btn" aria-expanded="false" aria-controls="mobile-menu" class="rounded-lg p-2 text-ink hover:bg-sand md:hidden" aria-label="Open menu">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+
+    <nav id="mobile-menu" hidden aria-label="Mobile" class="border-t border-sand bg-cream px-4 pb-4 pt-2 md:hidden">
+      <div class="flex flex-col gap-1">
+        <a class="nav-link"{{active-home}} href="index.html">Home</a>
+        <a class="nav-link"{{active-about}} href="about.html">About</a>
+        <a class="nav-link"{{active-services}} href="services.html">Services</a>
+        <a class="nav-link"{{active-gallery}} href="gallery.html">Gallery</a>
+        <a class="nav-link"{{active-process}} href="process.html">Process</a>
+        <a class="nav-link"{{active-tips}} href="tips.html">Tips</a>
+        <a class="nav-link"{{active-contact}} href="contact.html">Contact</a>
+        <a href="contact.html" class="mt-2 rounded-full bg-moss px-4 py-2 text-center text-sm font-semibold text-cream">Get a quote</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
