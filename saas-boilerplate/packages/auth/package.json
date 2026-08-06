@@ -7,8 +7,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@auth/core": "^0.34.0",
+    "@auth/core": "^0.41.3",
     "@auth/prisma-adapter": "^2.5.0",
+    "@prisma/client": "^6.7.0",
     "@saas/config": "workspace:*",
     "@saas/database": "workspace:*",
     "@saas/utils": "workspace:*",

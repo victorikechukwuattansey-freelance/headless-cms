@@ -19,6 +19,12 @@ import { RagService } from "./rag/rag.service";
 import { AnalyticsController } from "./analytics/analytics.controller";
 import { AnalyticsService } from "./analytics/analytics.service";
 import { MetricsController } from "./metrics/metrics.controller";
+import { ApiKeysController } from "./api-keys/api-keys.controller";
+import { ApiKeysService } from "./api-keys/api-keys.service";
+import { ProvidersController } from "./providers/providers.controller";
+import { ProvidersService } from "./providers/providers.service";
+import { OrgsController } from "./orgs/orgs.controller";
+import { OrgsService } from "./orgs/orgs.service";
 import { QueueService } from "./queue/queue.service";
 import { AiService } from "./ai/ai.service";
 import { loadEnv } from "@awd/config";
@@ -45,7 +51,10 @@ const env = loadEnv();
     RagController,
     AnalyticsController,
     MetricsController,
+    ApiKeysController,
+    ProvidersController,
+    OrgsController,
   ],
-  providers: [AuthService, WorkflowsService, ExecutionsService, WebhooksService, QueueService, AiService, CredentialsService, PromptsService, RagService, AnalyticsService],
+  providers: [AuthService, WorkflowsService, ExecutionsService, WebhooksService, QueueService, AiService, CredentialsService, PromptsService, RagService, AnalyticsService, ApiKeysService, ProvidersService, OrgsService],
 })
 export class AppModule {}

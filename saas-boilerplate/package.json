@@ -15,11 +15,24 @@
     "db:migrate": "pnpm --filter @saas/database db:migrate",
     "db:seed": "pnpm --filter @saas/database db:seed",
     "db:studio": "pnpm --filter @saas/database db:studio",
-    "typecheck": "turbo typecheck"
+    "db:validate": "pnpm --filter @saas/database db:validate",
+    "db:drift": "pnpm --filter @saas/database db:drift",
+    "db:deploy": "pnpm --filter @saas/database db:deploy",
+    "typecheck": "turbo typecheck",
+    "lint:strict": "eslint . --ext .ts,.tsx --max-warnings 0",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md}\"",
+    "test:integration": "vitest run tests/integration --config tests/vitest.config.ts",
+    "test:e2e": "pnpm --filter @saas/web test:e2e",
+    "security:audit": "pnpm audit --prod --audit-level high",
+    "deps:check": "node scripts/check-deps.mjs",
+    "bundle:check": "node scripts/check-bundle.mjs",
+    "docs:check": "node scripts/check-docs.mjs"
   },
   "devDependencies": {
     "@turbo/gen": "^2.0.0",
     "@types/node": "^20.14.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^15.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.2.0",
     "prettier": "^3.3.0",
@@ -29,6 +42,12 @@
     "vitest": "^2.0.0"
   },
   "packageManager": "pnpm@9.1.0",
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.18",
+      "sharp": "^0.35.0"
+    }
+  },
   "engines": {
     "node": ">=20",
     "pnpm": ">=9"

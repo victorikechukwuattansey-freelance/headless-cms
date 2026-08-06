@@ -14,7 +14,9 @@ export default async function UsagePage() {
   });
 
   const teamSize = org ? await prisma.membership.count({ where: { organizationId: org.id } }) : 0;
-  const teamPercent = org ? await getUsagePercent("teamMembers", org.id, teamSize) : 0;
+  const teamPercent = org
+    ? await getUsagePercent("teamMembers", org.id, teamSize, org.planTier)
+    : 0;
 
   return (
     <div className="space-y-6">

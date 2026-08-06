@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -15,8 +16,11 @@ env:
   TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
 jobs:
-  lint:
-    name: Lint, Format & Typecheck
+  # ---------------------------------------------------------------------------
+  # Gate 10: Dependency compatibility (frozen lockfile + no duplicate majors)
+  # ---------------------------------------------------------------------------
+  deps:
+    name: Dependencies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,20 +29,67 @@ jobs:
         with:
           node-version: 20
           cache: "pnpm"
-      - name: Cache pnpm store
-        uses: actions/cache@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dedupe --check
+      - run: pnpm deps:check
+
+  # ---------------------------------------------------------------------------
+  # Gate 2: ESLint zero warnings | Gate 12: formatting
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          path: ~/.local/share/pnpm/store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-      - run: pnpm install
-      - run: pnpm format --check
-      - run: pnpm lint
+          node-version: 20
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint:strict
+
+  # ---------------------------------------------------------------------------
+  # Gate 1: TypeScript zero errors
+  # ---------------------------------------------------------------------------
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
 
+  # ---------------------------------------------------------------------------
+  # Gate 3: Unit tests pass
+  # ---------------------------------------------------------------------------
   test:
-    name: Test
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/saas_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm test
+
+  # ---------------------------------------------------------------------------
+  # Gates 4, 6, 7: Integration tests + Prisma generation + Migration validation
+  # ---------------------------------------------------------------------------
+  integration:
+    name: Integration & Migrations
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -54,6 +105,8 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/saas_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -61,21 +114,57 @@ jobs:
         with:
           node-version: 20
           cache: "pnpm"
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/pnpm/store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
-      - run: pnpm test
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/saas_test
+      - run: pnpm db:validate
+      - run: pnpm db:push
+      - run: pnpm db:drift
+      - run: pnpm test:integration
 
+  # ---------------------------------------------------------------------------
+  # Gate 5: End-to-end smoke tests (chromium)
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: E2E Smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: saas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/saas_test
+      AUTH_SECRET: test-auth-secret-0123456789abcdef
+      NEXT_PUBLIC_SUPABASE_URL: ""
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm db:push
+      - run: pnpm --filter @saas/web build
+      - run: pnpm --filter @saas/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+
+  # ---------------------------------------------------------------------------
+  # Gate 8: Build succeeds | Gate 11: Bundle size thresholds
+  # ---------------------------------------------------------------------------
   build:
-    name: Build
+    name: Build & Bundle
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,13 +173,67 @@ jobs:
         with:
           node-version: 20
           cache: "pnpm"
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/pnpm/store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
       - run: pnpm build
+      - run: pnpm bundle:check
+
+  # ---------------------------------------------------------------------------
+  # Gate 9: Security audit (high/critical fail)
+  # ---------------------------------------------------------------------------
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm security:audit
+
+  # ---------------------------------------------------------------------------
+  # Gate 12: Documentation updated for architectural changes (PRs only)
+  # ---------------------------------------------------------------------------
+  docs:
+    name: Docs Gate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: pnpm docs:check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
+  # ---------------------------------------------------------------------------
+  # Aggregator: CD may only deploy when every gate is green
+  # ---------------------------------------------------------------------------
+  quality-gates:
+    name: All Quality Gates
+    runs-on: ubuntu-latest
+    needs: [deps, lint, typecheck, test, integration, e2e, build, security, docs]
+    if: always()
+    steps:
+      - run: |
+          echo "deps: ${{ needs.deps.result }}"
+          echo "lint: ${{ needs.lint.result }}"
+          echo "typecheck: ${{ needs.typecheck.result }}"
+          echo "test: ${{ needs.test.result }}"
+          echo "integration: ${{ needs.integration.result }}"
+          echo "e2e: ${{ needs.e2e.result }}"
+          echo "build: ${{ needs.build.result }}"
+          echo "security: ${{ needs.security.result }}"
+          echo "docs: ${{ needs.docs.result }}"
+          test "${{ needs.deps.result }}" = "success" && \
+          test "${{ needs.lint.result }}" = "success" && \
+          test "${{ needs.typecheck.result }}" = "success" && \
+          test "${{ needs.test.result }}" = "success" && \
+          test "${{ needs.integration.result }}" = "success" && \
+          test "${{ needs.e2e.result }}" = "success" && \
+          test "${{ needs.build.result }}" = "success" && \
+          test "${{ needs.security.result }}" = "success" && \
+          { test "${{ needs.docs.result }}" = "success" || test "${{ needs.docs.result }}" = "skipped"; }

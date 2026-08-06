@@ -24,7 +24,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email already in use" }, { status: 409 });
     }
 
-    const passwordHash = await hash(password, 12);
+    const passwordHash = await hash(password, 10);
 
     await prisma.user.create({
       data: {

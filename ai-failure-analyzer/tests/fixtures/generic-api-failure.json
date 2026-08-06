@@ -1,0 +1,6 @@
+[
+  { "level": "error", "event": "llm_request", "message": "status_code: 429 - Rate limit exceeded for requests. Please retry after 20s." },
+  { "level": "error", "event": "llm_request", "message": "status_code: 429 - Rate limit exceeded for requests. Please retry after 20s." },
+  { "level": "error", "event": "llm_request", "message": "status_code: 429 - Rate limit exceeded for requests. Please retry after 20s." },
+  { "level": "error", "event": "agent_abort", "message": "Giving up after 3 consecutive rate-limit failures." }
+]

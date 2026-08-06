@@ -17,6 +17,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./apps/web/src"),
+      "@saas/database": path.resolve(__dirname, "../packages/database/src/index.ts"),
     },
   },
 });

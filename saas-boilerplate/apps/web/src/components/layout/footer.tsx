@@ -1,6 +1,7 @@
-"use client";
-
 import Link from "next/link";
+
+// Module scope — stable during the session, avoids re-evaluating per render.
+const footerYear = new Date().getFullYear();
 
 export function Footer() {
   return (
@@ -62,7 +63,7 @@ export function Footer() {
           </div>
         </div>
         <div className="text-muted-foreground mt-8 border-t pt-8 text-center text-sm">
-          &copy; {new Date().getFullYear()} SaaS Boilerplate. All rights reserved.
+          &copy; {footerYear} SaaS Boilerplate. All rights reserved.
         </div>
       </div>
     </footer>

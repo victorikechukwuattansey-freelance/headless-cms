@@ -1,6 +1,6 @@
 # jarvis-demo
 
-**OpenCode workspace for the Jarvis AI agent.** Links to an Obsidian vault for long-term memory. Not a software project — no build, test, or lint pipeline.
+**OpenCode workspace for the Jarvis AI agent.** Links to an Obsidian vault for long-term memory. The root is an agent workspace with no pipeline of its own; contained software projects (e.g. `ai-workflow-dashboard`, `saas-boilerplate`, `kaya-renovations`, `_open-canva`) have their own tooling.
 
 ## Instruction Chain (loaded every session)
 
@@ -29,12 +29,26 @@ The Obsidian vault is at `C:\Users\1040 G8\Documents\Brain`. It is the single so
 | `scripts/generate-product-images.mjs` | Product listing image generator (covers, previews) |
 | `African-Real-Estate-Agent-Growth-Kit-v1.0.zip` | Product ZIP (13.76 MB) — 9 modules, 111 files |
 | `African-Real-Estate-Affiliate-Promo-Pack.zip` | Affiliate promo pack — mockups, ad scripts, WhatsApp scripts, email swipes, FAQ sheet |
-| `package.json` | Dependencies and scripts (`npm run build:ads`)
+| `package.json` | Dependencies and root scripts (`build:ads`, `build:site`, `build:blaise`)
 | `MEMORY.md` | Redirects memory to vault (legacy, not loaded by OpenCode) |
 | `ai-memory-vault-opencode.md` | Reference/tutorial doc (not loaded as instructions) |
 | `.obsidian/` | Obsidian workspace config (app, appearance, plugins) |
 | `_open-canva/` | OpenCanva design workspace — React-component template designs with live canvas preview |
-| `_mcp-affinity-designer/` | Affinity Designer MCP server (built, blocked — Affinity Designer not installed) |
+| `_mcp-affinity-designer/` | Affinity Designer MCP server (configured in opencode.json; requires the Affinity Designer app to be running) |
+| `ADR/` | Architecture Decision Record registry — index + template (ADRs themselves live in owning projects, e.g. `saas-boilerplate/docs/adr/`) |
+| `docs/ai/` | Agent behavior notes — deltas too small for AGENTS.md or vault `_system/` manuals |
+| `docs/onboarding/` | Workspace boot guide — instruction chain, startup routine, commands |
+| `docs/decisions/` | Running decision log — informal history; graduates to ADR when formalized |
+| `saas-boilerplate/` | SaaS boilerplate project (Turborepo + pnpm) — own docs, ADRs, apps, packages |
+| `ai-workflow-dashboard/` | AI workflow dashboard monorepo (NestJS API + Next.js web + Prisma) |
+| `kaya-renovations/` | Kaya Home Renovations client site (static Tailwind, built via `build:site`) |
+| `blaise-crest-enterprises/` | Blaise Crest Enterprises client site (static Tailwind, built via `build:blaise`) |
+| `mc-danfo/` | MC Danfo multipage site (Next.js App Router) |
+| `mc-danfo-old/` | MC Danfo pre-rebuild archive (source-only backup) |
+| `social-media-os/` | Social media OS monorepo (apps, packages, docker, k8s) |
+| `landing-pages/` | Landing page collection |
+| `lcos/` | LCOS project |
+| `.agents/` | Workspace agent skills (loaded by the system prompt) |
 
 ## Available Commands
 
@@ -61,14 +75,20 @@ Full voice-activated assistant (push-to-talk + whisper STT + opencode AI + TTS):
 
 Dependencies: `ffmpeg`, `whisper-cli.exe` + `ggml-tiny.bin` model.
 
+### Social Media Posting
+
+Post ads as **drafts for review** before publishing. See `.opencode/commands/social.md`.
+
+Powered by PostEverywhere MCP. Requires `POSTEVERYWHERE_API_KEY` env var.
+
 ## Repo State
 
-- **No commits yet.** All files are untracked. Initialize with `git add . && git commit -m "initial scaffold"` when ready.
-- `package.json` includes `sharp`, `commander`, `glob` for the social ad batch processor.
+- Git history exists: `a9aa112` initial scaffold, `8628111` Prisma client fix, `d08c70b` Kaya Home Renovations site. Working tree has in-progress changes not yet committed.
+- Root `package.json` scripts: `build:ads` (batch social processor), `build:site` (kaya-renovations), `build:blaise` (blaise-crest-enterprises).
 
 ## Available Agent Skills
 
-The system prompt loads these skills for specialized tasks:
+The system prompt auto-loads the full skill set each session (workspace `.agents/skills/` plus installed plugin skills). Highlights relevant to this workspace:
 
 | Skill | Trigger |
 |---|---|
@@ -81,6 +101,12 @@ The system prompt loads these skills for specialized tasks:
 | `apply-comments` | Processing inspector markers/comments on OpenCanva designs |
 | `current-design` | Resolving "this design" to a concrete `<id>` in the open-canva project |
 | `svg-illustration` | Hand-authoring inline SVG illustrations for OpenCanva templates |
+| `react-best-practices` | React quality checklist after editing TSX components |
+| `nextjs` | Next.js App Router guidance — routing, RSC, data fetching |
+| `supabase` | Any task involving Supabase — auth, database, storage |
+| `tailwind-css` | Tailwind v4 styling and configuration |
+| `hyperframes` | Video and motion-graphic creation, rendering, captions |
+| `web-research` | Cited web research reports |
 
 ### Finding & Installing New Skills
 
@@ -95,19 +121,11 @@ npx skills update          # update all installed skills
 
 Browse the leaderboard at https://skills.sh/ for popular skills by category (React, testing, DevOps, etc.).
 
-Installed skills go to `~/.claude/skills/` (or the configured skills directory).
+This workspace's skills live in `.agents/skills/`; user-level plugin skills live under `~/.config/opencode/`. The Skills CLI installs to the configured skills directory.
 
 ### OpenCanva Template Design
 
 Design templates as React components in `_open-canva/designs/<id>/index.tsx`. Preview with `npm run dev` in `_open-canva/`, open at `/d/<id>`. Export to PNG/SVG/PDF via the built-in export panel. Before authoring, load the `canva-authoring` skill for the file contract and object model.
-
-## Available Commands
-
-### Social Media Posting
-
-Post ads as **drafts for review** before publishing. See `.opencode/commands/social.md`.
-
-Powered by PostEverywhere MCP. Requires `POSTEVERYWHERE_API_KEY` env var.
 
 ## Session Rules
 
@@ -121,9 +139,9 @@ The AI should automatically determine which tools are required and execute them 
 
 ---
 
-# Connected Services
+## Connected Services
 
-## Figma MCP
+### Figma MCP
 
 Purpose:
 Source of truth for all UI and UX.
@@ -148,7 +166,7 @@ Rules
 
 ---
 
-## Oxylabs AI
+### Oxylabs AI
 
 Purpose:
 Live web intelligence.
@@ -172,7 +190,7 @@ Rules
 
 ---
 
-## OpenCode
+### OpenCode
 
 Responsible for
 
@@ -186,7 +204,7 @@ Responsible for
 
 ---
 
-# Execution Order
+## Execution Order
 
 When multiple tools are needed
 
@@ -198,7 +216,7 @@ When multiple tools are needed
 
 ---
 
-# Shared Context
+## Shared Context
 
 Maintain throughout the session
 
@@ -214,7 +232,7 @@ Reuse this context until replaced.
 
 ---
 
-# Error Handling
+## Error Handling
 
 If Figma is unavailable
 
@@ -230,7 +248,7 @@ Never present assumptions as verified facts.
 
 ---
 
-# Decision Priority
+## Decision Priority
 
 1. User instructions
 2. Project code
@@ -246,3 +264,42 @@ Always prefer higher-priority sources.
 - Never publish social media content without explicit user approval — always use draft mode.
 - Do not move the vault location without updating `opencode.json` references.
 - The `MEMORY.md` and `ai-memory-vault-opencode.md` files are reference material; treat as read-only unless updating the vault architecture.
+
+---
+
+## Project Instructions
+
+This project uses:
+
+- React
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+
+Applies to the contained web projects (e.g. `_open-canva`, `mc-danfo`, `saas-boilerplate`); the workspace root itself has no code pipeline.
+
+When asked to optimize performance:
+
+Always use the `vercel-react-best-practices` skill (React/Next.js performance optimization).
+
+Your workflow must be:
+
+1. Inspect before editing.
+2. Explain findings.
+3. Rank issues by severity.
+4. Recommend fixes.
+5. Show exact code changes.
+6. Explain trade-offs.
+7. Explain how improvements should be verified.
+
+Never:
+
+- guess metrics
+- fabricate Lighthouse results
+- make silent architecture changes
+- introduce unnecessary dependencies
+- rewrite the project without justification
+
+If information is missing, ask for clarification before making changes.
+
+Always prioritize maintainability alongside performance.

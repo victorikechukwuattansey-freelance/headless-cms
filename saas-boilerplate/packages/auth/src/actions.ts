@@ -23,7 +23,7 @@ export async function registerUser(formData: FormData) {
     return { success: false, error: "A user with this email already exists" };
   }
 
-  const passwordHash = await hash(password, 12);
+  const passwordHash = await hash(password, 10);
 
   await prisma.user.create({
     data: {

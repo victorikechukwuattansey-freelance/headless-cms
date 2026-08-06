@@ -61,6 +61,10 @@ let cachedClientEnv: ClientEnv | null = null;
 export function getEnv(): Env {
   if (cachedEnv) return cachedEnv;
 
+  console.log("NODE_ENV =", process.env.NODE_ENV);
+  console.log("DATABASE_URL exists =", !!process.env.DATABASE_URL);
+  console.log("DATABASE_URL starts with =", process.env.DATABASE_URL?.substring(0, 15));
+
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {

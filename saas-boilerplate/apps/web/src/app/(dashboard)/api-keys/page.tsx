@@ -29,12 +29,12 @@ export default async function ApiKeysPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">API Keys</h1>
           <p className="text-muted-foreground">Manage your API keys for programmatic access.</p>
         </div>
-        <Button>
+        <Button className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" /> Create Key
         </Button>
       </div>

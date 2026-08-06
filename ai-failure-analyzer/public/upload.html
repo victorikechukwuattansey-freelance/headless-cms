@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Upload Logs &mdash; AI Failure Analyzer</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <span class="brand">AI<span>FailureAnalyzer</span></span>
+    <span class="links">
+      <a href="/">Landing</a>
+      <a href="/upload.html">Upload Logs</a>
+      <a href="/history.html">Previous Reports</a>
+    </span>
+  </nav>
+
+  <main>
+    <h1>Upload agent logs</h1>
+    <p class="sub">Drop a file or paste log text. Up to 10 MB. API keys and secrets are redacted automatically.</p>
+
+    <div class="card">
+      <div id="dropzone" class="dropzone">
+        Drop a log file here, or click to browse<br />
+        <span class="muted">.json &middot; .jsonl &middot; .ndjson &middot; .txt &middot; .log</span>
+      </div>
+      <input type="file" id="file" accept=".json,.jsonl,.ndjson,.txt,.log" hidden />
+      <p id="fileInfo" class="muted" hidden></p>
+
+      <div class="row" style="margin: 18px 0 10px">
+        <span style="color:var(--text-dim);font-size:13px">&mdash; or paste raw log text &mdash;</span>
+      </div>
+
+      <textarea id="paste" placeholder='{"messages": [{"role": "user", "content": "..."}]}'></textarea>
+
+      <div class="row" style="margin-top:16px">
+        <button id="analyzeBtn" type="button">Analyze</button>
+        <span id="status" class="muted"></span>
+      </div>
+      <div id="error" class="error-banner" hidden></div>
+    </div>
+  </main>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file');
+    const fileInfo = document.getElementById('fileInfo');
+    const paste = document.getElementById('paste');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const statusEl = document.getElementById('status');
+    const errorEl = document.getElementById('error');
+
+    let selectedFile = null;
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag');
+      if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files.length) setFile(fileInput.files[0]); });
+
+    function setFile(f) {
+      selectedFile = f;
+      fileInfo.textContent = `Selected: ${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
+      fileInfo.hidden = false;
+    }
+
+    analyzeBtn.addEventListener('click', async () => {
+      errorEl.hidden = true;
+      analyzeBtn.disabled = true;
+      statusEl.textContent = 'Analyzing...';
+
+      try {
+        let res;
+        if (selectedFile) {
+          const fd = new FormData();
+          fd.append('log', selectedFile);
+          res = await fetch('/api/analyze', { method: 'POST', body: fd });
+        } else if (paste.value.trim()) {
+          res = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ log: paste.value }),
+          });
+        } else {
+          throw new Error('Choose a file or paste log text first.');
+        }
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Analysis failed');
+        window.location.href = `/report.html?id=${data.id}`;
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.hidden = false;
+        statusEl.textContent = '';
+      } finally {
+        analyzeBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,14 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const port = process.env.E2E_PORT ?? "3000";
+const baseURL = `http://localhost:${port}`;
+
 export default defineConfig({
-  testDir: "../tests/e2e",
+  testDir: "../../tests/e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
+  expect: { timeout: 10_000 },
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     trace: "on-first-retry",
   },
   projects: [
@@ -17,8 +21,9 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
   webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    command: `pnpm start -p ${port}`,
+    url: baseURL,
+    reuseExistingServer: false,
+    timeout: 120_000,
   },
 });

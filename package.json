@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build:ads": "node batch-social-processor.mjs",
-    "build:site": "node kaya-renovations/scripts/build.mjs"
+    "build:site": "node kaya-renovations/scripts/build.mjs",
+    "build:blaise": "node blaise-crest-enterprises/scripts/build.mjs"
   },
   "dependencies": {
     "chalk": "^5.4.1",

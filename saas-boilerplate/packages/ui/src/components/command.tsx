@@ -63,15 +63,17 @@ CommandGroup.displayName = "CommandGroup";
 
 interface CommandItemProps extends React.HTMLAttributes<HTMLDivElement> {
   disabled?: boolean;
+  selected?: boolean;
   onSelect?: () => void;
 }
 
 const CommandItem = React.forwardRef<HTMLDivElement, CommandItemProps>(
-  ({ className, disabled, onSelect, ...props }, ref) => (
+  ({ className, disabled, selected = false, onSelect, ...props }, ref) => (
     <div
       ref={ref}
+      aria-selected={selected}
       className={cn(
-        "aria-selected:bg-accent aria-selected:text-accent-foreground relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "aria-selected:bg-accent aria-selected:text-accent-foreground relative flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
       onClick={disabled ? undefined : onSelect}

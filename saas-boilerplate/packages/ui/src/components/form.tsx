@@ -14,7 +14,7 @@ function FormField({ label, error, hint, required, children, className }: FormFi
   return (
     <div className={cn("space-y-2", className)}>
       {label && (
-        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+        <label className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
           {label}
           {required && <span className="text-destructive ml-1">*</span>}
         </label>

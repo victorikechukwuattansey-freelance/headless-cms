@@ -30,3 +30,12 @@ Brain/
 # OS
 Thumbs.db
 .DS_Store
+
+# Playwright test artifacts
+saas-boilerplate/apps/web/playwright-report/
+saas-boilerplate/apps/web/test-results/
+
+# Nested git repos (own GitHub lifecycle)
+mc-danfo/
+mc-danfo-old/
+blaise-crest-enterprises/

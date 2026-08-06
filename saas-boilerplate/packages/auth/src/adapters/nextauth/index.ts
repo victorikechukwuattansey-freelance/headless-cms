@@ -9,6 +9,7 @@ import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { prisma } from "@saas/database";
 import { getEnv } from "@saas/config";
+import { callbacks, pages } from "./auth-config";
 import type { AuthService } from "../../service";
 import type { AuthSession, AuthUser, Credentials as Creds, OAuthProvider } from "../../types";
 import { InvalidCredentialsError } from "../../types";
@@ -34,11 +35,7 @@ const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60,
   },
-  pages: {
-    signIn: "/auth/login",
-    error: "/auth/error",
-    verifyRequest: "/auth/verify-request",
-  },
+  pages,
   providers: [
     ...(env.AUTH_GITHUB_ID && env.AUTH_GITHUB_SECRET
       ? [GitHub({ clientId: env.AUTH_GITHUB_ID, clientSecret: env.AUTH_GITHUB_SECRET })]
@@ -100,45 +97,7 @@ const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user, trigger, session: updateSession }) {
-      if (user) {
-        token.id = user.id;
-        token.role = (user as { role?: string }).role ?? "USER";
-      }
-      if (trigger === "update" && updateSession?.currentOrgId) {
-        token.currentOrgId = updateSession.currentOrgId;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as string;
-      }
-      (session as any).currentOrgId = token.currentOrgId as string | undefined;
-      return session;
-    },
-    async authorized({ auth: session, request: { nextUrl } }) {
-      const isLoggedIn = !!session?.user;
-      const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
-      const isOnAdmin = nextUrl.pathname.startsWith("/admin");
-      const isOnAuth = nextUrl.pathname.startsWith("/auth");
-
-      if (isOnAuth && isLoggedIn) {
-        return Response.redirect(new URL("/dashboard", nextUrl));
-      }
-
-      if (isOnDashboard || isOnAdmin) {
-        if (!isLoggedIn) return false;
-        if (isOnAdmin && session?.user?.role !== "ADMIN" && session?.user?.role !== "SUPER_ADMIN") {
-          return Response.redirect(new URL("/dashboard", nextUrl));
-        }
-      }
-
-      return true;
-    },
-  },
+  callbacks,
 });
 
 async function getSession(): Promise<AuthSession | null> {
@@ -184,7 +143,7 @@ export class NextAuthAdapter implements AuthService {
     if (existing) throw new InvalidCredentialsError();
 
     const bcrypt = await import("bcryptjs");
-    const passwordHash = await bcrypt.hash(data.password, 12);
+    const passwordHash = await bcrypt.hash(data.password, 10);
 
     await prisma.user.create({
       data: {

@@ -7,9 +7,8 @@ import {
   ToastTitle,
   ToastDescription,
   ToastClose,
-  type ToasterToast,
-} from "@saas/ui";
-import { useToast } from "@saas/ui";
+} from "@saas/ui/components/toast";
+import { useToast, type ToasterToast } from "@saas/ui/hooks/use-toast";
 
 export function Toaster() {
   const { toasts } = useToast();

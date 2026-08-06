@@ -1,6 +1,7 @@
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearch", "postgresqlExtensions"]
+  engineType      = "client"
+  previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions"]
 }
 
 datasource db {
@@ -554,4 +555,59 @@ model NotificationUserPreference {
 
   @@unique([userId, channel])
   @@map("notification_user_preferences")
+}
+
+enum NewsletterStatus {
+  SUBSCRIBED
+  UNSUBSCRIBED
+  BOUNCED
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(100)
+  email     String   @db.VarChar(255)
+  subject   String   @db.VarChar(150)
+  message   String   @db.Text
+  source    String   @default("marketing-site") @db.VarChar(50)
+  ip        String?  @db.VarChar(45)
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("contact_messages")
+}
+
+model NewsletterSubscriber {
+  id               String           @id @default(cuid())
+  email            String           @unique @db.VarChar(255)
+  status           NewsletterStatus @default(SUBSCRIBED)
+  source           String           @default("marketing-site") @db.VarChar(50)
+  unsubscribeToken String           @unique @map("unsubscribe_token") @db.VarChar(64)
+  createdAt        DateTime         @default(now()) @map("created_at")
+  unsubscribedAt   DateTime?        @map("unsubscribed_at")
+
+  @@index([status])
+  @@map("newsletter_subscribers")
+}
+
+model ContentPost {
+  id          String     @id @default(cuid())
+  slug        String     @unique @db.VarChar(255)
+  title       String     @db.VarChar(255)
+  excerpt     String?    @db.VarChar(500)
+  body        String     @db.Text
+  coverImage  String?    @map("cover_image")
+  status      PostStatus @default(DRAFT)
+  publishedAt DateTime?  @map("published_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([status, publishedAt])
+  @@map("content_posts")
 }

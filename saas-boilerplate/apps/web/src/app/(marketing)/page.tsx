@@ -79,7 +79,7 @@ export default function HomePage() {
     <>
       <section className="relative overflow-hidden py-24 lg:py-32">
         <div className="from-primary/5 to-primary/5 absolute inset-0 bg-gradient-to-br via-transparent" />
-        <div className="container relative">
+        <div className="relative container">
           <div className="mx-auto max-w-4xl text-center">
             <div className="bg-muted mb-6 inline-flex items-center rounded-full border px-4 py-1.5 text-sm font-medium">
               Launch your SaaS in hours
@@ -156,7 +156,7 @@ export default function HomePage() {
                 )}
                 <h3 className="text-xl font-bold">{plan.name}</h3>
                 <p className="text-muted-foreground mt-2 text-sm">{plan.description}</p>
-                <div className="mb-8 mt-6">
+                <div className="mt-6 mb-8">
                   <span className="text-4xl font-bold">{plan.price}</span>
                   <span className="text-muted-foreground">/month</span>
                 </div>

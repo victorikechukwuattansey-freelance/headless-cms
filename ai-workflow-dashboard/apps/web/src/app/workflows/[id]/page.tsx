@@ -1,24 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  applyNodeChanges,
-  applyEdgeChanges,
-  addEdge,
-  type Node,
-  type Edge,
-  type NodeChange,
-  type EdgeChange,
-  type Connection,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import { api, getToken, type WorkflowDetail } from "@/lib/api";
+import dynamic from "next/dynamic";
+import type { Node, Edge } from "@xyflow/react";
+import { api, getToken, type WorkflowDetail, type ProviderInfo } from "@/lib/api";
+import type { FlowNode, FlowEdge } from "@/components/workflow-canvas";
+
+const WorkflowCanvas = dynamic(() => import("@/components/workflow-canvas"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center text-slate-500">Loading canvas…</div>
+  ),
+});
 
 const NODE_COLORS: Record<string, string> = {
   TRIGGER: "border-indigo-500 bg-indigo-500/10",
@@ -71,6 +66,16 @@ export default function WorkflowPage() {
   const [aiOutput, setAiOutput] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedSystem, setSelectedSystem] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState("default");
+  const [selectedModel, setSelectedModel] = useState("");
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const pollGuardRef = useRef<{ cancelled: boolean } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollGuardRef.current) pollGuardRef.current.cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!getToken()) {
@@ -78,6 +83,9 @@ export default function WorkflowPage() {
       return;
     }
     void load();
+    void api<ProviderInfo[]>("/providers")
+      .then(setProviders)
+      .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
@@ -126,42 +134,37 @@ export default function WorkflowPage() {
     [draftNodes],
   );
 
-  const onNodesChange = useCallback((changes: NodeChange[]) => {
-    setDraftNodes((prev) => {
-      const next = applyNodeChanges(changes, prev);
-      if (changes.some((c) => (c.type === "position" && !c.dragging) || c.type === "remove")) setDirty(true);
-      return next as DraftNode[];
-    });
+  const handleNodesChange = useCallback((next: FlowNode[], dirty: boolean) => {
+    setDraftNodes(next as DraftNode[]);
+    if (dirty) setDirty(true);
   }, []);
 
-  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    setDraftEdges((prev) => {
-      const next = applyEdgeChanges(changes, prev);
-      if (changes.some((c) => c.type === "remove")) setDirty(true);
-      return next;
-    });
+  const handleEdgesChange = useCallback((next: FlowEdge[], dirty: boolean) => {
+    setDraftEdges(next);
+    if (dirty) setDirty(true);
   }, []);
 
-  const onConnect = useCallback((conn: Connection) => {
-    setDraftEdges((prev) => {
-      const next = addEdge(
-        { id: `edge-${Date.now()}`, source: conn.source ?? "", target: conn.target ?? "", animated: true, style: { stroke: "#64748b" } },
-        prev,
-      );
-      setDirty(true);
-      return next;
-    });
-  }, []);
-  const onNodesDelete = useCallback(() => {
+  const handleConnect = useCallback((edge: FlowEdge) => {
+    setDraftEdges((prev) => [...prev, edge]);
     setDirty(true);
   }, []);
+
+  const handleNodeClick = useCallback((node: FlowNode) => {
+    setSelected(node.id);
+    const cfg = node.data.configuration ?? {};
+    setSelectedSystem(typeof cfg.system === "string" ? cfg.system : "");
+    setSelectedProvider(typeof cfg.provider === "string" ? cfg.provider : "default");
+    setSelectedModel(typeof cfg.model === "string" ? cfg.model : "");
+  }, []);
+
+  const handlePaneClick = useCallback(() => setSelected(null), []);
 
   function addNode(nodeType: string) {
     const id = `${nodeType}-${Math.random().toString(36).slice(2, 7)}`;
     const configuration: Record<string, unknown> = {};
     if (nodeType === "schedule-trigger") configuration.cron = "0 9 * * *";
     if (nodeType === "ai-chat") {
-      configuration.provider = "ollama";
+      configuration.provider = "default";
       configuration.model = "llama3.2";
       configuration.system = "";
     }
@@ -181,7 +184,18 @@ export default function WorkflowPage() {
     setDraftNodes((prev) =>
       prev.map((n) =>
         n.id === selected
-          ? { ...n, data: { ...n.data, configuration: { ...n.data.configuration, system: selectedSystem } } }
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                configuration: {
+                  ...n.data.configuration,
+                  provider: selectedProvider,
+                  model: selectedModel,
+                  system: selectedSystem,
+                },
+              },
+            }
           : n,
       ),
     );
@@ -269,12 +283,16 @@ export default function WorkflowPage() {
   async function pollExecution(id: string) {
     const interval = 3000;
     const maxAttempts = 40;
+    const guard = { cancelled: false };
+    pollGuardRef.current = guard;
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((resolve) => setTimeout(resolve, interval));
+      if (guard.cancelled) return;
       try {
         const ex = await api<{ status: string; nodes: Array<{ nodeType: string; status: string; output: { text?: string } | null }> }>(
           `/executions/${id}`,
         );
+        if (guard.cancelled) return;
         setRunStatus(ex.status);
         const ai = ex.nodes?.find((n) => n.nodeType === "ai-chat" && n.output?.text);
         if (ai) setAiOutput(ai.output?.text ?? null);
@@ -288,6 +306,10 @@ export default function WorkflowPage() {
   if (!workflow && !error) return <main className="p-8 text-slate-400">Loading…</main>;
 
   const selectedNode = draftNodes.find((n) => n.id === selected);
+  const providerInfo = providers.find((p) => p.name === selectedProvider) ?? null;
+  const resolvedProvider =
+    selectedProvider === "default" ? (providers.find((p) => p.isDefault) ?? null) : providerInfo;
+  const providerModels = resolvedProvider?.models ?? [];
 
   return (
     <main className="flex h-screen flex-col">
@@ -362,26 +384,15 @@ export default function WorkflowPage() {
 
         <div className="flex-1">
           {draftNodes.length > 0 ? (
-            <ReactFlow
+            <WorkflowCanvas
               nodes={nodes}
               edges={draftEdges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onNodesDelete={onNodesDelete}
-              onNodeClick={(_, node) => {
-                setSelected(node.id);
-                const found = draftNodes.find((n) => n.id === node.id);
-                setSelectedSystem(typeof found?.data.configuration.system === "string" ? found.data.configuration.system : "");
-              }}
-              onPaneClick={() => setSelected(null)}
-              deleteKeyCode={["Backspace", "Delete"]}
-              fitView
-            >
-              <Background color="#334155" gap={24} />
-              <Controls />
-              <MiniMap className="!bg-slate-900" nodeColor="#312e81" maskColor="rgba(15,23,42,0.7)" />
-            </ReactFlow>
+              onNodesChange={handleNodesChange}
+              onEdgesChange={handleEdgesChange}
+              onConnect={handleConnect}
+              onNodeClick={handleNodeClick}
+              onPaneClick={handlePaneClick}
+            />
           ) : (
             <div className="flex h-full items-center justify-center text-slate-500">
               Add a node from the palette to build this workflow.
@@ -397,14 +408,58 @@ export default function WorkflowPage() {
               <div className="text-xs text-slate-400">{selectedNode.data.nodeType}</div>
             </div>
             {selectedNode.data.nodeType === "ai-chat" && (
-              <div>
-                <label className="mb-1 block text-xs text-slate-400">System prompt</label>
-                <textarea
-                  value={selectedSystem}
-                  onChange={(e) => setSelectedSystem(e.target.value)}
-                  rows={6}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white"
-                />
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">Provider</label>
+                  <select
+                    value={selectedProvider}
+                    onChange={(e) => setSelectedProvider(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white"
+                  >
+                    <option value="default">default (platform)</option>
+                    {providers.map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name}
+                        {p.isDefault ? " (default)" : ""}
+                        {p.isFallback ? " (fallback)" : ""}
+                        {p.configured ? "" : " — not configured"}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1 text-[10px] text-slate-500">
+                    {resolvedProvider
+                      ? resolvedProvider.configured
+                        ? resolvedProvider.healthy
+                          ? "● live"
+                          : "● configured (unverified)"
+                        : "○ not configured"
+                      : "platform default"}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">Model</label>
+                  <input
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    list="awd-model-options"
+                    placeholder={resolvedProvider?.models?.[0] ?? "llama3.2"}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white placeholder:text-slate-600"
+                  />
+                  <datalist id="awd-model-options">
+                    {providerModels.map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">System prompt</label>
+                  <textarea
+                    value={selectedSystem}
+                    onChange={(e) => setSelectedSystem(e.target.value)}
+                    rows={6}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-xs text-white"
+                  />
+                </div>
                 <button
                   onClick={updateSelectedConfig}
                   className="mt-2 w-full rounded-lg bg-slate-700 px-2 py-1.5 text-xs text-white hover:bg-slate-600"

@@ -8,6 +8,9 @@
     "db:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
     "db:seed": "prisma db seed --schema=prisma/schema.prisma",
     "db:studio": "prisma studio --schema=prisma/schema.prisma",
+    "db:validate": "prisma validate --schema=prisma/schema.prisma",
+    "db:drift": "node ../../scripts/check-migration-drift.mjs",
+    "db:deploy": "prisma migrate deploy --schema=prisma/schema.prisma",
     "typecheck": "tsc --noEmit"
   },
   "prisma": {
@@ -15,11 +18,14 @@
     "schema": "prisma/schema.prisma"
   },
   "dependencies": {
-    "@prisma/client": "^5.18.0"
+    "@prisma/adapter-pg": "^6.7.0",
+    "@prisma/client": "^6.7.0",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
-    "prisma": "^5.18.0",
+    "@types/pg": "^8.20.3",
+    "prisma": "^6.7.0",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
   },

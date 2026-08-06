@@ -544,7 +544,7 @@ model Embedding {
   documentId String   @map("document_id") @db.Uuid
   chunkIndex Int      @map("chunk_index")
   content    String   @db.Text
-  embedding  Json
+  embedding  Unsupported("vector(768)")
   metadata   Json?
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 

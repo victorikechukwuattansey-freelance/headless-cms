@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Analysis Report &mdash; AI Failure Analyzer</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <span class="brand">AI<span>FailureAnalyzer</span></span>
+    <span class="links">
+      <a href="/">Landing</a>
+      <a href="/upload.html">Upload Logs</a>
+      <a href="/history.html">Previous Reports</a>
+    </span>
+  </nav>
+
+  <main id="main">
+    <p class="muted" id="loading">Loading report...</p>
+  </main>
+
+  <script>
+    const TYPE_COLORS = {
+      wrong_prompt: 'amber',
+      wrong_tool_selection: 'purple',
+      missing_context: 'purple',
+      hallucination: 'red',
+      infinite_loop: 'red',
+      timeout: 'amber',
+      invalid_output: 'amber',
+      api_failure: 'red',
+      context_overflow: 'amber',
+    };
+
+    const kindClass = (kind) => (kind === 'failure' ? 'failure' : kind === 'tool_call' ? 'tool_call' : kind === 'response' ? 'response' : '');
+
+    async function load() {
+      const id = new URLSearchParams(location.search).get('id');
+      const main = document.getElementById('main');
+      if (!id) { main.innerHTML = '<div class="error-banner">Missing report id</div>'; return; }
+
+      let r;
+      try {
+        r = await fetch(`/api/reports/${id}`);
+      } catch {
+        main.innerHTML = '<div class="error-banner">Cannot reach the server</div>';
+        return;
+      }
+      if (!r.ok) { main.innerHTML = '<div class="error-banner">Report not found</div>'; return; }
+
+      const rep = await r.json();
+      const pct = Math.round(rep.confidence * 100);
+      const color = TYPE_COLORS[rep.failureType] || 'accent';
+      const when = new Date(rep.createdAt).toLocaleString();
+
+      main.innerHTML = `
+        <div class="row space-between">
+          <h1 style="margin:0">Analysis Report</h1>
+          <span class="muted">${when} &middot; source: ${rep.sourceFormat}</span>
+        </div>
+        <p class="sub" style="margin-top:12px">${escapeHtml(rep.summary)}</p>
+
+        <div class="verdict-grid">
+          <div class="card">
+            <span class="badge ${color}">${escapeHtml(rep.failureType)}</span>
+            <h2 style="margin:12px 0 4px">Root cause</h2>
+            <p style="margin:0 0 12px;font-size:14px">${escapeHtml(rep.rootCause)}</p>
+            <div class="muted">Confidence ${pct}%</div>
+            <div class="confidence-bar"><div style="width:${pct}%"></div></div>
+          </div>
+
+          <div class="card">
+            <h2 style="margin:0 0 12px">Recommended fix</h2>
+            <p style="margin:0;font-size:14px">${escapeHtml(rep.recommendedFix)}</p>
+          </div>
+
+          <div class="card">
+            <h2 style="margin:0 0 12px">Prevention strategy</h2>
+            <p style="margin:0;font-size:14px">${escapeHtml(rep.preventionStrategy)}</p>
+          </div>
+        </div>
+
+        <h2>Evidence</h2>
+        <div class="card">
+          ${rep.evidences.length === 0
+            ? '<p class="muted" style="margin:0">No specific evidence captured.</p>'
+            : `<table>
+                <thead><tr><th>Severity</th><th>Label</th><th>Detail</th></tr></thead>
+                <tbody>
+                  ${rep.evidences.map((e) => `
+                    <tr>
+                      <td><span class="badge ${e.severity === 'strong' ? 'red' : 'amber'}">${e.severity}</span></td>
+                      <td>${escapeHtml(e.label)}</td>
+                      <td class="muted" style="font-size:13px">${escapeHtml(e.detail)}</td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>`}
+          ${rep.redactions > 0 ? `<p class="muted" style="margin:14px 0 0">${rep.redactions} secret(s) redacted before storage.</p>` : ''}
+        </div>
+
+        <h2>Execution timeline (${rep.steps.length} events)</h2>
+        <div class="card">
+          <ul class="timeline">
+            ${rep.steps.map((s) => `
+              <li class="${kindClass(s.kind)}">
+                <div class="lbl">#${s.order} ${escapeHtml(s.label)}${s.outcome ? ` <span class="muted">[${escapeHtml(s.outcome)}]</span>` : ''}</div>
+                ${s.content ? `<div class="body">${escapeHtml(s.content)}</div>` : ''}
+              </li>`).join('')}
+          </ul>
+        </div>
+
+        <div class="row" style="margin-top:24px">
+          <a class="btn" href="/upload.html">Analyze another log</a>
+          <a class="btn secondary" href="/history.html">All reports</a>
+        </div>
+      `;
+      document.getElementById('loading').hidden = true;
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    load();
+  </script>
+</body>
+</html>

@@ -69,15 +69,22 @@ export async function getUsagePercent(
   resource: keyof typeof plans.free.limits,
   organizationId: string,
   currentUsage: number,
+  planTier?: string,
 ): Promise<number> {
-  const org = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    select: { planTier: true },
-  });
+  // Callers that already hold the org row (with planTier) can pass it in and
+  // skip this query entirely.
+  const tier =
+    planTier ??
+    (
+      await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { planTier: true },
+      })
+    )?.planTier;
 
-  if (!org) return 100;
+  if (!tier) return 100;
 
-  const limits = getPlanLimits(org.planTier);
+  const limits = getPlanLimits(tier);
   const limit = limits[resource];
 
   if (limit === -1) return 0;

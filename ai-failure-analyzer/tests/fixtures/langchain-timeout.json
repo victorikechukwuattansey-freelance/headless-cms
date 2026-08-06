@@ -1,0 +1,11 @@
+[
+  { "event": "on_chain_start", "name": "research_agent", "data": { "input": "Find the pricing page" } },
+  { "event": "on_tool_start", "name": "browse", "data": { "input": { "url": "https://example.com/pricing" } } },
+  { "event": "on_tool_end", "name": "browse", "data": { "output": { "content": "<html>Pricing: $49/mo</html>" } } },
+  { "event": "on_llm_start", "name": "ChatOpenAI", "data": { "input": { "prompts": ["Summarize"] } } },
+  { "event": "on_llm_end", "name": "ChatOpenAI", "data": { "output": { "generations": [{ "text": "The page lists $49/mo." }] } } },
+  { "event": "on_chain_end", "name": "research_agent", "data": { "output": { "result": "Pricing is $49/mo" } } },
+  { "event": "on_tool_start", "name": "generate_report", "data": { "input": { "path": "report.md" } } },
+  { "event": "on_tool_end", "name": "generate_report", "data": { "output": { "status_code": 504, "error": "timed out after 120s" } } },
+  { "event": "on_chain_end", "name": "research_agent", "data": { "output": { "error": "Gateway timeout: upstream did not respond" } } }
+]

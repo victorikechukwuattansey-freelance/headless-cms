@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Failure Analyzer</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <span class="brand">AI<span>FailureAnalyzer</span></span>
+    <span class="links">
+      <a href="/">Landing</a>
+      <a href="/upload.html">Upload Logs</a>
+      <a href="/history.html">Previous Reports</a>
+    </span>
+  </nav>
+
+  <main>
+    <h1>Why did your AI agent fail?</h1>
+    <p class="sub">
+      Upload an agent log (OpenAI, Anthropic, LangChain, JSON, or plain text).
+      The analyzer rebuilds the execution timeline, classifies the failure, and
+      tells you the root cause, evidence, and what to fix.
+    </p>
+
+    <div class="verdict-grid">
+      <div class="card">
+        <span class="badge accent">1</span> <strong>Upload</strong>
+        <p class="muted">Paste a log or drop a <code>.json</code> / <code>.jsonl</code> / <code>.txt</code> / <code>.log</code> file.</p>
+      </div>
+      <div class="card">
+        <span class="badge accent">2</span> <strong>Diagnose</strong>
+        <p class="muted">Secrets are redacted. The timeline is rebuilt and checked against 9 failure classes.</p>
+      </div>
+      <div class="card">
+        <span class="badge accent">3</span> <strong>Fix</strong>
+        <p class="muted">Get the root cause, supporting evidence, a recommended fix, and a prevention strategy.</p>
+      </div>
+    </div>
+
+    <h2>Detected failure classes</h2>
+    <div class="card">
+      <p class="muted" style="margin:0">
+        wrong_prompt &middot; wrong_tool_selection &middot; missing_context &middot; hallucination &middot;
+        infinite_loop &middot; timeout &middot; invalid_output &middot; api_failure &middot; context_overflow
+      </p>
+    </div>
+
+    <div class="row" style="margin-top:32px">
+      <a class="btn" href="/upload.html">Analyze a log &rarr;</a>
+      <a class="btn secondary" href="/history.html">View previous reports</a>
+    </div>
+  </main>
+
+  <div class="footer">AI Failure Analyzer &mdash; local-first MVP &middot; logs are redacted before storage</div>
+</body>
+</html>

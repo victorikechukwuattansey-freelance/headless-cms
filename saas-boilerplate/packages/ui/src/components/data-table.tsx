@@ -89,7 +89,7 @@ function DataTable<T extends Record<string, unknown>>({
         </TableBody>
       </Table>
       {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between px-2 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-2 py-4">
           <p className="text-muted-foreground text-sm">
             Page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
           </p>
