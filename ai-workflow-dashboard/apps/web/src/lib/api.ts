@@ -9,17 +9,27 @@ export class ApiError extends Error {
   }
 }
 
+// Auth token lives in a same-site cookie (not localStorage) so middleware and
+// server components can read it. SameSite=Lax — the cookie is only needed for
+// in-page logic and next middleware; the API authenticates via the Bearer
+// header below, so cross-origin cookie forwarding is not required.
+const TOKEN_COOKIE = "awd_token";
+const TOKEN_MAX_AGE = 60 * 60 * 24 * 7; // 7d, matches API JWT_EXPIRES_IN
+
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("awd_token");
+  const match = document.cookie
+    .split("; ")
+    .find((c) => c.startsWith(`${TOKEN_COOKIE}=`));
+  return match ? decodeURIComponent(match.slice(TOKEN_COOKIE.length + 1)) : null;
 }
 
 export function setToken(token: string): void {
-  localStorage.setItem("awd_token", token);
+  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${TOKEN_MAX_AGE}; samesite=lax`;
 }
 
 export function clearToken(): void {
-  localStorage.removeItem("awd_token");
+  document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0; samesite=lax`;
 }
 
 export function getOrg(): string | null {
@@ -57,6 +67,12 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const request = (async () => {
     const res = await fetch(`${API_URL}${path}`, { ...options, headers });
     if (!res.ok) {
+      // Expired/revoked token with a session present → drop it and return to
+      // the login screen. Login failures (401 with no token) must NOT redirect.
+      if (res.status === 401 && token) {
+        clearToken();
+        if (typeof window !== "undefined") window.location.assign("/");
+      }
       let message = `Request failed (${res.status})`;
       try {
         const body = (await res.json()) as { message?: string | string[] };

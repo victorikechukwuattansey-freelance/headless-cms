@@ -4,6 +4,7 @@ import { JwtModule, type JwtModuleOptions } from "@nestjs/jwt";
 import { HealthController } from "./health/health.controller";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService } from "./auth/auth.service";
+import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { WorkflowsController } from "./workflows/workflows.controller";
 import { WorkflowsService } from "./workflows/workflows.service";
 import { ExecutionsController } from "./executions/executions.controller";
@@ -55,6 +56,6 @@ const env = loadEnv();
     ProvidersController,
     OrgsController,
   ],
-  providers: [AuthService, WorkflowsService, ExecutionsService, WebhooksService, QueueService, AiService, CredentialsService, PromptsService, RagService, AnalyticsService, ApiKeysService, ProvidersService, OrgsService],
+  providers: [AuthService, WorkflowsService, ExecutionsService, WebhooksService, QueueService, AiService, CredentialsService, PromptsService, RagService, AnalyticsService, ApiKeysService, ProvidersService, OrgsService, JwtAuthGuard],
 })
 export class AppModule {}

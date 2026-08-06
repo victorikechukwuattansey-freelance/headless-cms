@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from "@nestjs/common";
-import { prisma } from "@awd/database";
+import { prisma, Prisma } from "@awd/database";
 import { createHash } from "node:crypto";
 import { loadEnv } from "@awd/config";
 
@@ -14,23 +14,6 @@ function chunkText(text: string, chunkSize: number, overlap: number): string[] {
     chunks.push(words.slice(i, i + chunkSize).join(" "));
   }
   return chunks;
-}
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  const n = Math.min(a.length, b.length);
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < n; i++) {
-    const av = a[i];
-    const bv = b[i];
-    if (av === undefined || bv === undefined) continue;
-    dot += av * bv;
-    normA += av * av;
-    normB += bv * bv;
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 export interface SearchResult {
@@ -131,16 +114,20 @@ export class RagService {
         size: Buffer.byteLength(body.content, "utf8"),
         checksum: createHash("sha256").update(body.content).digest("hex"),
         indexedAt: new Date(),
-        chunks: {
-          create: vectors.map((embedding, i) => ({
-            chunkIndex: i,
-            content: chunks[i]!,
-            embedding: embedding as unknown as object,
-            metadata: { source: body.filename.trim() },
-          })),
-        },
       },
     });
+
+    // vector(768) is Unsupported in Prisma (the client can only `connect` to
+    // embedding rows), so chunks are inserted via raw SQL.
+    const metadata = JSON.stringify({ source: body.filename.trim() });
+    await prisma.$executeRaw`
+      INSERT INTO "embeddings" ("id", "document_id", "chunk_index", "content", "embedding", "metadata")
+      VALUES ${Prisma.join(
+        chunks.map((content, i) => Prisma.sql`
+          (gen_random_uuid(), ${document.id}::uuid, ${i}, ${content}, ${`[${vectors[i]!.join(",")}]`}::vector(768), ${metadata}::jsonb)
+        `),
+      )}
+    `;
 
     return { id: document.id, filename: document.filename, chunkCount: chunks.length };
   }
@@ -153,32 +140,43 @@ export class RagService {
     if (!body.query?.trim()) throw new BadRequestException("query is required");
     const kb = await prisma.knowledgeBase.findFirst({
       where: { id: knowledgeBaseId, organizationId, deletedAt: null },
-      include: {
-        documents: {
-          where: { deletedAt: null },
-          include: { chunks: true },
-        },
-      },
     });
     if (!kb) throw new NotFoundException("Knowledge base not found");
 
     const queryVector = await this.embed(body.query.trim(), kb.embeddingModel);
     const topK = Math.min(Math.max(body.topK ?? 3, 1), 10);
+    const literal = `[${queryVector.join(",")}]`;
 
-    const results: SearchResult[] = [];
-    for (const doc of kb.documents) {
-      for (const chunk of doc.chunks) {
-        const vector = chunk.embedding as number[];
-        results.push({
-          documentId: doc.id,
-          filename: doc.filename,
-          chunkIndex: chunk.chunkIndex,
-          content: chunk.content,
-          score: cosineSimilarity(queryVector, vector),
-        });
-      }
-    }
-    results.sort((a, b) => b.score - a.score);
-    return results.slice(0, topK);
+    // ANN search over the HNSW cosine index; raw SQL because the vector
+    // column is Unsupported in the Prisma client.
+    const rows = await prisma.$queryRaw<
+      Array<{
+        documentId: string;
+        filename: string;
+        chunkIndex: number;
+        content: string;
+        similarity: number;
+      }>
+    >`
+      SELECT e.document_id AS "documentId",
+             d.filename AS "filename",
+             e.chunk_index AS "chunkIndex",
+             e.content AS "content",
+             1 - (e."embedding" <=> ${literal}::vector(768)) AS "similarity"
+      FROM "embeddings" e
+      JOIN "knowledge_documents" d ON d.id = e.document_id
+      WHERE d.knowledge_base_id = ${knowledgeBaseId}::uuid
+        AND d.deleted_at IS NULL
+      ORDER BY e."embedding" <=> ${literal}::vector(768)
+      LIMIT ${topK}
+    `;
+
+    return rows.map((r) => ({
+      documentId: r.documentId,
+      filename: r.filename,
+      chunkIndex: r.chunkIndex,
+      content: r.content,
+      score: r.similarity,
+    }));
   }
 }
