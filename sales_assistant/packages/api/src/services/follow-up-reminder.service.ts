@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import type { DomainContext } from '../domain/domain-context.js';
+import { DomainError } from '../domain/domain-error.js';
 import { writeAuditEvent } from './audit.service.js';
 
 export interface ReminderListOptions {
@@ -77,5 +78,19 @@ export class FollowUpReminderService {
       prisma.followUpReminder.count({ where }),
     ]);
     return { data, total };
+  }
+
+  async dismiss(context: DomainContext, reminderId: string) {
+    const reminder = await prisma.followUpReminder.findFirst({
+      where: { id: reminderId, organizationId: context.organizationId },
+    });
+    if (!reminder) throw new DomainError('NOT_FOUND', 'Reminder not found');
+    const updated = await prisma.followUpReminder.update({
+      where: { id: reminder.id },
+      data: { status: 'dismissed' },
+      include: { lead: { select: { phone: true, name: true } } },
+    });
+    await writeAuditEvent(context, 'REMINDER_DISMISSED', { reminderId: reminder.id, leadId: reminder.leadId });
+    return updated;
   }
 }

@@ -40,7 +40,7 @@
 - Produces: `FollowUpReminderService.dismiss(context: DomainContext, reminderId: string): Promise<Reminder & { lead: { phone: string; name: string | null } }>` — 404 `NOT_FOUND` when missing/foreign; sets `status: 'dismissed'`; writes audit event `REMINDER_DISMISSED`; returns the updated reminder (with `include.lead`).
 - Produces: HTTP `POST /reminders/:id/dismiss` → 200 `{ data: <reminder> }`, 401, 404.
 
-- [ ] **Step 1: Add the failing service method** in `packages/api/src/services/follow-up-reminder.service.ts` — the `prisma`, `DomainError`, `writeAuditEvent` imports already exist in the file. Add after the `list` method (end of class, line ~80):
+- [ ] **Step 1: Add the failing service method** in `packages/api/src/services/follow-up-reminder.service.ts` — `prisma` and `writeAuditEvent` are already imported, but `DomainError` must be added: `import { DomainError } from '../domain/domain-error.js';` after the `DomainContext` import. Then add after the `list` method (end of class):
 
 ```ts
   async dismiss(context: DomainContext, reminderId: string) {

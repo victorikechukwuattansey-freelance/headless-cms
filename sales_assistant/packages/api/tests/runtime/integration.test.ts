@@ -743,6 +743,30 @@ test('follow-up reminders list, filter, and generate endpoint (admin-only)', asy
   assert.ok(typeof generated.json.data.jobId === 'string');
 });
 
+test('reminder dismiss endpoint flips status, audits, and is org-scoped', async () => {
+  const lead = await prisma.leadProfile.create({ data: { organizationId: orgA, phone: '+2348000001000' } });
+  const reminder = await prisma.followUpReminder.create({
+    data: { organizationId: orgA, leadId: lead.id, dueAt: new Date(Date.now() + 86_400_000), message: 'Follow up with lead' },
+  });
+
+  const dismissed = await api(`/reminders/${reminder.id}/dismiss`, { method: 'POST', token: tokenA });
+  assert.equal(dismissed.status, 200);
+  assert.equal(dismissed.json.data.id, reminder.id);
+  assert.equal(dismissed.json.data.status, 'dismissed');
+
+  const audit = await prisma.domainAuditEvent.findFirst({
+    where: { organizationId: orgA, eventType: 'REMINDER_DISMISSED' },
+  });
+  assert.ok(audit);
+
+  const crossOrg = await api(`/reminders/${reminder.id}/dismiss`, { method: 'POST', token: tokenB });
+  assert.equal(crossOrg.status, 404);
+  assert.equal(crossOrg.json.error.code, 'NOT_FOUND');
+
+  const missing = await api('/reminders/reminder-missing/dismiss', { method: 'POST', token: tokenA });
+  assert.equal(missing.status, 404);
+});
+
 test('docs and openapi.json are served without auth', async () => {
   const spec = await api('/openapi.json');
   assert.equal(spec.status, 200);
@@ -751,6 +775,7 @@ test('docs and openapi.json are served without auth', async () => {
   assert.ok(spec.json.paths['/users']);
   assert.ok(spec.json.paths['/leads/{id}/score']);
   assert.ok(spec.json.paths['/reminders/generate']);
+  assert.ok(spec.json.paths['/reminders/{id}/dismiss']);
   assert.ok(spec.json.paths['/docs']);
   assert.ok(spec.json.components.securitySchemes.bearerAuth);
 

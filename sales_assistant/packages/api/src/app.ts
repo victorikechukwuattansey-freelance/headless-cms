@@ -432,6 +432,7 @@ async function routeReminders(
   body: Record<string, unknown>,
   query: URLSearchParams,
 ): Promise<void> {
+  const [, id, action] = segments;
   if (segments.length === 1 && method === 'GET') {
     const options = parseQuery(listRemindersQuerySchema, query);
     sendJson(res, 200, paginated(await service.list(context, options), options.limit, options.offset));
@@ -444,6 +445,8 @@ async function routeReminders(
       payload: { organizationId: context.organizationId, userId: context.userId, role: context.role },
     });
     sendJson(res, 202, { data: { queued: true, jobId } });
+  } else if (segments.length === 3 && id && action === 'dismiss' && method === 'POST') {
+    sendJson(res, 200, { data: plain(await service.dismiss(context, id)) });
   } else {
     sendJson(res, 404, { error: { code: 'NOT_FOUND', message: 'Route not found' } });
   }
