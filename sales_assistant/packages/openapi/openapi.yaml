@@ -1,0 +1,1041 @@
+openapi: 3.0.3
+info:
+  title: Sales Assistant API
+  description: |
+    Org-scoped lead management, AI lead scoring, follow-up reminders, user
+    administration, and queue-driven background work for the Sales Assistant.
+  version: 1.0.0
+servers:
+  - url: /
+tags:
+  - name: Auth
+  - name: Users
+  - name: Leads
+  - name: Agents
+  - name: Bookings
+  - name: Deals
+  - name: Reminders
+  - name: Operations
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of records per page (max 100).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    OffsetParam:
+      name: offset
+      in: query
+      description: Number of records to skip.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+  headers:
+    XRateLimitLimit:
+      description: Maximum requests permitted per window.
+      schema:
+        type: integer
+    XRateLimitRemaining:
+      description: Requests remaining in the current window.
+      schema:
+        type: integer
+    XRateLimitReset:
+      description: Unix seconds when the window resets.
+      schema:
+        type: integer
+    RetryAfter:
+      description: Seconds to wait before retrying a rate-limited request.
+      schema:
+        type: integer
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code (UNAUTHORIZED, FORBIDDEN, NOT_FOUND, INVALID_TRANSITION, VALIDATION, RATE_LIMITED, INTERNAL).
+            message:
+              type: string
+    Paginated:
+      type: object
+      required: [data, total, limit, offset]
+      properties:
+        data:
+          type: array
+          items: {}
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+    TokenResponse:
+      type: object
+      required: [token, expiresAt]
+      properties:
+        token:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum: [USER, AGENT, ADMIN]
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    User:
+      type: object
+      required: [id, email, role, organizationId]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [USER, AGENT, ADMIN]
+        organizationId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CreateUserRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+        role:
+          type: string
+          enum: [USER, AGENT, ADMIN]
+          default: USER
+    UpdateUserRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 8
+        role:
+          type: string
+          enum: [USER, AGENT, ADMIN]
+    Lead:
+      type: object
+      required: [id, phone, status, score, organizationId]
+      properties:
+        id:
+          type: string
+        phone:
+          type: string
+        name:
+          type: string
+          nullable: true
+        score:
+          type: integer
+        scoreReason:
+          type: string
+          nullable: true
+        lastScoredAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastContactedAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [new, assigned, contacted, qualified, converted, lost]
+        agentId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    CreateLeadRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+        name:
+          type: string
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+    UpdateLeadRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [new, assigned, contacted, qualified, converted, lost]
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+    Agent:
+      type: object
+      required: [id, name, status, organizationId]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [idle, busy]
+        createdAt:
+          type: string
+          format: date-time
+    Booking:
+      type: object
+      required: [id, leadId, at, status, organizationId]
+      properties:
+        id:
+          type: string
+        leadId:
+          type: string
+        at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, confirmed, completed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+    CreateBookingRequest:
+      type: object
+      required: [leadId, at]
+      properties:
+        leadId:
+          type: string
+        at:
+          type: string
+          format: date-time
+    Deal:
+      type: object
+      required: [id, amount, stage, organizationId]
+      properties:
+        id:
+          type: string
+        amount:
+          type: number
+        stage:
+          type: string
+          enum: [proposed, won, lost]
+        createdAt:
+          type: string
+          format: date-time
+    CreateDealRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          minimum: 0
+        stage:
+          type: string
+          enum: [proposed, won, lost]
+    FollowUpReminder:
+      type: object
+      required: [id, leadId, dueAt, message, status, organizationId]
+      properties:
+        id:
+          type: string
+        leadId:
+          type: string
+        agentId:
+          type: string
+          nullable: true
+        dueAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+        status:
+          type: string
+          enum: [pending, sent, dismissed]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Insufficient role for this operation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found or not in the current organization.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Request body or query parameters failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Too many requests in the current window.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        X-RateLimit-Limit:
+          $ref: '#/components/headers/XRateLimitLimit'
+        X-RateLimit-Remaining:
+          $ref: '#/components/headers/XRateLimitRemaining'
+        X-RateLimit-Reset:
+          $ref: '#/components/headers/XRateLimitReset'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+paths:
+  /auth/token:
+    post:
+      tags: [Auth]
+      summary: Exchange credentials for a bearer token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /users:
+    get:
+      tags: [Users]
+      summary: List users in the current organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+      responses:
+        '200':
+          description: Paginated users
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Users]
+      summary: Create a user in the current organization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /users/{id}:
+    patch:
+      tags: [Users]
+      summary: Update a user role or password
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /leads:
+    get:
+      tags: [Leads]
+      summary: List leads with pagination and filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [new, assigned, contacted, qualified, converted, lost]
+        - name: agentId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated leads
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Lead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      tags: [Leads]
+      summary: Create a lead
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLeadRequest'
+      responses:
+        '201':
+          description: Lead created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Lead'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /leads/{id}:
+    get:
+      tags: [Leads]
+      summary: Get a single lead
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lead
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Lead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Leads]
+      summary: Update a lead or transition its status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLeadRequest'
+      responses:
+        '200':
+          description: Lead updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Lead'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /leads/{id}/assign:
+    post:
+      tags: [Leads]
+      summary: Assign a lead to the least-loaded agent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+      responses:
+        '200':
+          description: Lead assigned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Lead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: No agent available or invalid lead state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /leads/{id}/score:
+    post:
+      tags: [Leads]
+      summary: Score a lead using the AI scoring engine
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lead scored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Lead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /agents:
+    get:
+      tags: [Agents]
+      summary: List agents with pagination and availability filter
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: available
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Paginated agents
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /agents/{id}/availability:
+    post:
+      tags: [Agents]
+      summary: Set agent availability
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [available]
+              properties:
+                available:
+                  type: boolean
+      responses:
+        '200':
+          description: Agent availability updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /bookings:
+    get:
+      tags: [Bookings]
+      summary: List bookings with pagination and status filter
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, completed, cancelled]
+      responses:
+        '200':
+          description: Paginated bookings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Booking'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      tags: [Bookings]
+      summary: Create a booking for a lead
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+      responses:
+        '201':
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /bookings/{id}/transition:
+    post:
+      tags: [Bookings]
+      summary: Transition a booking status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, confirmed, completed, cancelled]
+      responses:
+        '200':
+          description: Booking status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /deals:
+    get:
+      tags: [Deals]
+      summary: List deals with pagination and stage filter
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: stage
+          in: query
+          schema:
+            type: string
+            enum: [proposed, won, lost]
+      responses:
+        '200':
+          description: Paginated deals
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Deal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+    post:
+      tags: [Deals]
+      summary: Create a deal
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDealRequest'
+      responses:
+        '201':
+          description: Deal created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Deal'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /deals/{id}/transition:
+    post:
+      tags: [Deals]
+      summary: Transition a deal stage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stage]
+              properties:
+                stage:
+                  type: string
+                  enum: [proposed, won, lost]
+      responses:
+        '200':
+          description: Deal stage updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Deal'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Invalid stage transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reminders:
+    get:
+      tags: [Reminders]
+      summary: List follow-up reminders with pagination and status filter
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, sent, dismissed]
+      responses:
+        '200':
+          description: Paginated reminders
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FollowUpReminder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /reminders/generate:
+    post:
+      tags: [Reminders]
+      summary: Enqueue follow-up reminder generation for the current organization
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Generation job queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      queued:
+                        type: boolean
+                      jobId:
+                        type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /health:
+    get:
+      tags: [Operations]
+      summary: Liveness probe
+      security: []
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+  /metrics:
+    get:
+      tags: [Operations]
+      summary: Prometheus metrics
+      security: []
+      responses:
+        '200':
+          description: Metrics in Prometheus text format
+          content:
+            text/plain:
+              schema:
+                type: string
+  /docs:
+    get:
+      tags: [Operations]
+      summary: Interactive API documentation (Redoc)
+      security: []
+      responses:
+        '200':
+          description: HTML documentation page
+          content:
+            text/html:
+              schema:
+                type: string
+  /openapi.json:
+    get:
+      tags: [Operations]
+      summary: This OpenAPI specification document
+      security: []
+      responses:
+        '200':
+          description: OpenAPI 3.0 JSON document
+          content:
+            application/json:
+              schema:
+                type: object

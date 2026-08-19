@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  AGENT
+  ADMIN
+}
+
+model Organization {
+  id                     String                     @id @default(cuid())
+  name                   String
+  createdAt              DateTime                   @default(now())
+  users                  User[]
+  agents                 Agent[]
+  leads                  LeadProfile[]
+  properties             Property[]
+  bookings               Booking[]
+  deals                  Deal[]
+  integrationTokens      IntegrationToken[]
+  domainCommandExecutions DomainCommandExecution[]
+  domainAuditEvents      DomainAuditEvent[]
+  aiUsageLogs            AiUsageLog[]
+  followUpReminders      FollowUpReminder[]
+}
+
+model User {
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  email            String       @unique
+  name             String?
+  role             Role         @default(USER)
+  passwordHash     String?
+  refreshTokenHash String?
+  createdAt        DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model Agent {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  name           String
+  status         String        @default("idle")
+  createdAt      DateTime      @default(now())
+  leads          LeadProfile[]
+  reminders      FollowUpReminder[]
+
+  @@index([organizationId])
+}
+
+model LeadProfile {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  phone           String
+  name            String?
+  score           Int          @default(0)
+  scoreReason     String?
+  lastScoredAt    DateTime?
+  lastContactedAt DateTime?
+  status          String       @default("new")
+  agentId         String?
+  agent           Agent?       @relation(fields: [agentId], references: [id])
+  createdAt       DateTime     @default(now())
+  reminders       FollowUpReminder[]
+
+  @@index([organizationId])
+}
+
+model Property {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  title          String
+  price          Decimal
+  status         String       @default("available")
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model Booking {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  leadId         String
+  at             DateTime
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model Deal {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  amount         Decimal
+  stage          String       @default("proposed")
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model IntegrationToken {
+  id                   String       @id @default(cuid())
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  provider             String
+  encryptedAccessToken String?
+  encryptionKeyVersion Int
+  tokenHash            String?
+  createdAt            DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model DomainCommandExecution {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  type           String
+  payload        Json
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model DomainAuditEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  eventType      String
+  payload        Json
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model AiUsageLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  model          String
+  tokensIn       Int
+  tokensOut      Int
+  cost           Decimal
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model FollowUpReminder {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leadId         String
+  lead           LeadProfile  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  agentId        String?
+  agent          Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  dueAt          DateTime
+  message        String
+  status         String       @default("pending")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([leadId])
+}
