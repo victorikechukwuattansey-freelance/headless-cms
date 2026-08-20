@@ -9,6 +9,7 @@ servers:
   - url: /
 tags:
   - name: Auth
+  - name: Audit
   - name: Users
   - name: Leads
   - name: Agents
@@ -220,6 +221,24 @@ components:
         status:
           type: string
           enum: [idle, busy]
+        createdAt:
+          type: string
+          format: date-time
+    AuditEventType:
+      type: string
+      enum: [AGENT_AVAILABILITY_CHANGED, AI_USAGE_LOGGED, BOOKING_CREATED, BOOKING_STATUS_CHANGED, BULK_REMINDERS_GENERATED, DEAL_CREATED, DEAL_STAGE_CHANGED, INTEGRATION_TOKEN_DELETED, INTEGRATION_TOKEN_STORED, LEAD_ASSIGNED, LEAD_CREATED, LEAD_SCORED, LEAD_STATUS_CHANGED, LEAD_UPDATED, REMINDER_DISMISSED, USER_CREATED, USER_UPDATED]
+    AuditEvent:
+      type: object
+      required: [id, eventType, payload, createdAt]
+      properties:
+        id:
+          type: string
+          description: Event ID.
+        eventType:
+          $ref: '#/components/schemas/AuditEventType'
+        payload:
+          type: object
+          description: Event-specific data (entity ids, amounts, statuses).
         createdAt:
           type: string
           format: date-time
@@ -782,6 +801,39 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /audit-events:
+    get:
+      tags: [Audit]
+      summary: List audit events with pagination and optional type filter
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/OffsetParam'
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/AuditEventType'
+      responses:
+        '200':
+          description: Paginated audit events
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AuditEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /bookings/{id}/transition:
     post:
       tags: [Bookings]

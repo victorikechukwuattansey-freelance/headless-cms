@@ -22,7 +22,7 @@ function escapeRegExp(text) {
 describe('API contract: auth, users, scoring, reminders, docs, and rate limits', () => {
   it('openapi spec exists and covers the full auth/docs/reminder surface', async () => {
     const spec = await readRepoFile('packages/openapi/openapi.yaml');
-    for (const route of ['/auth/token', '/users', '/leads/{id}/score', '/reminders', '/reminders/generate', '/openapi.json', '/docs', '/health']) {
+    for (const route of ['/auth/token', '/users', '/leads/{id}/score', '/reminders', '/reminders/generate', '/audit-events', '/openapi.json', '/docs', '/health']) {
       assert.match(spec, new RegExp(escapeRegExp(route)), `spec must document ${route}`);
     }
     assert.match(spec, /openapi: 3\.0\.3/);
@@ -78,6 +78,8 @@ describe('API contract: auth, users, scoring, reminders, docs, and rate limits',
     assert.match(app, /verifyPassword/);
     assert.match(app, /RateLimiter/);
     assert.match(app, /x-ratelimit-limit/);
+    assert.match(app, /audit-events/);
+    assert.match(app, /routeAuditEvents/);
   });
 
   it('auth and user services hash passwords without exposing hashes in responses', async () => {
