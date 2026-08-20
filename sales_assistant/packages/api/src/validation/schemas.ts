@@ -106,3 +106,29 @@ export const listRemindersQuerySchema = z.object({
   ...pagination,
   status: z.enum(REMINDER_STATUSES).optional(),
 });
+
+export const AUDIT_EVENT_TYPES = [
+  'AGENT_AVAILABILITY_CHANGED',
+  'AI_USAGE_LOGGED',
+  'BOOKING_CREATED',
+  'BOOKING_STATUS_CHANGED',
+  'BULK_REMINDERS_GENERATED',
+  'DEAL_CREATED',
+  'DEAL_STAGE_CHANGED',
+  'INTEGRATION_TOKEN_DELETED',
+  'INTEGRATION_TOKEN_STORED',
+  'LEAD_ASSIGNED',
+  'LEAD_CREATED',
+  'LEAD_SCORED',
+  'LEAD_STATUS_CHANGED',
+  'LEAD_UPDATED',
+  'REMINDER_DISMISSED',
+  'USER_CREATED',
+  'USER_UPDATED',
+] as const;
+export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
+
+export const listAuditEventsQuerySchema = z.object({
+  ...pagination,
+  type: z.enum(AUDIT_EVENT_TYPES).optional(),
+});
