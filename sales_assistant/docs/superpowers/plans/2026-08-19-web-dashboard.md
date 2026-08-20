@@ -40,7 +40,7 @@
 - Produces: `FollowUpReminderService.dismiss(context: DomainContext, reminderId: string): Promise<Reminder & { lead: { phone: string; name: string | null } }>` — 404 `NOT_FOUND` when missing/foreign; sets `status: 'dismissed'`; writes audit event `REMINDER_DISMISSED`; returns the updated reminder (with `include.lead`).
 - Produces: HTTP `POST /reminders/:id/dismiss` → 200 `{ data: <reminder> }`, 401, 404.
 
-- [ ] **Step 1: Add the failing service method** in `packages/api/src/services/follow-up-reminder.service.ts` — `prisma` and `writeAuditEvent` are already imported, but `DomainError` must be added: `import { DomainError } from '../domain/domain-error.js';` after the `DomainContext` import. Then add after the `list` method (end of class):
+- [x] **Step 1: Add the failing service method** in `packages/api/src/services/follow-up-reminder.service.ts` — `prisma` and `writeAuditEvent` are already imported, but `DomainError` must be added: `import { DomainError } from '../domain/domain-error.js';` after the `DomainContext` import. Then add after the `list` method (end of class):
 
 ```ts
   async dismiss(context: DomainContext, reminderId: string) {
@@ -58,7 +58,7 @@
   }
 ```
 
-- [ ] **Step 2: Wire the route** in `packages/api/src/app.ts`. In `routeReminders` (starts line 426), the function currently has no `id`/`action` destructure. Change the signature line to add it, and insert the dismiss branch before the final `else`:
+- [x] **Step 2: Wire the route** in `packages/api/src/app.ts`. In `routeReminders` (starts line 426), the function currently has no `id`/`action` destructure. Change the signature line to add it, and insert the dismiss branch before the final `else`:
 
 ```ts
 async function routeReminders(
@@ -91,7 +91,7 @@ async function routeReminders(
 }
 ```
 
-- [ ] **Step 3: Document in OpenAPI** — insert this block at the end of `packages/openapi/openapi.yaml` paths (after the `/reminders/generate` block closes at line ~990, before the `/health` path):
+- [x] **Step 3: Document in OpenAPI** — insert this block at the end of `packages/openapi/openapi.yaml` paths (after the `/reminders/generate` block closes at line ~990, before the `/health` path):
 
 ```yaml
   /reminders/{id}/dismiss:
@@ -122,7 +122,7 @@ async function routeReminders(
           $ref: '#/components/responses/NotFound'
 ```
 
-- [ ] **Step 4: Write the failing integration test** — append to `packages/api/tests/runtime/integration.test.ts` (after the `follow-up reminders list, filter, and generate endpoint` test, ~line 744):
+- [x] **Step 4: Write the failing integration test** — append to `packages/api/tests/runtime/integration.test.ts` (after the `follow-up reminders list, filter, and generate endpoint` test, ~line 744):
 
 ```ts
 test('reminder dismiss endpoint flips status, audits, and is org-scoped', async () => {
@@ -150,18 +150,18 @@ test('reminder dismiss endpoint flips status, audits, and is org-scoped', async 
 });
 ```
 
-- [ ] **Step 5: Extend the docs test** — in the `docs and openapi.json are served without auth` test (~line 753), add after the `/reminders/generate` assertion:
+- [x] **Step 5: Extend the docs test** — in the `docs and openapi.json are served without auth` test (~line 753), add after the `/reminders/generate` assertion:
 
 ```ts
   assert.ok(spec.json.paths['/reminders/{id}/dismiss']);
 ```
 
-- [ ] **Step 6: Run integration tests** — from `sales_assistant/`:
+- [x] **Step 6: Run integration tests** — from `sales_assistant/`:
 
 Run: `npm run test:integration`
 Expected: 25/25 pass (including the new dismiss test).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add sales_assistant/packages/api/src/services/follow-up-reminder.service.ts sales_assistant/packages/api/src/app.ts sales_assistant/packages/openapi/openapi.yaml sales_assistant/packages/api/tests/runtime/integration.test.ts
@@ -181,7 +181,7 @@ git commit -m "feat(api): reminder dismiss endpoint"
 - Produces: `apiRequest(path: string, options?: { method?: string; body?: unknown; query?: Record<string, string | number | boolean | undefined>; token?: string }): Promise<{ status: number; json: any }>`.
 - Produces the endpoint helpers in `src/index.ts` (used by every later task): `login`, `listUsers`, `createUser`, `listLeads`, `getLead`, `transitionLeadStatus`, `assignLead`, `scoreLead`, `listAgents`, `setAgentAvailability`, `listDeals`, `transitionDeal`, `listReminders`, `generateReminders`, `dismissReminder` — all `(token, ...)` style returning the `apiRequest` promise. Signature detail: `assignLead(token, id, agentId?)` sends body `{ agentId }` when provided, else `{}`.
 
-- [ ] **Step 1: Write `package.json`**:
+- [x] **Step 1: Write `package.json`**:
 
 ```json
 {
@@ -209,7 +209,7 @@ git commit -m "feat(api): reminder dismiss endpoint"
 }
 ```
 
-- [ ] **Step 2: Write `tsconfig.json`** (mirror `packages/api/tsconfig.json` style):
+- [x] **Step 2: Write `tsconfig.json`** (mirror `packages/api/tsconfig.json` style):
 
 ```json
 {
@@ -231,9 +231,9 @@ git commit -m "feat(api): reminder dismiss endpoint"
 }
 ```
 
-- [ ] **Step 3: Write `eslint.config.js`** — copy the contents of `packages/api/eslint.config.js` verbatim (it sets `node` languageOptions with the import plugin via flat config).
+- [x] **Step 3: Write `eslint.config.js`** — copy the contents of `packages/api/eslint.config.js` verbatim (it sets `node` languageOptions with the import plugin via flat config).
 
-- [ ] **Step 4: Write `src/types.ts`** (uses `.js`-free type-only import so it compiles under NodeNext without a runtime dep on shared's dist):
+- [x] **Step 4: Write `src/types.ts`** (uses `.js`-free type-only import so it compiles under NodeNext without a runtime dep on shared's dist):
 
 ```ts
 export type Role = 'USER' | 'AGENT' | 'ADMIN';
@@ -304,7 +304,7 @@ export interface Reminder {
 }
 ```
 
-- [ ] **Step 5: Write `src/index.ts`**:
+- [x] **Step 5: Write `src/index.ts`**:
 
 ```ts
 export type {
@@ -420,7 +420,7 @@ export const dismissReminder = (token: string, id: string) =>
   apiRequest(`/reminders/${encodeURIComponent(id)}/dismiss`, { method: 'POST', token });
 ```
 
-- [ ] **Step 6: Write tests `tests/api-client.test.ts`** (mock `globalThis.fetch`; mirrors repo `node:test` style):
+- [x] **Step 6: Write tests `tests/api-client.test.ts`** (mock `globalThis.fetch`; mirrors repo `node:test` style):
 
 ```ts
 import { test, beforeEach } from 'node:test';
@@ -492,18 +492,18 @@ test('helpers build the documented paths and payloads', async () => {
 
 (Note: the `listLeads` assertion — `query` object literal spread keeps insertion order, `limit` then `status`; if ordering differs, adjust the expected string to match `URLSearchParams` iteration.)
 
-- [ ] **Step 7: Run the api-client tests**
+- [x] **Step 7: Run the api-client tests**
 
 Run: `npm --workspace @sales_assistant/api-client run test`
 Expected: 3/3 pass. Then `npm --workspace @sales_assistant/api-client run build` — expected: `dist/` with `index.js` + `index.d.ts` + `types.js`.
 
-- [ ] **Step 8: Wire into root test script** — in `sales_assistant/package.json`, change the `test` line (line 15) to:
+- [x] **Step 8: Wire into root test script** — in `sales_assistant/package.json`, change the `test` line (line 15) to:
 
 ```json
     "test": "npm run test:repo && npm --workspace @sales_assistant/api run test && npm --workspace @sales_assistant/api-client run test && npm --workspace @sales_assistant/via run test",
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add sales_assistant/packages/api-client sales_assistant/package.json
@@ -523,7 +523,7 @@ git commit -m "feat(api-client): typed HTTP client workspace"
 - Produces: `Session` `{ token, expiresAt, role }`; `parseSession(value?: string): Session | null`; `sessionCookieOptions(expiresAt: string)`; `getSession(): Promise<Session | null>` (server-only, `next/headers`); `POST /api/auth/login` → `{ role }` or error json; `POST /api/auth/logout` → `{ ok: true }`; `API_URL`-based proxy; middleware gating pages/API.
 - Proxy contract for client components: any `fetch('/api/<api-path>?query')` with method/body passthrough returns `{ status, json }` of the API and forwards `retry-after` + `x-ratelimit-*` headers; 401 json when no valid session.
 
-- [ ] **Step 1: Write `apps/web/package.json`**:
+- [x] **Step 1: Write `apps/web/package.json`**:
 
 ```json
 {
@@ -556,7 +556,7 @@ git commit -m "feat(api-client): typed HTTP client workspace"
 }
 ```
 
-- [ ] **Step 2: Write `apps/web/tsconfig.json`** (standard Next config, `@/*` alias → app root):
+- [x] **Step 2: Write `apps/web/tsconfig.json`** (standard Next config, `@/*` alias → app root):
 
 ```json
 {
@@ -582,7 +582,7 @@ git commit -m "feat(api-client): typed HTTP client workspace"
 }
 ```
 
-- [ ] **Step 3: Write `next.config.ts`**:
+- [x] **Step 3: Write `next.config.ts`**:
 
 ```ts
 import type { NextConfig } from 'next';
@@ -592,7 +592,7 @@ const nextConfig: NextConfig = {};
 export default nextConfig;
 ```
 
-- [ ] **Step 4: Write `postcss.config.mjs`**:
+- [x] **Step 4: Write `postcss.config.mjs`**:
 
 ```js
 export default {
@@ -602,7 +602,7 @@ export default {
 };
 ```
 
-- [ ] **Step 5: Write `eslint.config.mjs`**:
+- [x] **Step 5: Write `eslint.config.mjs`**:
 
 ```js
 import { dirname } from 'path';
@@ -617,13 +617,13 @@ export default [...compat.extends('next/core-web-vitals', 'next/typescript')];
 
 (If installing `@eslint/eslintrc` is required, add it to devDependencies: `"@eslint/eslintrc": "^3.2.0"`.)
 
-- [ ] **Step 6: Write `app/globals.css`**:
+- [x] **Step 6: Write `app/globals.css`**:
 
 ```css
 @import 'tailwindcss';
 ```
 
-- [ ] **Step 7: Write `src/lib/session-core.ts`** (pure module — imported by Edge middleware, keep free of `next/*` imports):
+- [x] **Step 7: Write `src/lib/session-core.ts`** (pure module — imported by Edge middleware, keep free of `next/*` imports):
 
 ```ts
 export const SESSION_COOKIE = 'sa_session';
@@ -662,7 +662,7 @@ export function sessionCookieOptions(expiresAt: string) {
 }
 ```
 
-- [ ] **Step 8: Write `src/lib/session.ts`** (server-only):
+- [x] **Step 8: Write `src/lib/session.ts`** (server-only):
 
 ```ts
 import { cookies } from 'next/headers';
@@ -676,7 +676,7 @@ export async function getSession(): Promise<Session | null> {
 }
 ```
 
-- [ ] **Step 9: Write `middleware.ts`**:
+- [x] **Step 9: Write `middleware.ts`**:
 
 ```ts
 import { NextResponse, type NextRequest } from 'next/server';
@@ -709,7 +709,7 @@ export const config = {
 };
 ```
 
-- [ ] **Step 10: Write `app/api/[...path]/route.ts`** (catch-all proxy):
+- [x] **Step 10: Write `app/api/[...path]/route.ts`** (catch-all proxy):
 
 ```ts
 import { NextRequest, NextResponse } from 'next/server';
@@ -762,7 +762,7 @@ export const PATCH = handler;
 export const DELETE = handler;
 ```
 
-- [ ] **Step 11: Write `app/api/auth/login/route.ts`**:
+- [x] **Step 11: Write `app/api/auth/login/route.ts`**:
 
 ```ts
 import { NextRequest, NextResponse } from 'next/server';
@@ -792,7 +792,7 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-- [ ] **Step 12: Write `app/api/auth/logout/route.ts`**:
+- [x] **Step 12: Write `app/api/auth/logout/route.ts`**:
 
 ```ts
 import { NextResponse } from 'next/server';
@@ -806,7 +806,7 @@ export async function POST() {
 }
 ```
 
-- [ ] **Step 13: Write `app/layout.tsx`** (shell: fixed sidebar when logged in):
+- [x] **Step 13: Write `app/layout.tsx`** (shell: fixed sidebar when logged in):
 
 ```tsx
 import type { Metadata } from 'next';
@@ -832,7 +832,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 }
 ```
 
-- [ ] **Step 14: Write `src/components/nav.tsx`** (client — logout button needs interactivity):
+- [x] **Step 14: Write `src/components/nav.tsx`** (client — logout button needs interactivity):
 
 ```tsx
 'use client';
@@ -888,7 +888,7 @@ export function Nav({ role }: { role: Session['role'] }) {
 }
 ```
 
-- [ ] **Step 15: Write `app/login/page.tsx`**:
+- [x] **Step 15: Write `app/login/page.tsx`**:
 
 ```tsx
 import { redirect } from 'next/navigation';
@@ -910,7 +910,7 @@ export default async function LoginPage() {
 }
 ```
 
-- [ ] **Step 16: Write `src/components/login-form.tsx`**:
+- [x] **Step 16: Write `src/components/login-form.tsx`**:
 
 ```tsx
 'use client';
@@ -989,13 +989,13 @@ export function LoginForm() {
 }
 ```
 
-- [ ] **Step 17: Install and boot**
+- [x] **Step 17: Install and boot**
 
 Run: `npm install` (root — installs next/react/tailwind + links `@sales_assistant/api-client`; expect a few minutes).
 Then: `npm --workspace @sales_assistant/web run dev`
 Expected: Next dev server on http://localhost:4000, `/login` renders the form; visiting `/` while logged out redirects to `/login`; `curl -s -o /dev/null -w "%{http_code}" http://localhost:4000/login` → 200.
 
-- [ ] **Step 18: Manual login smoke test** (API running on :3000 — `npm --workspace @sales_assistant/api run start` with `.env` set per `docker-compose.yml`; seeds `admin@acme.test` / `password123`):
+- [x] **Step 18: Manual login smoke test** (API running on :3000 — `npm --workspace @sales_assistant/api run start` with `.env` set per `docker-compose.yml`; seeds `admin@acme.test` / `password123`):
 
 ```bash
 curl -s -c cookies.txt -X POST http://localhost:4000/api/auth/login -H "content-type: application/json" -d "{\"email\":\"admin@acme.test\",\"password\":\"password123\"}"
@@ -1004,7 +1004,7 @@ Expected: `{"role":"ADMIN"}`.
 Then: `curl -s -b cookies.txt -o /dev/null -w "%{http_code}" http://localhost:4000/` → 200 with the dashboard shell markup (KPI sections render in Task 5).
 And: `curl -s -b cookies.txt http://localhost:4000/api/leads` → 200 `{"data":[...],"total":...}` (proves the proxy injects the token).
 
-- [ ] **Step 19: Commit**
+- [x] **Step 19: Commit**
 
 ```bash
 git add sales_assistant/apps/web
