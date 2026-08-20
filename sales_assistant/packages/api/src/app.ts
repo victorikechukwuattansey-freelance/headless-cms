@@ -19,6 +19,7 @@ import {
   dealStageSchema,
   leadStatusSchema,
   listAgentsQuerySchema,
+  listAuditEventsQuerySchema,
   listBookingsQuerySchema,
   listDealsQuerySchema,
   listLeadsQuerySchema,
@@ -39,6 +40,7 @@ import { UserService } from './services/user.service.js';
 import { AuthService } from './services/auth.service.js';
 import { LeadScoreService } from './services/lead-score.service.js';
 import { FollowUpReminderService } from './services/follow-up-reminder.service.js';
+import { AuditService } from './services/audit.service.js';
 
 const DOCS_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -155,6 +157,7 @@ interface RouteHandlers {
   deals: DealService;
   users: UserService;
   reminders: FollowUpReminderService;
+  audit: AuditService;
 }
 
 function createRouteHandlers(): RouteHandlers {
@@ -165,6 +168,7 @@ function createRouteHandlers(): RouteHandlers {
     deals: new DealService(),
     users: new UserService(),
     reminders: new FollowUpReminderService(),
+    audit: new AuditService(),
   };
 }
 
@@ -236,6 +240,8 @@ export function createApp(options: AppOptions = {}) {
           await routeUsers(res, services.users, context, method, segments, body, query);
         } else if (segments[0] === 'reminders') {
           await routeReminders(res, services.reminders, context, method, segments, body, query);
+        } else if (segments[0] === 'audit-events') {
+          await routeAuditEvents(res, services.audit, context, method, segments, body, query);
         } else {
           sendJson(res, 404, { error: { code: 'NOT_FOUND', message: 'Route not found' } });
         }
@@ -390,6 +396,24 @@ async function routeBookings(
     sendJson(res, 200, {
       data: plain(await service.transitionStatus(context, id, status)),
     });
+  } else {
+    sendJson(res, 404, { error: { code: 'NOT_FOUND', message: 'Route not found' } });
+  }
+}
+
+async function routeAuditEvents(
+  res: ServerResponse,
+  service: AuditService,
+  context: DomainContext,
+  method: string,
+  segments: string[],
+  body: Record<string, unknown>,
+  query: URLSearchParams,
+): Promise<void> {
+  requireRole(context, ['ADMIN']);
+  if (segments.length === 1 && method === 'GET') {
+    const options = parseQuery(listAuditEventsQuerySchema, query);
+    sendJson(res, 200, paginated(await service.list(context, options), options.limit, options.offset));
   } else {
     sendJson(res, 404, { error: { code: 'NOT_FOUND', message: 'Route not found' } });
   }
