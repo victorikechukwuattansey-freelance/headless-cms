@@ -73,3 +73,28 @@ export interface Booking {
   status: BookingStatus;
   createdAt: string;
 }
+export type AuditEventType =
+  | 'AGENT_AVAILABILITY_CHANGED'
+  | 'AI_USAGE_LOGGED'
+  | 'BOOKING_CREATED'
+  | 'BOOKING_STATUS_CHANGED'
+  | 'BULK_REMINDERS_GENERATED'
+  | 'DEAL_CREATED'
+  | 'DEAL_STAGE_CHANGED'
+  | 'INTEGRATION_TOKEN_DELETED'
+  | 'INTEGRATION_TOKEN_STORED'
+  | 'LEAD_ASSIGNED'
+  | 'LEAD_CREATED'
+  | 'LEAD_SCORED'
+  | 'LEAD_STATUS_CHANGED'
+  | 'LEAD_UPDATED'
+  | 'REMINDER_DISMISSED'
+  | 'USER_CREATED'
+  | 'USER_UPDATED';
+
+export interface AuditEvent {
+  id: string;
+  eventType: AuditEventType;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
