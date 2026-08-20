@@ -21,3 +21,32 @@ export function DismissReminderButton({ reminderId }: { reminderId: string }) {
     </Button>
   );
 }
+
+export function GenerateRemindersButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function generate() {
+    setBusy(true);
+    setMessage('');
+    const res = await fetch('/api/reminders/generate', { method: 'POST' });
+    const json = await res.json().catch(() => null);
+    setBusy(false);
+    if (!res.ok) {
+      setMessage(json?.error?.message ?? 'Generation failed');
+      return;
+    }
+    setMessage(`Job queued (${json?.data?.jobId ?? 'unknown'})`);
+    router.refresh();
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button variant="primary" onClick={generate} disabled={busy}>
+        {busy ? 'Queuing…' : 'Generate reminders'}
+      </Button>
+      {message && <span className="text-xs text-neutral-500">{message}</span>}
+    </div>
+  );
+}

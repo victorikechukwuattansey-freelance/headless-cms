@@ -1690,7 +1690,7 @@ git commit -m "feat(web): leads list, filters, actions, detail page"
 - Produces: `AvailabilityToggle` (client), `GenerateRemindersButton` (client, shown only when `role === 'ADMIN'`), `DealTransitionButtons` (client).
 - Extends `reminder-actions.tsx` with the generate button (adds the second export to that file).
 
-- [ ] **Step 1: Write `app/agents/page.tsx`** (server):
+- [x] **Step 1: Write `app/agents/page.tsx`** (server):
 
 ```tsx
 import { redirect } from 'next/navigation';
@@ -1732,7 +1732,7 @@ export default async function AgentsPage() {
 }
 ```
 
-- [ ] **Step 2: Write `src/components/agent-actions.tsx`** (client):
+- [x] **Step 2: Write `src/components/agent-actions.tsx`** (client):
 
 ```tsx
 'use client';
@@ -1768,7 +1768,7 @@ export function AvailabilityToggle({ agentId, status }: { agentId: string; statu
 }
 ```
 
-- [ ] **Step 3: Write `app/reminders/page.tsx`** (server):
+- [x] **Step 3: Write `app/reminders/page.tsx`** (server):
 
 ```tsx
 import { redirect } from 'next/navigation';
@@ -1820,7 +1820,7 @@ export default async function RemindersPage() {
 }
 ```
 
-- [ ] **Step 4: Extend `src/components/reminder-actions.tsx`** — append (file already has `DismissReminderButton`; keep it untouched):
+- [x] **Step 4: Extend `src/components/reminder-actions.tsx`** — append (file already has `DismissReminderButton`; keep it untouched):
 
 ```tsx
 export function GenerateRemindersButton() {
@@ -1855,7 +1855,7 @@ export function GenerateRemindersButton() {
 
 (The `Button` and `useState` imports are already present in that file.)
 
-- [ ] **Step 5: Write `app/deals/page.tsx`** (server):
+- [x] **Step 5: Write `app/deals/page.tsx`** (server):
 
 ```tsx
 import { redirect } from 'next/navigation';
@@ -1897,7 +1897,7 @@ export default async function DealsPage() {
 }
 ```
 
-- [ ] **Step 6: Write `src/components/deal-actions.tsx`** (client):
+- [x] **Step 6: Write `src/components/deal-actions.tsx`** (client):
 
 ```tsx
 'use client';
@@ -1942,7 +1942,7 @@ export function DealTransitionButtons({ dealId, stage }: { dealId: string; stage
 }
 ```
 
-- [ ] **Step 7: Verify + commit** — manual: agents toggle flips idle↔busy; reminders page lists + dismiss works; admin sees **Generate reminders** (queues job → 202 message logged); deals transition proposed→won/lost. Lint + build clean. Then:
+- [x] **Step 7: Verify + commit** — manual: agents toggle flips idle↔busy; reminders page lists + dismiss works; admin sees **Generate reminders** (queues job → 202 message logged); deals transition proposed→won/lost. Lint + build clean. Then:
 
 ```bash
 git add sales_assistant/apps/web/app/agents sales_assistant/apps/web/app/reminders sales_assistant/apps/web/app/deals sales_assistant/apps/web/src/components/agent-actions.tsx sales_assistant/apps/web/src/components/deal-actions.tsx sales_assistant/apps/web/src/components/reminder-actions.tsx
