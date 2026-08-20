@@ -32,7 +32,7 @@
 - Consumes: existing api-client structure (`types.ts` + re-export barrel in `index.ts`).
 - Produces: `BookingStatus`, `Booking` types, and `listBookings` / `createBooking` / `transitionBooking` helpers — used by Task 6's page.
 
-- [ ] **Step 1: Append types to `packages/api-client/src/types.ts`** — after the `Reminder` interface (line 66):
+- [x] **Step 1: Append types to `packages/api-client/src/types.ts`** — after the `Reminder` interface (line 66):
 
 ```ts
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
@@ -46,7 +46,7 @@ export interface Booking {
 }
 ```
 
-- [ ] **Step 2: Export the types from `packages/api-client/src/index.ts`** — extend the type import on line 1 and the `export type` list:
+- [x] **Step 2: Export the types from `packages/api-client/src/index.ts`** — extend the type import on line 1 and the `export type` list:
 
 ```ts
 import type { Booking, BookingStatus, DealStage, LeadStatus, ReminderStatus, Role } from './types.js';
@@ -69,7 +69,7 @@ export type {
 } from './types.js';
 ```
 
-- [ ] **Step 3: Add the typed helpers to `packages/api-client/src/index.ts`** — append after `transitionDeal` (line 102):
+- [x] **Step 3: Add the typed helpers to `packages/api-client/src/index.ts`** — append after `transitionDeal` (line 102):
 
 ```ts
 export const listBookings = (
@@ -84,7 +84,7 @@ export const transitionBooking = (token: string, id: string, status: BookingStat
   apiRequest(`/bookings/${encodeURIComponent(id)}/transition`, { method: 'POST', token, body: { status } });
 ```
 
-- [ ] **Step 4: Verify** — from `sales_assistant/`:
+- [x] **Step 4: Verify** — from `sales_assistant/`:
 
 ```bash
 npm --workspace @sales_assistant/api-client run build
@@ -93,7 +93,7 @@ npm --workspace @sales_assistant/api-client test
 
 Expected: build compiles (0 type errors), all 3 api-client tests pass.
 
-- [ ] **Step 5: Commit** (from repo root `C:\Users\1040 G8\Documents\jarvis-demo`):
+- [x] **Step 5: Commit** (from repo root `C:\Users\1040 G8\Documents\jarvis-demo`):
 
 ```bash
 git add sales_assistant/packages/api-client/src/types.ts sales_assistant/packages/api-client/src/index.ts
@@ -113,13 +113,13 @@ git commit -m "feat(api-client): booking types and helpers"
 - Consumes: `BookingStatus` from `@sales_assistant/api-client` (Task 1).
 - Produces: `BOOKING_TRANSITIONS` and `BOOKING_BADGES` — consumed by Tasks 3 and 5; the nav `Bookings` link used by the layout.
 
-- [ ] **Step 1: Extend the import in `apps/web/src/lib/status-maps.ts`** (line 1):
+- [x] **Step 1: Extend the import in `apps/web/src/lib/status-maps.ts`** (line 1):
 
 ```ts
 import type { BookingStatus, DealStage, LeadStatus, ReminderStatus } from '@sales_assistant/api-client';
 ```
 
-- [ ] **Step 2: Append the booking maps** to `apps/web/src/lib/status-maps.ts` (after `AGENT_BADGES`). The edges MUST mirror the API's `BOOKING_TRANSITIONS` (see Global Constraints):
+- [x] **Step 2: Append the booking maps** to `apps/web/src/lib/status-maps.ts` (after `AGENT_BADGES`). The edges MUST mirror the API's `BOOKING_TRANSITIONS` (see Global Constraints):
 
 ```ts
 export const BOOKING_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
@@ -137,13 +137,13 @@ export const BOOKING_BADGES: Record<BookingStatus, string> = {
 };
 ```
 
-- [ ] **Step 3: Add the nav item** to `apps/web/src/components/nav.tsx` — insert into `ITEMS` between Agents and Reminders:
+- [x] **Step 3: Add the nav item** to `apps/web/src/components/nav.tsx` — insert into `ITEMS` between Agents and Reminders:
 
 ```ts
   { href: '/bookings', label: 'Bookings' },
 ```
 
-- [ ] **Step 4: Verify** — from `sales_assistant/`:
+- [x] **Step 4: Verify** — from `sales_assistant/`:
 
 ```bash
 npm --workspace @sales_assistant/web run lint
@@ -151,7 +151,7 @@ npm --workspace @sales_assistant/web run lint
 
 Expected: 0 errors (2 pre-existing config warnings allowed).
 
-- [ ] **Step 5: Commit** (repo root):
+- [x] **Step 5: Commit** (repo root):
 
 ```bash
 git add sales_assistant/apps/web/src/lib/status-maps.ts sales_assistant/apps/web/src/components/nav.tsx
@@ -170,7 +170,7 @@ git commit -m "feat(web): booking status maps and nav link"
 - Consumes: `BookingStatus` (Task 1), `BOOKING_TRANSITIONS` (Task 2), the `Button` primitive.
 - Produces: `BookingActions({ bookingId: string, status: BookingStatus })` — consumed by Task 5's table rows.
 
-- [ ] **Step 1: Create `apps/web/src/components/booking-actions.tsx`** (mirrors `src/components/deal-actions.tsx`):
+- [x] **Step 1: Create `apps/web/src/components/booking-actions.tsx`** (mirrors `src/components/deal-actions.tsx`):
 
 ```tsx
 'use client';
@@ -215,7 +215,7 @@ export function BookingActions({ bookingId, status }: { bookingId: string; statu
 }
 ```
 
-- [ ] **Step 2: Verify** — from `sales_assistant/`:
+- [x] **Step 2: Verify** — from `sales_assistant/`:
 
 ```bash
 npm --workspace @sales_assistant/web run lint
@@ -223,7 +223,7 @@ npm --workspace @sales_assistant/web run lint
 
 Expected: 0 errors.
 
-- [ ] **Step 3: Commit** (repo root):
+- [x] **Step 3: Commit** (repo root):
 
 ```bash
 git add sales_assistant/apps/web/src/components/booking-actions.tsx
@@ -242,7 +242,7 @@ git commit -m "feat(web): booking transition actions"
 - Consumes: `Lead` type (exported by `@sales_assistant/api-client`), the `Button` primitive.
 - Produces: `CreateBookingForm({ leads: Lead[] })` — consumed by Task 6's page.
 
-- [ ] **Step 1: Create `apps/web/src/components/create-booking-form.tsx`** (mirrors the form structure of `src/components/create-user-form.tsx`):
+- [x] **Step 1: Create `apps/web/src/components/create-booking-form.tsx`** (mirrors the form structure of `src/components/create-user-form.tsx`):
 
 ```tsx
 'use client';
@@ -312,7 +312,7 @@ export function CreateBookingForm({ leads }: { leads: Lead[] }) {
 
 Notes: `new Date(at).toISOString()` serializes the local `datetime-local` value to UTC ISO (ends in `Z`), which satisfies the API's `z.string().datetime({ offset: true })` requirement.
 
-- [ ] **Step 2: Verify** — from `sales_assistant/`:
+- [x] **Step 2: Verify** — from `sales_assistant/`:
 
 ```bash
 npm --workspace @sales_assistant/web run lint
@@ -320,7 +320,7 @@ npm --workspace @sales_assistant/web run lint
 
 Expected: 0 errors.
 
-- [ ] **Step 3: Commit** (repo root):
+- [x] **Step 3: Commit** (repo root):
 
 ```bash
 git add sales_assistant/apps/web/src/components/create-booking-form.tsx
@@ -339,7 +339,7 @@ git commit -m "feat(web): create booking form"
 - Consumes: `Booking`, `BookingStatus`, `Lead`, `Paginated<Booking>` types (Task 1), `BOOKING_BADGES` (Task 2), `BookingActions` (Task 3), `Table`/`Badge`/`Button` primitives.
 - Produces: `BookingsTable({ initial: Paginated<Booking>, leads: Lead[] })` — consumed by Task 6's page.
 
-- [ ] **Step 1: Create `apps/web/app/bookings/bookings-table.tsx`** (colocated, cloned/adapted from `app/leads/leads-table.tsx`):
+- [x] **Step 1: Create `apps/web/app/bookings/bookings-table.tsx`** (colocated, cloned/adapted from `app/leads/leads-table.tsx`):
 
 ```tsx
 'use client';
@@ -428,7 +428,7 @@ export function BookingsTable({ initial, leads }: { initial: Paginated<Booking>;
 }
 ```
 
-- [ ] **Step 2: Verify** — from `sales_assistant/`:
+- [x] **Step 2: Verify** — from `sales_assistant/`:
 
 ```bash
 npm --workspace @sales_assistant/web run lint
@@ -436,7 +436,7 @@ npm --workspace @sales_assistant/web run lint
 
 Expected: 0 errors.
 
-- [ ] **Step 3: Commit** (repo root):
+- [x] **Step 3: Commit** (repo root):
 
 ```bash
 git add sales_assistant/apps/web/app/bookings/bookings-table.tsx
@@ -455,7 +455,7 @@ git commit -m "feat(web): bookings table with filter and pagination"
 - Consumes: `getSession()` (from `@/src/lib/session`), `listBookings` / `listLeads` (Task 1), `CreateBookingForm` (Task 4), `BookingsTable` (Task 5), `Card` primitive.
 - Produces: the `/bookings` route.
 
-- [ ] **Step 1: Create `apps/web/app/bookings/page.tsx`** (mirrors `app/leads/page.tsx` and `app/deals/page.tsx`):
+- [x] **Step 1: Create `apps/web/app/bookings/page.tsx`** (mirrors `app/leads/page.tsx` and `app/deals/page.tsx`):
 
 ```tsx
 import { redirect } from 'next/navigation';
@@ -491,7 +491,7 @@ export default async function BookingsPage() {
 }
 ```
 
-- [ ] **Step 2: Build + lint** — from `sales_assistant/`:
+- [x] **Step 2: Build + lint** — from `sales_assistant/`:
 
 ```bash
 npm --workspace @sales_assistant/web run lint
@@ -500,7 +500,7 @@ npm --workspace @sales_assistant/web run build
 
 Expected: lint 0 errors; build compiles and lists a new `ƒ /bookings` route.
 
-- [ ] **Step 3: Start the web server on the new build** — restart `next start` on :4000:
+- [x] **Step 3: Start the web server on the new build** — restart `next start` on :4000:
 
 ```powershell
 Get-NetTCPConnection -LocalPort 4000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
@@ -509,7 +509,7 @@ Start-Process powershell -WindowStyle Hidden -WorkingDirectory "C:\Users\1040 G8
 
 (Assumes the API on :3000 and `run-sa-web.ps1` launcher already exist from the dashboard plan.)
 
-- [ ] **Step 4: Manual smoke** — login as `admin@acme.test` / `password123` (save the jar), then:
+- [x] **Step 4: Manual smoke** — login as `admin@acme.test` / `password123` (save the jar), then:
 
 ```powershell
 $jar = "C:\Users\1040G8~1\AppData\Local\Temp\opencode\sa-cookies.txt"
@@ -517,7 +517,7 @@ curl.exe -s -o NUL -w "login: %{http_code}`n" -c $jar -H "content-type: applicat
 curl.exe -s -b $jar http://localhost:4000/bookings | Select-String -Pattern "Book a call|Select a lead|All|pending|confirmed" | ForEach-Object { "render: FOUND" }
 ```
 
-- [ ] **Step 5: Commit** (repo root):
+- [x] **Step 5: Commit** (repo root):
 
 ```bash
 git add sales_assistant/apps/web/app/bookings
@@ -534,7 +534,7 @@ git commit -m "feat(web): bookings page"
 
 **Interfaces:** None new — final verification of the /bookings feature end to end.
 
-- [ ] **Step 1: Repo-wide verification** — from `sales_assistant/`:
+- [x] **Step 1: Repo-wide verification** — from `sales_assistant/`:
 
 ```bash
 npm run lint
@@ -543,7 +543,7 @@ npm run build
 
 Expected: lint 0 errors across all workspaces; turbo build 8/8 packages successful, exit 0.
 
-- [ ] **Step 2: Rebuild + restart web** (Task 6 Step 3), then smoke the full flow against the dev stack (API :3000 running, host PostgreSQL dev DB):
+- [x] **Step 2: Rebuild + restart web** (Task 6 Step 3), then smoke the full flow against the dev stack (API :3000 running, host PostgreSQL dev DB):
 
 1. Login as `admin@acme.test` → `/bookings` renders with `Book a call` form, filter chips, and the `Bookings` nav link.
 2. Create a booking (pick a lead, choose a future time) → row appears with `pending` badge and buttons `Mark confirmed` + `Mark cancelled`.
@@ -555,7 +555,7 @@ Expected: lint 0 errors across all workspaces; turbo build 8/8 packages successf
 8. Login as `user@acme.test` → `/bookings` is viewable (no admin gate).
 9. Confirm no API/OpenAPI/worker files changed: `git status --short` in `sales_assistant/` shows only the web + api-client + docs changes above.
 
-- [ ] **Step 3: Check this plan's boxes** — replace every `- [ ]` in this file with `- [x]`, using the UTF-8-safe PowerShell write (plain `Set-Content` corrupts non-ASCII):
+- [x] **Step 3: Check this plan's boxes** — replace every `- [ ]` in this file with `- [x]`, using the UTF-8-safe PowerShell write (plain `Set-Content` corrupts non-ASCII):
 
 ```powershell
 $p = "C:\Users\1040 G8\Documents\jarvis-demo\sales_assistant\docs\superpowers\plans\2026-08-20-bookings-pipeline-ui.md"
@@ -564,7 +564,7 @@ for ($i = 0; $i -lt $lines.Length; $i++) { if ($lines[$i] -match '^- \[ \]') { $
 [System.IO.File]::WriteAllLines((Resolve-Path $p), $lines, (New-Object System.Text.UTF8Encoding($false)))
 ```
 
-- [ ] **Step 4: Commit** (repo root):
+- [x] **Step 4: Commit** (repo root):
 
 ```bash
 git add "sales_assistant/docs/superpowers/plans/2026-08-20-bookings-pipeline-ui.md"
