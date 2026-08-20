@@ -34,11 +34,18 @@ export function Nav({ role }: { role: Session['role'] }) {
           </li>
         ))}
         {role === 'ADMIN' && (
-          <li>
-            <Link href="/users" className="block rounded px-3 py-2 text-sm hover:bg-neutral-800">
-              Users
-            </Link>
-          </li>
+          <>
+            <li>
+              <Link href="/activity" className="block rounded px-3 py-2 text-sm hover:bg-neutral-800">
+                Activity
+              </Link>
+            </li>
+            <li>
+              <Link href="/users" className="block rounded px-3 py-2 text-sm hover:bg-neutral-800">
+                Users
+              </Link>
+            </li>
+          </>
         )}
       </ul>
       <div className="mt-auto space-y-2 text-xs text-neutral-400">
