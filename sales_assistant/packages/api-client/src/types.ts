@@ -64,3 +64,12 @@ export interface Reminder {
   updatedAt: string;
   lead: { phone: string; name: string | null };
 }
+export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
+export interface Booking {
+  id: string;
+  organizationId: string;
+  leadId: string;
+  at: string;
+  status: BookingStatus;
+  createdAt: string;
+}

@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus, ReminderStatus, Role } from './types.js';
+import type { Booking, BookingStatus, DealStage, LeadStatus, ReminderStatus, Role } from './types.js';
 
 export type {
   Role,
@@ -13,6 +13,8 @@ export type {
   Deal,
   ReminderStatus,
   Reminder,
+  BookingStatus,
+  Booking,
 } from './types.js';
 
 export interface RequestOptions {
@@ -111,3 +113,14 @@ export const generateReminders = (token: string) =>
 
 export const dismissReminder = (token: string, id: string) =>
   apiRequest(`/reminders/${encodeURIComponent(id)}/dismiss`, { method: 'POST', token });
+
+export const listBookings = (
+  token: string,
+  query: { limit?: number; offset?: number; status?: BookingStatus } = {},
+) => apiRequest('/bookings', { token, query });
+
+export const createBooking = (token: string, input: { leadId: string; at: string }) =>
+  apiRequest('/bookings', { method: 'POST', token, body: input });
+
+export const transitionBooking = (token: string, id: string, status: BookingStatus) =>
+  apiRequest(`/bookings/${encodeURIComponent(id)}/transition`, { method: 'POST', token, body: { status } });
