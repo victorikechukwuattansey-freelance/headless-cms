@@ -72,7 +72,7 @@ export function CreateUserForm() {
           <option value="AGENT">AGENT</option>
           <option value="ADMIN">ADMIN</option>
         </select>
-        <Button disabled={busy}>{busy ? 'Creating…' : 'Create'}</Button>
+        <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create'}</Button>
       </div>
       {error && <p className="text-sm text-red-600 md:col-span-4">{error}</p>}
     </form>

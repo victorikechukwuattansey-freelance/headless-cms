@@ -16,15 +16,23 @@ Multi-tenant B2B sales platform — org-scoped lead management, AI lead scoring,
 
 ```
 sales_assistant/
+├── apps/
+│   ├── web/          # Next.js dashboard (App Router, Tailwind v4)
+│   └── via/          # Mobile client metadata package (@sales_assistant/via)
 ├── packages/
 │   ├── api/          # HTTP API, domain logic, workers, Prisma, tests
-│   ├── via/          # Client metadata package
+│   ├── api-client/   # Typed API client (types + request helpers)
 │   ├── config/       # Shared config / role contracts
-│   └── openapi/      # OpenAPI 3.0.3 spec (openapi.yaml)
+│   ├── db/           # Database provider metadata
+│   ├── openapi/      # OpenAPI 3.0.3 spec (openapi.yaml)
+│   ├── shared/       # Shared types
+│   └── ui/           # UI metadata package
 ├── tests/            # Repo-level contract & static tests (*.test.mjs)
 ├── docker-compose.yml           # Dev Postgres + Redis
 └── docker-compose.production.yml
 ```
+
+> **Note (`@sales_assistant/via` packaging):** `apps/via/package.json` currently ships `"main": "src/index.ts"`. Before adding a runtime consumer (e.g. the future mobile client), confirm whether the Expo/Metro/Babel pipeline consumes TypeScript source directly; if not, switch to `"main": "dist/index.js"`, `"types": "dist/index.d.ts"`, and add an `exports` map.
 
 ## Prerequisites
 
@@ -38,8 +46,10 @@ npm install
 docker compose up -d          # Postgres :5432, Redis :6379
 npx prisma migrate deploy     # api package: apply migrations
 npm run db:seed               # seed org, users, agents, leads
-cp .env.example .env          # then fill in real values
+cp .env.example packages/api/.env   # dev values for API + worker (already filled for local docker-compose)
 ```
+
+The API and worker load `packages/api/.env` via `node --env-file` (Prisma CLI reads it directly); the `.vscode/launch.json` configs carry the same dev values, so both terminal and F5 work out of the box.
 
 ### Seed credentials
 
@@ -53,6 +63,7 @@ cp .env.example .env          # then fill in real values
 
 | Command                  | Description                                    |
 | ------------------------ | ---------------------------------------------- |
+| `npm run dev`            | Start API + web (dev, :4000) + worker together |
 | `npm run build`          | Typecheck + build all workspaces (turbo)       |
 | `npm run lint`           | ESLint all workspaces                          |
 | `npm test`               | Repo contract tests + unit tests (api, via)    |
@@ -109,6 +120,7 @@ Canonical spec: `packages/openapi/openapi.yaml`.
 | POST   | `/deals/:id/transition`         | bearer      | Stage transition               |
 | GET    | `/reminders`                    | bearer      | Paginate + filter by status    |
 | POST   | `/reminders/generate`           | ADMIN       | Enqueue reminder generation (202) |
+| GET    | `/audit-events`                 | ADMIN       | Audit feed — 17 event types, newest-first, `?type=` filter |
 | GET    | `/health`, `/metrics`           | public      | Liveness + Prometheus metrics  |
 
 ### Auth
@@ -132,17 +144,22 @@ Tunable via `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`.
 
 `apps/web` — Next.js App Router + Tailwind v4 dashboard. Server components fetch the API through an internal proxy using the session token; client components call `/api/*` and `router.refresh()`.
 
-Run it (API must be up on `:3000`):
+Run it (API must be up on `:3000`), or start everything at once from the repo root:
 
 ```bash
-npm run dev:web      # http://localhost:4000
+npm run dev      # http://localhost:4000 (web) + :3000 (api) + worker
+npm run dev:web  # web only
 ```
 
 Login with the seeded credentials (see above; `admin@acme.test / password123` for full access).
 
 - **Session:** httpOnly cookie `sa_session` set on login, 1-hour expiry, no refresh — re-login when it expires.
 - **Proxy:** `/api/*` forwards to `API_URL` (default `http://localhost:3000`), injecting the session token. No CORS needed.
-- **Pages:** Dashboard, Leads (list + detail — assign, score, transition), Agents (availability), Reminders (generate + dismiss), Deals (stage transition), Users (admin-only create user).
+- **Pages:** Dashboard, Leads (list + detail — assign, score, transition), Agents (availability), Reminders (generate + dismiss), Deals (stage transition), Activity (admin-only audit feed — every event as a sentence with entity links), Users (admin-only create user).
+
+### Run locally in VSCode
+
+`sales_assistant/.vscode/launch.json` ships three debug configurations — **API** (:3000, env baked in), **Web (dev)** (`next dev -p 4000`), **Worker** — plus an **API + Web + Worker** compound that starts all three with F5 (open `sales_assistant/` as the workspace folder). Rebuild the API after `packages/api/src` changes: `npm run build --workspace @sales_assistant/api`.
 
 ## Background Jobs
 
@@ -194,7 +211,7 @@ npm test
 npm run test:integration
 ```
 
-Runs the API against a dedicated test database, truncating tables between tests: 24 tests covering auth token flow, admin-only user management, lead scoring, reminders, rate limiting (429 + `Retry-After`), docs/OpenAPI serving, and full domain lifecycle over HTTP.
+Runs the API against a dedicated test database, truncating tables between tests: 26 tests covering auth token flow, admin-only user management, lead scoring, reminders, rate limiting (429 + `Retry-After`), docs/OpenAPI serving, the admin-only audit-events feed (org-scoped, newest-first, `?type=` filter, non-admin 403), and full domain lifecycle over HTTP.
 
 ## Database Migrations
 

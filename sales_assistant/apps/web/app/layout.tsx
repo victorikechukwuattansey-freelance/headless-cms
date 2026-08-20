@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-neutral-100 text-neutral-900 antialiased">
         {session && <Nav role={session.role} />}
         <main className={session ? 'lg:pl-56' : ''}>{children}</main>

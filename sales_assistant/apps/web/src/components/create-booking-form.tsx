@@ -55,7 +55,7 @@ export function CreateBookingForm({ leads }: { leads: Lead[] }) {
         className="rounded border border-neutral-300 px-3 py-2 text-sm"
       />
       <div className="flex items-center">
-        <Button disabled={busy}>{busy ? 'Creating…' : 'Create booking'}</Button>
+        <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create booking'}</Button>
       </div>
       {error && <p className="text-sm text-red-600 md:col-span-4">{error}</p>}
     </form>

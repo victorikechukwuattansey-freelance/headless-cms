@@ -1,0 +1,45 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "API",
+      "program": "${workspaceFolder}/packages/api/dist/index.js",
+      "cwd": "${workspaceFolder}/packages/api",
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:attansey@localhost:5432/sales_assistant?schema=public",
+        "REDIS_URL": "redis://localhost:56379",
+        "PORT": "3000",
+        "JWT_SECRET": "dev-only-jwt-secret",
+        "INTEGRATION_TOKEN_ENCRYPTION_KEY": "dev-only-key-change-me"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Web (dev)",
+      "program": "${workspaceFolder}/node_modules/next/dist/bin/next",
+      "args": ["dev", "-p", "4000"],
+      "cwd": "${workspaceFolder}/apps/web",
+      "console": "integratedTerminal"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Worker",
+      "program": "${workspaceFolder}/packages/api/dist/workers/queue-worker.js",
+      "cwd": "${workspaceFolder}/packages/api",
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:attansey@localhost:5432/sales_assistant?schema=public",
+        "REDIS_URL": "redis://localhost:56379"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "API + Web + Worker",
+      "configurations": ["API", "Web (dev)", "Worker"]
+    }
+  ]
+}

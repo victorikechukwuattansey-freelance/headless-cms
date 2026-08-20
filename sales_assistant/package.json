@@ -19,10 +19,14 @@
     "db:migrate": "npm --workspace @sales_assistant/api run db:migrate",
     "db:migrate:deploy": "npm --workspace @sales_assistant/api run db:migrate:deploy",
     "db:seed": "npm --workspace @sales_assistant/api run db:seed",
+    "dev": "concurrently -k -n api,web,worker -c blue,green,yellow \"npm:dev:api\" \"npm:dev:web\" \"npm:dev:worker\"",
+    "dev:api": "npm --workspace @sales_assistant/api run dev",
     "dev:web": "npm --workspace @sales_assistant/web run dev",
+    "dev:worker": "npm --workspace @sales_assistant/api run start:worker",
     "build:web": "npm --workspace @sales_assistant/web run build"
   },
   "devDependencies": {
+    "concurrently": "^10.0.5",
     "turbo": "^2.3.3"
   },
   "allowScripts": {
