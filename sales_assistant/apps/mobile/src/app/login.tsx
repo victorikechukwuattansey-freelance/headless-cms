@@ -1,15 +1,23 @@
 import '../config';
-import { useState } from 'react';
-import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Redirect, router } from 'expo-router';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput } from 'react-native';
 import { login as apiLogin } from '@sales_assistant/api-client';
-import { saveSession } from '../session';
+import { getSession, saveSession } from '../session';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [session, setSession] = useState<unknown>(null);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      setSession(await getSession());
+    })();
+  }, []);
+  if (session) return <Redirect href="/" />;
 
   async function submit() {
     if (busy) return;
