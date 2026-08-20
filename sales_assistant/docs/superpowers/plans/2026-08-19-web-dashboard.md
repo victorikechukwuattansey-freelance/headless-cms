@@ -1960,7 +1960,7 @@ git commit -m "feat(web): agents, reminders, deals pages"
 - Consumes: `listUsers`, `createUser` via proxy; session role gate.
 - Produces: `/users` (server, ADMIN-only — non-admin gets 403-equivalent redirect to `/`), users table, `CreateUserForm` (client, posts `/api/users`, then `router.refresh()`).
 
-- [ ] **Step 1: Write `app/users/page.tsx`** (server):
+- [x] **Step 1: Write `app/users/page.tsx`** (server):
 
 ```tsx
 import { redirect } from 'next/navigation';
@@ -2011,7 +2011,7 @@ export default async function UsersPage() {
 }
 ```
 
-- [ ] **Step 2: Write `src/components/create-user-form.tsx`** (client):
+- [x] **Step 2: Write `src/components/create-user-form.tsx`** (client):
 
 ```tsx
 'use client';
@@ -2096,7 +2096,7 @@ export function CreateUserForm() {
 }
 ```
 
-- [ ] **Step 3: Verify + commit** — manual: sign in as `admin@acme.test` → `/users` visible in nav, create a user (it appears in the table); sign in as `user@acme.test` → `/users` redirects to `/`. Lint + build clean. Then:
+- [x] **Step 3: Verify + commit** — manual: sign in as `admin@acme.test` → `/users` visible in nav, create a user (it appears in the table); sign in as `user@acme.test` → `/users` redirects to `/`. Lint + build clean. Then:
 
 ```bash
 git add sales_assistant/apps/web/app/users sales_assistant/apps/web/src/components/create-user-form.tsx
