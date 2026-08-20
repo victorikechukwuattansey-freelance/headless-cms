@@ -1,4 +1,4 @@
-import type { DealStage, LeadStatus, ReminderStatus } from '@sales_assistant/api-client';
+import type { BookingStatus, DealStage, LeadStatus, ReminderStatus } from '@sales_assistant/api-client';
 
 export const LEAD_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   new: ['assigned'],
@@ -39,4 +39,18 @@ export const REMINDER_BADGES: Record<ReminderStatus, string> = {
 export const AGENT_BADGES: Record<'idle' | 'busy', string> = {
   idle: 'bg-emerald-100 text-emerald-800',
   busy: 'bg-neutral-200 text-neutral-700',
+};
+
+export const BOOKING_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+};
+
+export const BOOKING_BADGES: Record<BookingStatus, string> = {
+  pending: 'bg-amber-100 text-amber-800',
+  confirmed: 'bg-blue-100 text-blue-800',
+  completed: 'bg-green-100 text-green-800',
+  cancelled: 'bg-neutral-200 text-neutral-700',
 };

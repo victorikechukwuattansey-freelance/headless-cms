@@ -8,6 +8,7 @@ const ITEMS: { href: string; label: string }[] = [
   { href: '/', label: 'Dashboard' },
   { href: '/leads', label: 'Leads' },
   { href: '/agents', label: 'Agents' },
+  { href: '/bookings', label: 'Bookings' },
   { href: '/reminders', label: 'Reminders' },
   { href: '/deals', label: 'Deals' },
 ];
