@@ -1021,7 +1021,7 @@ git commit -m "feat(web): Next.js app scaffold, session auth, API proxy"
 **Interfaces:**
 - Produces: `Button` (variants `primary`|`ghost`|`danger`), `Badge` (className string), `Card` ({ title?, children, action? }), `Table` ({ headers: [string, string][], rows: ReactNode[][] }), `Modal` ({ open, title, onClose, children }) — plus `LEAD_TRANSITIONS`, `DEAL_TRANSITIONS`, `LEAD_BADGES`, `DEAL_BADGES`, `REMINDER_BADGES`, `AGENT_BADGES` maps. All are plain function components (no client state except Modal) that any page can import.
 
-- [ ] **Step 1: Write `src/lib/status-maps.ts`**:
+- [x] **Step 1: Write `src/lib/status-maps.ts`**:
 
 ```ts
 import type { DealStage, LeadStatus, ReminderStatus } from '@sales_assistant/api-client';
@@ -1068,7 +1068,7 @@ export const AGENT_BADGES: Record<'idle' | 'busy', string> = {
 };
 ```
 
-- [ ] **Step 2: Write `src/components/badge.tsx`**:
+- [x] **Step 2: Write `src/components/badge.tsx`**:
 
 ```tsx
 export function Badge({ className, children }: { className: string; children: React.ReactNode }) {
@@ -1080,7 +1080,7 @@ export function Badge({ className, children }: { className: string; children: Re
 }
 ```
 
-- [ ] **Step 3: Write `src/components/button.tsx`**:
+- [x] **Step 3: Write `src/components/button.tsx`**:
 
 ```tsx
 import { type ButtonHTMLAttributes } from 'react';
@@ -1108,7 +1108,7 @@ export function Button({
 }
 ```
 
-- [ ] **Step 4: Write `src/components/card.tsx`**:
+- [x] **Step 4: Write `src/components/card.tsx`**:
 
 ```tsx
 export function Card({
@@ -1134,7 +1134,7 @@ export function Card({
 }
 ```
 
-- [ ] **Step 5: Write `src/components/table.tsx`**:
+- [x] **Step 5: Write `src/components/table.tsx`**:
 
 ```tsx
 export function Table({
@@ -1176,7 +1176,7 @@ export function Table({
 }
 ```
 
-- [ ] **Step 6: Write `src/components/modal.tsx`**:
+- [x] **Step 6: Write `src/components/modal.tsx`**:
 
 ```tsx
 'use client';
@@ -1209,7 +1209,7 @@ export function Modal({
 }
 ```
 
-- [ ] **Step 7: Verify + commit**
+- [x] **Step 7: Verify + commit**
 
 Run: `npm --workspace @sales_assistant/web run lint` and `npm --workspace @sales_assistant/web run build`
 Expected: lint clean, build success (`route / (app)`, `/login`, API route handlers compiled).
