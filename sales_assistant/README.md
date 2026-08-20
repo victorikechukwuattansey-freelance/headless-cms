@@ -18,7 +18,8 @@ Multi-tenant B2B sales platform — org-scoped lead management, AI lead scoring,
 sales_assistant/
 ├── apps/
 │   ├── web/          # Next.js dashboard (App Router, Tailwind v4)
-│   └── via/          # Mobile client metadata package (@sales_assistant/via)
+│   ├── via/          # Mobile client metadata package (@sales_assistant/via)
+│   └── mobile/       # Expo app (expo-router, secure-store session)
 ├── packages/
 │   ├── api/          # HTTP API, domain logic, workers, Prisma, tests
 │   ├── api-client/   # Typed API client (types + request helpers)
@@ -32,7 +33,7 @@ sales_assistant/
 └── docker-compose.production.yml
 ```
 
-> **Note (`@sales_assistant/via` packaging):** `apps/via/package.json` currently ships `"main": "src/index.ts"`. Before adding a runtime consumer (e.g. the future mobile client), confirm whether the Expo/Metro/Babel pipeline consumes TypeScript source directly; if not, switch to `"main": "dist/index.js"`, `"types": "dist/index.d.ts"`, and add an `exports` map.
+> **Note (`@sales_assistant/via` packaging):** `apps/via/package.json` ships `"main": "src/index.ts"`. The mobile client (`apps/mobile`) empirically confirmed Metro/Babel consumes workspace TypeScript source directly (`npx expo export` bundles it), so no packaging change is required — `api-client` and `via` keep `"main": "src/index.ts"` as-is.
 
 ## Prerequisites
 
@@ -160,6 +161,29 @@ Login with the seeded credentials (see above; `admin@acme.test / password123` fo
 ### Run locally in VSCode
 
 `sales_assistant/.vscode/launch.json` ships three debug configurations — **API** (:3000, env baked in), **Web (dev)** (`next dev -p 4000`), **Worker** — plus an **API + Web + Worker** compound that starts all three with F5 (open `sales_assistant/` as the workspace folder). Rebuild the API after `packages/api/src` changes: `npm run build --workspace @sales_assistant/api`.
+
+## Mobile Client
+
+`apps/mobile` — Expo SDK 57 app (expo-router) with `/login` and a guarded lead-list home (`/`); session is stored via `expo-secure-store`.
+
+Run it (API must be up on `:3000`):
+
+```bash
+cd apps/mobile
+cp .env.example .env.local
+npx expo start      # w = web, a = Android emulator, i = iOS simulator
+```
+
+- **Environment:** `EXPO_PUBLIC_API_URL` (default `http://localhost:3000`) — inlined at bundle time by Metro, so restart `expo start` after changing `.env.local`. The default points at the local dev API (root `npm run dev` must be running); physical devices need the host machine's LAN IP.
+- **Architecture:** `packages/api-client` TypeScript source is consumed directly by Metro (no build step). `src/config.ts` bridges `EXPO_PUBLIC_API_URL` onto `process.env.API_URL`, which api-client's `apiUrl()` reads. The session lives in `expo-secure-store` under `sa_session`.
+
+Verify:
+
+```bash
+npm run lint
+npx tsc --noEmit
+npx expo export --platform web
+```
 
 ## Background Jobs
 
