@@ -818,3 +818,38 @@ test('rate limiter returns 429 with retry-after when quota is exhausted and exem
     limited.closeIdleConnections();
   }
 });
+
+test('audit events feed is org-scoped, newest-first, filterable, and admin-only', async () => {
+  const lead = await api('/leads', {
+    token: tokenA,
+    method: 'POST',
+    body: { phone: '+2349009000001' },
+  });
+  assert.equal(lead.status, 201);
+
+  const events = await api('/audit-events', { token: tokenA });
+  assert.equal(events.status, 200);
+  assert.equal(events.json.data.length, 1);
+  assert.equal(events.json.data[0].eventType, 'LEAD_CREATED');
+  assert.equal(events.json.data[0].payload.leadId, lead.json.data.id);
+
+  const ordered = await api('/audit-events?limit=5', { token: tokenA });
+  const stamps = ordered.json.data.map((e: { createdAt: string }) => new Date(e.createdAt).getTime());
+  assert.deepEqual(stamps, [...stamps].sort((a, b) => b - a));
+
+  const filtered = await api('/audit-events?type=LEAD_CREATED', { token: tokenA });
+  assert.ok(filtered.json.data.length >= 1);
+  assert.ok(filtered.json.data.every((e: { eventType: string }) => e.eventType === 'LEAD_CREATED'));
+
+  const crossOrg = await api('/audit-events', { token: tokenB });
+  assert.equal(crossOrg.status, 200);
+  assert.equal(crossOrg.json.data.length, 0);
+
+  const userToken = auth.issueToken({ userId: 'user-x', organizationId: orgA, role: 'USER' });
+  const forbidden = await api('/audit-events', { token: userToken });
+  assert.equal(forbidden.status, 403);
+
+  const badType = await api('/audit-events?type=NOPE', { token: tokenA });
+  assert.equal(badType.status, 400);
+  assert.equal(badType.json.error.code, 'VALIDATION');
+});

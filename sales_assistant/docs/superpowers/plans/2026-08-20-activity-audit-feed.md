@@ -3,7 +3,7 @@
 - **Date:** 2026-08-20
 - **Project:** SaaS Boilerplate (`sales_assistant/`)
 - **Source of truth:** `docs/superpowers/specs/2026-08-20-activity-audit-feed-design.md` (committed `224aa48`, approved)
-- **Status:** unchecked - begin by ticking boxes as tasks complete
+- **Status:** complete - all tasks shipped, commits `ee560dd` (T1), `f1ed1d9` (T2), `68ec6f0` (T3), `7d57e8e` (T4), `ae882b4` (T5), `505b5bf` (T6), T7 close-out commit
 
 ## Objective
 
@@ -55,13 +55,13 @@ Single-pass vertical slice per layer, one commit per task, same flow that shippe
 
 ## Task Checklist
 
-- [ ] T1 - AuditService + event-types schema + schema unit test - commit
-- [ ] T2 - `routeAuditEvents` wired into `app.ts` - commit
-- [ ] T3 - OpenAPI spec + repo contract-test update - commit
-- [ ] T4 - api-client types/const/helper - commit
-- [ ] T5 - `audit-formatters.ts` - commit
-- [ ] T6 - `/activity` page + `activity-list` + nav link - commit
-- [ ] T7 - integration tests + full verification + live smoke + plan close-out - commit
+- [x] T1 - AuditService + event-types schema + schema unit test - commit
+- [x] T2 - `routeAuditEvents` wired into `app.ts` - commit
+- [x] T3 - OpenAPI spec + repo contract-test update - commit
+- [x] T4 - api-client types/const/helper - commit
+- [x] T5 - `audit-formatters.ts` - commit
+- [x] T6 - `/activity` page + `activity-list` + nav link - commit
+- [x] T7 - integration tests + full verification + live smoke + plan close-out - commit
 ---
 
 ## T1 - AuditService + schema + unit test

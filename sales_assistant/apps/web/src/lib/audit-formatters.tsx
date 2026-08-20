@@ -46,7 +46,7 @@ export function describeAuditEvent(
     case 'BULK_REMINDERS_GENERATED':
       return <>Generated {String(payload.generated ?? 0)} reminders from {String(payload.total ?? 0)} qualifying leads</>;
     case 'DEAL_CREATED':
-      return <>Deal {shortId(payload.dealId)} created for {leadLink(payload.leadId)} at {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(payload.amount ?? 0))}</>;
+      return <>Deal {shortId(payload.dealId)} created{payload.leadId ? <> for {leadLink(payload.leadId)}</> : null} at {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(payload.amount ?? 0))}</>;
     case 'DEAL_STAGE_CHANGED':
       return <>Deal {shortId(payload.dealId)} moved {String(payload.from)} {'->'} {String(payload.to)}</>;
     case 'INTEGRATION_TOKEN_DELETED':
