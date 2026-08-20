@@ -2113,7 +2113,7 @@ git commit -m "feat(web): admin users page"
 
 **Interfaces:** None new — final wiring + verification.
 
-- [ ] **Step 1: Update `turbo.json`** — add the `dev` task:
+- [x] **Step 1: Update `turbo.json`** — add the `dev` task:
 
 ```json
 {
@@ -2130,23 +2130,23 @@ git commit -m "feat(web): admin users page"
 }
 ```
 
-- [ ] **Step 3: Update root `package.json`** — add convenience scripts after `db:seed` (line 21):
+- [x] **Step 3: Update root `package.json`** — add convenience scripts after `db:seed` (line 21):
 
 ```json
     "dev:web": "npm --workspace @sales_assistant/web run dev",
     "build:web": "npm --workspace @sales_assistant/web run build"
 ```
 
-- [ ] **Step 4: Update `.env.example`** — append:
+- [x] **Step 4: Update `.env.example`** — append:
 
 ```
 # Web dashboard (apps/web)
 API_URL=http://localhost:3000
 ```
 
-- [ ] **Step 5: Update `README.md`** — add a **Web Dashboard** section after the API section: stack (Next.js App Router + Tailwind v4), run command (`npm run dev:web`, requires API on `:3000`), login with seeded credentials, session cookie `sa_session` (1h, re-login on expiry), proxy note (`/api/*` forwards with the session token; no CORS needed), and available pages (Dashboard, Leads, Lead detail, Agents, Reminders, Deals, Users-admin).
+- [x] **Step 5: Update `README.md`** — add a **Web Dashboard** section after the API section: stack (Next.js App Router + Tailwind v4), run command (`npm run dev:web`, requires API on `:3000`), login with seeded credentials, session cookie `sa_session` (1h, re-login on expiry), proxy note (`/api/*` forwards with the session token; no CORS needed), and available pages (Dashboard, Leads, Lead detail, Agents, Reminders, Deals, Users-admin).
 
-- [ ] **Step 6: Full verification**
+- [x] **Step 6: Full verification**
 
 Run from `sales_assistant/`:
 1. `npm run lint` — all workspaces clean.
@@ -2156,7 +2156,7 @@ Run from `sales_assistant/`:
 5. Full E2E: `docker compose up -d` → `npm --workspace @sales_assistant/api run db:migrate:deploy` → `npm --workspace @sales_assistant/api run db:seed` → `npm --workspace @sales_assistant/api run start` → `npm run dev:web`.
    - Login `admin@acme.test/password123` → dashboard KPIs; create + score + assign + transition a lead; toggle agent availability; generate + dismiss reminders; create user; verify `/users` hidden for `user@acme.test` login; tokens expire → middleware redirects to `/login`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add sales_assistant/turbo.json sales_assistant/package.json sales_assistant/.env.example sales_assistant/README.md

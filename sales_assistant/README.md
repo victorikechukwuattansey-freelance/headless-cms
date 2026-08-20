@@ -128,6 +128,22 @@ Per-user (authenticated) or per-IP (anonymous), Redis-backed with in-memory fall
 Exempt: `/health`, `/metrics`, `/docs`, `/openapi.json`.
 Tunable via `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`.
 
+## Web Dashboard
+
+`apps/web` — Next.js App Router + Tailwind v4 dashboard. Server components fetch the API through an internal proxy using the session token; client components call `/api/*` and `router.refresh()`.
+
+Run it (API must be up on `:3000`):
+
+```bash
+npm run dev:web      # http://localhost:4000
+```
+
+Login with the seeded credentials (see above; `admin@acme.test / password123` for full access).
+
+- **Session:** httpOnly cookie `sa_session` set on login, 1-hour expiry, no refresh — re-login when it expires.
+- **Proxy:** `/api/*` forwards to `API_URL` (default `http://localhost:3000`), injecting the session token. No CORS needed.
+- **Pages:** Dashboard, Leads (list + detail — assign, score, transition), Agents (availability), Reminders (generate + dismiss), Deals (stage transition), Users (admin-only create user).
+
 ## Background Jobs
 
 Redis list-backed queue (`BRPOP`, retries with exponential backoff, max 3 attempts):

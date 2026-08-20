@@ -18,7 +18,9 @@
     "db:generate": "npm --workspace @sales_assistant/api run db:generate",
     "db:migrate": "npm --workspace @sales_assistant/api run db:migrate",
     "db:migrate:deploy": "npm --workspace @sales_assistant/api run db:migrate:deploy",
-    "db:seed": "npm --workspace @sales_assistant/api run db:seed"
+    "db:seed": "npm --workspace @sales_assistant/api run db:seed",
+    "dev:web": "npm --workspace @sales_assistant/web run dev",
+    "build:web": "npm --workspace @sales_assistant/web run build"
   },
   "devDependencies": {
     "turbo": "^2.3.3"
