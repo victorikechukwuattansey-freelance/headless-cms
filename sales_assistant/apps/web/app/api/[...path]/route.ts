@@ -13,11 +13,19 @@ async function proxy(req: NextRequest, path: string[]) {
   }
   const target = `${process.env.API_URL ?? 'http://localhost:3000'}/${path.join('/')}${req.nextUrl.search}`;
   const headers: Record<string, string> = { authorization: `Bearer ${session.token}` };
-  if (req.body && req.method !== 'GET' && req.method !== 'DELETE') headers['content-type'] = 'application/json';
+  const hasBody = req.body !== null;
+  if (hasBody) headers['content-type'] = 'application/json';
   let upstream: Response;
   try {
-    upstream = await fetch(target, { method: req.method, headers, body: req.body, cache: 'no-store' });
-  } catch {
+    upstream = await fetch(target, {
+      method: req.method,
+      headers,
+      body: hasBody ? req.body : undefined,
+      cache: 'no-store',
+      ...(hasBody ? { duplex: 'half' as const } : {}),
+    });
+  } catch (error) {
+    console.error('[proxy] upstream fetch failed', req.method, target, error);
     return NextResponse.json({ error: { code: 'INTERNAL', message: 'API unreachable' } }, { status: 502 });
   }
   const text = await upstream.text();

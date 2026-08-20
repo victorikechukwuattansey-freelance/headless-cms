@@ -1231,7 +1231,7 @@ git commit -m "feat(web): UI primitives and status maps"
 - Consumes: `getSession`, `apiRequest`, `Card`, `Badge`, `Table`, `REMINDER_BADGES`, `LEAD_BADGES`; proxy `POST /api/reminders/:id/dismiss`.
 - Produces: KPI grid from list `total`s; recent leads table; pending reminders panel with `DismissReminderButton` (client) that posts to `/api/reminders/{id}/dismiss` then `router.refresh()`.
 
-- [ ] **Step 1: Write `app/page.tsx`**:
+- [x] **Step 1: Write `app/page.tsx`**:
 
 ```tsx
 import { redirect } from 'next/navigation';
@@ -1324,7 +1324,7 @@ export default async function DashboardPage() {
 }
 ```
 
-- [ ] **Step 2: Write `src/components/reminder-actions.tsx`**:
+- [x] **Step 2: Write `src/components/reminder-actions.tsx`**:
 
 ```tsx
 'use client';
@@ -1352,7 +1352,7 @@ export function DismissReminderButton({ reminderId }: { reminderId: string }) {
 }
 ```
 
-- [ ] **Step 3: Verify + commit**
+- [x] **Step 3: Verify + commit**
 
 Run: `npm --workspace @sales_assistant/web run dev` (API on :3000, logged in per Task 3 steps) → http://localhost:4000 shows KPIs, recent leads, pending reminders; clicking **Dismiss** drops the reminder from the panel.
 Run: `npm --workspace @sales_assistant/web run lint && npm --workspace @sales_assistant/web run build` — expected clean.
