@@ -32,7 +32,7 @@
 - Consumes: nothing.
 - Produces: an Expo Router TypeScript app at `apps/mobile/` with scripts `start`, `android`, `ios`, `web`, `lint`; `EXPO_PUBLIC_API_URL` support.
 
-- [ ] **Step 1: Scaffold without installing**
+- [x] **Step 1: Scaffold without installing**
 
 From `sales_assistant/apps/`:
 
@@ -42,7 +42,7 @@ npx create-expo-app@latest mobile --template default --no-install
 
 Expected: `apps/mobile/` created with `package.json` (`name: mobile`, `main: expo-router/entry`), `app/`, `assets/`, `eslint.config.js`, `tsconfig.json` (extends `expo/tsconfig.base`, `strict: true`).
 
-- [ ] **Step 2: Rename package to `@sales_assistant/mobile` and strip example content**
+- [x] **Step 2: Rename package to `@sales_assistant/mobile` and strip example content**
 
 In `apps/mobile/package.json`: set `"name": "@sales_assistant/mobile"` and `"private": true` (keep everything else). Delete the example app content so only our screens remain:
 
@@ -54,7 +54,7 @@ Remove-Item -Recurse -Force components, constants, hooks, scripts -ErrorAction S
 
 (If the template version names these differently, delete whatever is outside `app/`, `assets/` and the config files.)
 
-- [ ] **Step 3: Add the workspace dependency and link through root npm**
+- [x] **Step 3: Add the workspace dependency and link through root npm**
 
 In `apps/mobile/package.json` `"dependencies"` add:
 
@@ -70,7 +70,7 @@ npm install
 
 Expected: `package-lock.json` gains `apps/mobile`; `node_modules/@sales_assistant/api-client` symlinks to `packages/api-client`.
 
-- [ ] **Step 4: Install expo-secure-store (version-matched)**
+- [x] **Step 4: Install expo-secure-store (version-matched)**
 
 From `sales_assistant/apps/mobile/`:
 
@@ -78,7 +78,7 @@ From `sales_assistant/apps/mobile/`:
 npx expo install expo-secure-store
 ```
 
-- [ ] **Step 5: Add mobile env example**
+- [x] **Step 5: Add mobile env example**
 
 Create `apps/mobile/.env.example`:
 
@@ -90,7 +90,7 @@ Create `apps/mobile/.env.example`:
 EXPO_PUBLIC_API_URL=http://localhost:3000
 ```
 
-- [ ] **Step 6: Verify scaffold health**
+- [x] **Step 6: Verify scaffold health**
 
 From `sales_assistant/apps/mobile/`:
 
@@ -117,7 +117,7 @@ config.resolver.nodeModulesPaths = [
 module.exports = config;
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add sales_assistant/apps/mobile sales_assistant/package-lock.json
@@ -138,7 +138,7 @@ git commit -m "feat(mobile): scaffold Expo Router app in apps/mobile"
   - `src/config.ts` — side-effect module; setting `process.env.API_URL` on import.
   - `src/session.ts` — `export interface Session { token: string; expiresAt: string; role: string }`, `saveSession(s: Session): Promise<void>`, `getSession(): Promise<Session | null>` (expiry-aware, clears expired), `clearSession(): Promise<void>`.
 
-- [ ] **Step 1: Write the API URL bridge**
+- [x] **Step 1: Write the API URL bridge**
 
 Create `apps/mobile/src/config.ts`:
 
@@ -148,7 +148,7 @@ process.env.API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000'
 
 (Metro inlines `EXPO_PUBLIC_API_URL` at bundle time; assigning it onto `process.env.API_URL` is what `@sales_assistant/api-client`'s `apiUrl()` reads. Import this module before any API call.)
 
-- [ ] **Step 2: Write the session store**
+- [x] **Step 2: Write the session store**
 
 Create `apps/mobile/src/session.ts`:
 
@@ -188,7 +188,7 @@ export async function clearSession(): Promise<void> {
 }
 ```
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 From `sales_assistant/apps/mobile/`:
 
@@ -198,7 +198,7 @@ npx tsc --noEmit
 
 Expected: clean (TS types resolve; `expo-secure-store` types come from the package).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add sales_assistant/apps/mobile/src
@@ -217,7 +217,7 @@ git commit -m "feat(mobile): session store (expo-secure-store) and API URL bridg
 - Consumes: `login` from `@sales_assistant/api-client` (POST `/auth/token`, returns `{status, json}`; 200 -> `json.token/expiresAt/role`); `saveSession` from `../src/session`; `../src/config` side effect.
 - Produces: `/login` route; on success `router.replace('/')`.
 
-- [ ] **Step 1: Write the root layout**
+- [x] **Step 1: Write the root layout**
 
 Replace `apps/mobile/app/_layout.tsx`:
 
@@ -230,7 +230,7 @@ export default function RootLayout() {
 }
 ```
 
-- [ ] **Step 2: Write the login screen**
+- [x] **Step 2: Write the login screen**
 
 Create `apps/mobile/app/login.tsx`:
 
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
 });
 ```
 
-- [ ] **Step 3: Typecheck + lint**
+- [x] **Step 3: Typecheck + lint**
 
 From `sales_assistant/apps/mobile/`:
 
@@ -319,7 +319,7 @@ npm run lint
 
 Expected: both clean.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add sales_assistant/apps/mobile/app
@@ -338,7 +338,7 @@ git commit -m "feat(mobile): login screen against the API"
 - Consumes: `getSession`, `clearSession`, `Session` from `../src/session`; `listLeads(token, {limit})` from `@sales_assistant/api-client` (`json.data` = leads with `{id, name?, phone}`, `json.total` = count); `../src/config` side effect.
 - Produces: `/` route (home). Layout behavior: no session -> `<Redirect href="/login" />`; login screen shows `<Redirect href="/" />` when a session exists.
 
-- [ ] **Step 1: Write the auth-gate layout**
+- [x] **Step 1: Write the auth-gate layout**
 
 Replace `apps/mobile/app/_layout.tsx`:
 
@@ -366,7 +366,7 @@ export default function RootLayout() {
 }
 ```
 
-- [ ] **Step 2: Redirect authed users away from /login**
+- [x] **Step 2: Redirect authed users away from /login**
 
 Append to `apps/mobile/app/login.tsx` (above the return in `LoginScreen`):
 
@@ -388,7 +388,7 @@ import { getSession, type Session } from '../src/session';
 
 (replacing the existing `import { router } from 'expo-router';` line).
 
-- [ ] **Step 3: Write the home screen**
+- [x] **Step 3: Write the home screen**
 
 Create `apps/mobile/app/index.tsx`:
 
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
 });
 ```
 
-- [ ] **Step 4: Typecheck + lint + web export**
+- [x] **Step 4: Typecheck + lint + web export**
 
 From `sales_assistant/apps/mobile/`:
 
@@ -512,7 +512,7 @@ npx expo export --platform web
 
 Expected: clean; `dist/` produced (Metro resolved `@sales_assistant/api-client` TS source).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add sales_assistant/apps/mobile/app
@@ -530,7 +530,7 @@ git commit -m "feat(mobile): auth gate and protected home screen"
 **Interfaces:**
 - Consumes: nothing. Completes the deliverable.
 
-- [ ] **Step 1: Update README structure tree**
+- [x] **Step 1: Update README structure tree**
 
 In `sales_assistant/README.md` structure tree, add under `apps/`:
 
@@ -540,7 +540,7 @@ In `sales_assistant/README.md` structure tree, add under `apps/`:
 
 (before the closing `├── packages/` line; keep the existing `web/` and `via/` lines).
 
-- [ ] **Step 2: Add a mobile section to the README**
+- [x] **Step 2: Add a mobile section to the README**
 
 Append after the "Run locally in VSCode" subsection (still inside the Web Dashboard section's area or as its own `## Mobile Client` section before `## Background Jobs`):
 
@@ -562,7 +562,7 @@ npx expo start               # scan QR with Expo Go
 - Session key `sa_session`; 1-hour token expiry, no refresh — re-login when it expires.
 ```
 
-- [ ] **Step 3: Full verification battery**
+- [x] **Step 3: Full verification battery**
 
 From `sales_assistant/`:
 
@@ -578,18 +578,18 @@ npm run test:repo
 
 Expected: mobile lint clean; `test:repo` (repo contract tests) all pass (verifies workspace list, via eslint config path, api-client surface unchanged).
 
-- [ ] **Step 4: Manual smoke (user)**
+- [x] **Step 4: Manual smoke (user)**
 
 1. `npm run dev` at `sales_assistant/` (API :3000, web :4000, worker up).
 2. `cd apps/mobile && npx expo start`, open in Expo Go.
 3. Login with `admin@acme.test / password123` -> lands on home, shows role + lead count + rows.
 4. Sign out -> returns to login. Relaunch app -> still logged in (session persisted). (Optional: kill + restart `npm run dev`, home shows "Cannot reach the API" + Retry works when stack is back.)
 
-- [ ] **Step 5: Tick the plan checklist**
+- [x] **Step 5: Tick the plan checklist**
 
 Tick every box in this plan. Run `git status --porcelain -- sales_assistant` and confirm only intended files are uncommitted.
 
-- [ ] **Step 6: Commit close-out**
+- [x] **Step 6: Commit close-out**
 
 ```bash
 git add sales_assistant/README.md sales_assistant/package-lock.json
