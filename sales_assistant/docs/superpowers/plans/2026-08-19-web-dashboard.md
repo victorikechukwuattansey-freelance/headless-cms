@@ -1374,7 +1374,7 @@ git commit -m "feat(web): dashboard page with KPIs, recent leads, reminder actio
 - Consumes: `listLeads`, `getLead`, `transitionLeadStatus`, `assignLead`, `scoreLead` (via proxy `/api/...` in client components); `LEAD_TRANSITIONS`, `LEAD_BADGES`, `Modal`, `Badge`, `Table`, `Button`.
 - Produces: `LeadsTable` (client: status filter, offset pagination, row actions assign/transition/score, then `router.refresh()`); `LeadActions` (client, shared by table + detail: transition select, assign select, score button).
 
-- [ ] **Step 1: Write `app/leads/page.tsx`** (server — initial data):
+- [x] **Step 1: Write `app/leads/page.tsx`** (server — initial data):
 
 ```tsx
 import { redirect } from 'next/navigation';
@@ -1403,7 +1403,7 @@ export default async function LeadsPage() {
 }
 ```
 
-- [ ] **Step 2: Write `app/leads/leads-table.tsx`** (client):
+- [x] **Step 2: Write `app/leads/leads-table.tsx`** (client):
 
 ```tsx
 'use client';
@@ -1495,7 +1495,7 @@ export function LeadsTable({ initial, agents }: { initial: Paginated<Lead>; agen
 }
 ```
 
-- [ ] **Step 3: Write `src/components/lead-actions.tsx`** (client):
+- [x] **Step 3: Write `src/components/lead-actions.tsx`** (client):
 
 ```tsx
 'use client';
@@ -1598,7 +1598,7 @@ export function LeadActions({
 }
 ```
 
-- [ ] **Step 4: Write `app/leads/[id]/page.tsx`** (server):
+- [x] **Step 4: Write `app/leads/[id]/page.tsx`** (server):
 
 ```tsx
 import { redirect, notFound } from 'next/navigation';
@@ -1671,7 +1671,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 }
 ```
 
-- [ ] **Step 5: Verify + commit** — manual: `/leads` filters/paginates; `Assign` modal → auto or agent; `Move to…` transitions per `LEAD_TRANSITIONS` (invalid → API 409 shows message); `Score` updates the score cell; `/leads/:id` renders detail. Lint + build clean. Then:
+- [x] **Step 5: Verify + commit** — manual: `/leads` filters/paginates; `Assign` modal → auto or agent; `Move to…` transitions per `LEAD_TRANSITIONS` (invalid → API 409 shows message); `Score` updates the score cell; `/leads/:id` renders detail. Lint + build clean. Then:
 
 ```bash
 git add sales_assistant/apps/web/app/leads sales_assistant/apps/web/src/components/lead-actions.tsx
