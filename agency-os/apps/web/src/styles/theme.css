@@ -1,0 +1,20 @@
+/* apps/web/src/styles/theme.css */
+:root {
+  --color-primary: 59 130 246;       /* blue-500 */
+  --color-primary-dark: 37 99 235;   /* blue-600 */
+  --color-surface: 255 255 255;
+  --color-background: 249 250 251;
+  --color-border: 229 231 235;
+  --color-text: 17 24 39;
+  --color-text-muted: 107 114 128;
+  --radius: 0.5rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+}
+
+[data-theme="dark"] {
+  --color-surface: 31 41 55;
+  --color-background: 17 24 39;
+  --color-border: 55 65 81;
+  --color-text: 249 250 251;
+  --color-text-muted: 156 163 175;
+}

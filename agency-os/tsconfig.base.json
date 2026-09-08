@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    /* Language & Runtime */
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+
+    /* Module System (FIXED) */
+    "module": "NodeNext",
+    "moduleResolution": "node16",
+
+    /* Strictness (global enforcement) */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    /* Interop */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+
+    /* Monorepo stability */
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    /* Build behavior */
+    "noEmit": true,
+    "incremental": true,
+
+    /* ESM correctness */
+    "isolatedModules": true,
+
+    /* Safety */
+    "noFallthroughCasesInSwitch": true
+  }
+}
