@@ -1,0 +1,9 @@
+business_name,industry,city,state,country,website,phone,public_email,contact_name,source,source_url
+Lone Star Heating & Cooling,HVAC,Austin,TX,US,https://lonestar-heating.example.com,(512) 555-0187,info@lonestar-heating.example.com,Maria Gonzales,google_maps,https://maps.google.com/place/lonestarheat
+Hill Country Plumbing,Plumbing,San Antonio,TX,US,https://hillcountry-plumbing.example.com,(210) 555-0143,hello@hillcountry-plumbing.example.com,Dana Whitfield,business_directory,https://bbb.org/hillcountry
+Capital City HVAC Services,HVAC,Austin,TX,US,https://capitalcity-hvac.example.com,(512) 555-0299,service@capitalcity-hvac.example.com,Rachel Kim,google_maps,https://maps.google.com/place/capitalcity
+Blue Bonnet Electric,Electrical,San Antonio,TX,US,https://bluebonnet-electric.example.com,(210) 555-0311,jobs@bluebonnet-electric.example.com,Tim Howard,business_directory,https://bbb.org/bluebonnet
+Lone Star HVAC,HVAC,Houston,TX,US,https://lonestar-hvac.example.com,(713) 555-0455,office@lonestar-hvac.example.com,James Lee,google_maps,https://maps.google.com/place/lonestarhvac
+Hilltop Roofing & Restoration,Roofing,Austin,TX,US,https://hilltop-roofing.example.com,(512) 555-0677,estimates@hilltop-roofing.example.com,Pam Neville,business_directory,https://bbb.org/hilltop
+Lonestar Climate Control,HVAC,San Antonio,TX,US,https://lonestar-climate.example.com,(210) 555-0788,info@lonestar-climate.example.com,Kim Sato,google_maps,https://maps.google.com/place/lonestarclimate
+Alamo City Contractors,General Contracting,San Antonio,TX,US,https://alamo-city.example.com,(210) 555-0910,contact@alamo-city.example.com,Ana Rivera,google_maps,https://maps.google.com/place/alamocity

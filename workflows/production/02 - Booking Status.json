@@ -1,0 +1,1038 @@
+{
+  "name": "02 - Booking Status",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "booking-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c060136c-009a-427d-a618-7758f9da0634",
+      "name": "Booking Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        16
+      ],
+      "webhookId": "webhook-booking-status-01",
+      "notes": "POST /booking-status. Receives booking confirmations from the booking provider. Header X-Lead-Engine-Secret must match $vars.LEAD_ENGINE_SECRET. Responds only after a Respond To Webhook node runs."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-secret-eq",
+              "leftValue": "={{ $json.headers['x-lead-engine-secret'] }}",
+              "rightValue": "={{ $vars.LEAD_ENGINE_SECRET }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "34273dbc-c529-4e36-a5fd-47b240b96cf2",
+      "name": "Valid Ingress Secret?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        16
+      ],
+      "notes": "Security gate BEFORE any Google Sheets lookup or business logic (live-validated V4.3 pattern: headers live at $json.headers on webhook v2 output; secret lives in n8n Variables)."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'unauthorized', code: 401 }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "20906f24-6185-4209-8d04-241795fff823",
+      "name": "Respond 401 Invalid Secret",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-ref-lead",
+              "leftValue": "={{ $json.body.lead_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-ref-booking",
+              "leftValue": "={{ $json.body.booking_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "74ce2f2b-307c-4e3d-aa88-3b0f0669e75e",
+      "name": "Booking Reference Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Requires a lead_id OR booking_id in the request body (webhook v2 nests payload under body)."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'missing_field', field: 'lead_id|booking_id', code: 400 }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "da8e11ea-ea86-49bc-9ba6-5eb6864f169d",
+      "name": "Respond 400 Missing Reference",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        208,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "options": {}
+      },
+      "id": "c30b274a-69d0-43e5-9437-6c0b23fbb35f",
+      "name": "Read Existing Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        208,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Reads ALL leads rows; resolution + tenant scoping happens in the Code node."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 909369209,
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=909369209"
+        },
+        "options": {}
+      },
+      "id": "548e3ea8-cb0a-4275-91ae-75ab2f8b67bb",
+      "name": "Read Existing Bookings",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        416,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Reads existing bookings so repeated booking_id events can be detected for idempotency (TEST 2). If your n8n version has no name mode on this field, reselect the bookings tab from the dropdown once."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "business_config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "e0c8f976-b910-44ee-b506-30dbea6180ed",
+      "name": "Get Business Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        624,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Sequential read chain (live-validated topology): each read is guaranteed to execute before the resolve node references it via $('Node Name')."
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook = $('Booking Status Webhook').first().json;\nconst body = webhook.body ?? webhook;\n\nconst leads = $('Read Existing Leads').all();\nconst bookings = $('Read Existing Bookings').all();\nconst cfgJson = $('Get Business Config').first()?.json ?? null;\n\nconst bid = body.business_id ? String(body.business_id).trim() : '';\n\n// Exact business_id match only: a lead can never be resolved against another business's config.\nconst config =\n  cfgJson && String(cfgJson.business_id || '').trim() === bid ? cfgJson : null;\n\nfunction digits(v) {\n  return String(v || '').replace(/\\D/g, '');\n}\n\n// Resolution order (tenant-scoped): lead_id+business_id -> phone+business_id -> email+business_id.\nlet lead = null;\nconst wantId = body.lead_id ? String(body.lead_id).trim() : '';\nif (wantId) {\n  lead =\n    leads.find(\n      (r) =>\n        String(r.json.lead_id || '').trim() === wantId &&\n        String(r.json.business_id || '').trim() === bid\n    ) || null;\n}\nif (!lead && body.phone) {\n  const p = digits(body.phone);\n  if (p) {\n    lead =\n      leads.find(\n        (r) => digits(r.json.phone) === p && String(r.json.business_id || '').trim() === bid\n      ) || null;\n  }\n}\nif (!lead && body.email) {\n  const e = String(body.email).trim().toLowerCase();\n  if (e) {\n    lead =\n      leads.find(\n        (r) =>\n          String(r.json.email || '').trim().toLowerCase() === e &&\n          String(r.json.business_id || '').trim() === bid\n      ) || null;\n  }\n}\n\n// Idempotent replay detection: same booking_id within the same business already recorded?\nconst incomingBookingId = body.booking_id ? String(body.booking_id).trim() : '';\nconst duplicateBooking = !!(\n  incomingBookingId &&\n  bookings.some(\n    (r) =>\n      String(r.json.booking_id || '').trim() === incomingBookingId &&\n      String(r.json.business_id || '').trim() === bid\n  )\n);\n\nconst booking = {\n  booking_id:\n    incomingBookingId || 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10),\n  lead_id: lead ? String(lead.json.lead_id || '') : wantId,\n  business_id: bid,\n  created_at: new Date().toISOString(),\n  booking_at: body.booking_at ? String(body.booking_at) : new Date().toISOString(),\n  source: body.source ? String(body.source) : 'booking_provider',\n  status: body.status ? String(body.status) : 'confirmed'\n};\n\nfunction esc(v) {\n  return String(v == null ? '' : v)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}\n\nreturn [\n  {\n    json: {\n      _leadFound: !!lead,\n      _configFound: !!config,\n      _duplicateBooking: duplicateBooking,\n      lead: lead ? lead.json : null,\n      booking: booking,\n      business_name: config ? config.business_name || '' : '',\n      owner_email: config ? config.owner_email || '' : '',\n      reply_to_email: config ? config.reply_to_email || '' : '',\n      from_email: config ? config.from_email || '' : '',\n      _esc_lead_id: esc(booking.lead_id),\n      _esc_booking_id: esc(booking.booking_id),\n      _esc_business_name: esc(config ? config.business_name || '' : ''),\n      _esc_name: lead ? esc(lead.json.name) : '',\n      _esc_phone: lead ? esc(lead.json.phone) : '',\n      _esc_service: lead ? esc(lead.json.service) : '',\n      _esc_booking_at: esc(booking.booking_at),\n      _esc_booking_link: lead ? esc(lead.json.booking_link) : ''\n    }\n  }\n];"
+      },
+      "id": "974e555b-b262-4da0-ba87-4baf02dd4181",
+      "name": "Resolve Lead & Booking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "notes": "Resolves the lead strictly within business_id (no cross-business resolution), detects replayed booking_ids, builds the booking record, and emits HTML-escaped copies for the owner email. Reads all prior nodes explicitly by name."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-found",
+              "leftValue": "={{ $json._leadFound }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ff742b3a-ccd4-4f55-af1d-2ce207351321",
+      "name": "Lead Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'lead_not_found', code: 404 }) }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "5c06f82e-8790-4b54-a096-7936ad58cb9a",
+      "name": "Respond 404 Lead Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        160
+      ],
+      "notes": "No booking append and no lead update happen on this path."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-dupbook",
+              "leftValue": "={{ $json._duplicateBooking }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b341dc94-e529-43b5-be4f-fc3ed01546ff",
+      "name": "Booking Already Recorded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1248,
+        0
+      ],
+      "notes": "Idempotency gate: repeated booking-status events for the same booking_id never append a second bookings row nor touch the lead again."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'booked', duplicate: true, lead_id: $('Resolve Lead & Booking').first().json.booking.lead_id, booking_id: $('Resolve Lead & Booking').first().json.booking.booking_id, code: 200 }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "1def4b59-f1c6-49b9-b7cb-a70da3cba7b9",
+      "name": "Respond 200 Idempotent Replay",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1456,
+        160
+      ],
+      "notes": "Safe idempotent response for duplicate booking events; state was already committed on the first event."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Resolve Lead & Booking').first().json;\nconst b = r.booking || {};\nreturn [\n  {\n    json: {\n      booking_id: b.booking_id,\n      lead_id: b.lead_id,\n      business_id: b.business_id,\n      created_at: b.created_at,\n      booking_at: b.booking_at,\n      source: b.source,\n      status: b.status\n    }\n  }\n];"
+      },
+      "id": "76efcfaf-9dae-4783-8b7b-006c2451084d",
+      "name": "Prep Booking Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        0
+      ],
+      "notes": "Flattens the booking record into the exact bookings tab column set."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "bookings",
+          "mode": "name"
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "booking_id",
+              "fieldValue": "={{ $json.booking_id }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "fieldId": "business_id",
+              "fieldValue": "={{ $json.business_id }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "booking_at",
+              "fieldValue": "={{ $json.booking_at }}"
+            },
+            {
+              "fieldId": "source",
+              "fieldValue": "={{ $json.source }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "903d83df-ba1b-4c20-8ed8-9743272c4b5e",
+      "name": "Append Booking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        1664,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Explicit field mapping to the exact bookings headers (live-proven append shape from Lead Intake V4.3)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Resolve Lead & Booking').first().json;\nconst lead = r.lead || {};\nconst b = r.booking || {};\nconst now = new Date().toISOString();\n\n// Prefer the stable webhook lead_id when supplied; fall back to the resolved lead.\nconst webhook = $('Booking Status Webhook').first().json;\nconst body = webhook.body ?? webhook;\nconst whLeadId = body.lead_id ? String(body.lead_id).trim() : '';\nconst matchLeadId = whLeadId || String(lead.lead_id || b.lead_id || '');\n\n// Capture status BEFORE Update Lead Booked changes it.\nconst oldStatus = String(lead.status || '').trim();\n\nreturn [\n  {\n    json: Object.assign({}, lead, {\n      lead_id: matchLeadId,\n\n      // Booking update\n      booked: 'TRUE',\n      booked_at: b.booking_at,\n      booking_id: b.booking_id,\n      status: 'booked',\n      next_followup_at: '',\n      updated_at: now,\n\n      // Status audit information\n      _old_status: oldStatus,\n      _new_status: 'booked',\n      _updated_by: 'booking_status',\n      _status_update_notes: b.booking_id\n        ? `Booking ID: ${b.booking_id}`\n        : 'Lead booked',\n\n      booking_link: lead.booking_link || '',\n      business_name: r.business_name,\n      owner_email: r.owner_email,\n      from_email: r.from_email,\n      reply_to_email: r.reply_to_email,\n\n      _esc_lead_id: r._esc_lead_id,\n      _esc_booking_id: r._esc_booking_id,\n      _esc_business_name: r._esc_business_name,\n      _esc_name: r._esc_name,\n      _esc_phone: r._esc_phone,\n      _esc_service: r._esc_service,\n      _esc_booking_at: r._esc_booking_at,\n      _esc_booking_link: r._esc_booking_link\n    })\n  }\n];"
+      },
+      "id": "ff0d5506-b016-4881-9fdf-b3e4c0d13a73",
+      "name": "Prep Lead Booked Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        0
+      ],
+      "notes": "Marks the matched lead booked (booked=TRUE, booked_at=booking.booking_at, booking_id, status=booked, next_followup_at cleared, updated_at refreshed) and carries email context. Reads authoritative data via $('Resolve Lead & Booking'), not Sheets output shape."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "columnToMatchOn": "lead_id",
+        "valueToMatchOn": "={{ ($('Booking Status Webhook').first().json.body || $('Booking Status Webhook').first().json).lead_id || $('Prep Lead Booked Update').first().json.lead_id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "booked",
+              "fieldValue": "={{ $('Prep Lead Booked Update').first().json.booked }}"
+            },
+            {
+              "column": "booked_at",
+              "fieldValue": "={{ $('Prep Lead Booked Update').first().json.booked_at }}"
+            },
+            {
+              "column": "booking_id",
+              "fieldValue": "={{ $('Prep Lead Booked Update').first().json.booking_id }}"
+            },
+            {
+              "column": "status",
+              "fieldValue": "={{ $('Prep Lead Booked Update').first().json.status }}"
+            },
+            {
+              "column": "next_followup_at",
+              "fieldValue": "={{ $('Prep Lead Booked Update').first().json.next_followup_at }}"
+            },
+            {
+              "column": "updated_at",
+              "fieldValue": "={{ $('Prep Lead Booked Update').first().json.updated_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3d19940b-e77e-42a5-b13b-be9a25298b54",
+      "name": "Update Lead Booked",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        2080,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Updates the EXISTING lead row matched by Column to Match On = lead_id (never row_number, never creates a second row). Match value prefers the stable webhook lead_id per the live-validated pattern."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-owner-present",
+              "leftValue": "={{ $('Prep Lead Booked Update').first().json.owner_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-from-present",
+              "leftValue": "={{ $('Prep Lead Booked Update').first().json.from_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "749ccc35-5661-4c78-a109-10a002aa67a6",
+      "name": "Owner Email Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2288,
+        32
+      ],
+      "notes": "Owner email is attempted only when BOTH owner_email AND from_email are present. Conditions reference the Prep node because Google Sheets update output shape is not relied upon."
+    },
+    {
+      "parameters": {},
+      "id": "d1e12053-076b-418c-a3b6-62e013612afe",
+      "name": "Skip Owner Email",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2512,
+        224
+      ],
+      "notes": "Clean skip when owner/from email config missing; booking state is already committed."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Prep Lead Booked Update').first().json.from_email }}",
+        "toEmail": "={{ $('Prep Lead Booked Update').first().json.owner_email }}",
+        "subject": "={{ 'Booking confirmed — ' + $('Prep Lead Booked Update').first().json.business_name + ' — Lead ' + $('Prep Lead Booked Update').first().json.lead_id }}",
+        "html": "={{ `<h3>Booking confirmed</h3><p><b>${$json._esc_business_name}</b></p><table cellpadding=\"4\"><tr><td><b>Lead ID</b></td><td>${$json._esc_lead_id}</td></tr><tr><td><b>Booking ID</b></td><td>${$json._esc_booking_id}</td></tr><tr><td><b>Name</b></td><td>${$json._esc_name}</td></tr><tr><td><b>Phone</b></td><td>${$json._esc_phone}</td></tr><tr><td><b>Service</b></td><td>${$json._esc_service}</td></tr><tr><td><b>Booked at</b></td><td>${$json._esc_booking_at}</td></tr></table>${$json._esc_booking_link ? '<p>Booking link: <a href=\"' + $json._esc_booking_link + '\">' + $json._esc_booking_link + '</a></p>' : ''}` }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b9c67575-b238-44c0-a95e-681409154df2",
+      "name": "Owner Booking Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2496,
+        0
+      ],
+      "webhookId": "a7f0c2d1-3e44-4a55-9b66-2f81d0c5e701",
+      "credentials": {
+        "smtp": {
+          "id": "uRV9Wct3Ugjxu9hk",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "FRESH native Email Send node (n8n-nodes-base.emailSend v2.1 — replaces obsolete n8n-nodes-base.sendEmail). Same SMTP credential proven in Lead Intake V4.3. n8n attribution footer disabled. onError isolates SMTP failure: booking stays committed either way."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'booked', lead_id: $('Prep Lead Booked Update').first().json.lead_id, booking_id: $('Prep Lead Booked Update').first().json.booking_id, code: 200 }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "18bc194e-eb2a-426b-9174-a887deab91ba",
+      "name": "Respond 200 Booked",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2720,
+        0
+      ],
+      "notes": "Terminal success response. Reads via node reference so it is identical whether the owner email succeeded or failed. Owner-email success AND error outputs both converge here."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 68953102,
+          "mode": "list",
+          "cachedResultName": "status_updates",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=68953102"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "created_at": "={{ $json.created_at }}",
+            "business_id": "={{ $json.business_id }}",
+            "update_id": "={{ 'upd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) }}",
+            "updated_by": "={{ $json._updated_by }}",
+            "new_status": "={{ $json._new_status }}",
+            "old_status": "={{ $json._old_status }}",
+            "notes": "={{ $json._status_update_notes }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "update_id",
+              "displayName": "update_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_id",
+              "displayName": "business_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "old_status",
+              "displayName": "old_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "new_status",
+              "displayName": "new_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_by",
+              "displayName": "updated_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2080,
+        352
+      ],
+      "id": "9c181d78-97b6-40f7-aea0-fe0f90020744",
+      "name": "Append Status Update",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Booking Status Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "victor-i-attansey.app.n8n.cloud",
+            "user-agent": "PostmanRuntime/2.4.0",
+            "content-length": "139",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cache-control": "no-cache",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "197.211.63.31",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "NG",
+            "cf-ray": "a30b3eb99a2e772c-LHR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "postman-token": "0a8bdee2-42c5-4ede-9759-5846bed4b719",
+            "x-forwarded-for": "197.211.63.31, 172.70.85.192",
+            "x-forwarded-host": "victor-i-attansey.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-50-7595cd7f4d-92vxh",
+            "x-is-trusted": "yes",
+            "x-lead-engine-secret": "REDACTED_LEAD_ENGINE_SECRET_PLACEHOLDER",
+            "x-real-ip": "197.211.63.31"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "business_id": "BIZ-1001",
+            "lead_id": "lead_1787481951589_nml9461c",
+            "new_status": "booked",
+            "booking_id": "TEST-BOOK-004"
+          },
+          "webhookUrl": "https://victor-i-attansey.app.n8n.cloud/webhook/booking-status",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Booking Status Webhook": {
+      "main": [
+        [
+          {
+            "node": "Valid Ingress Secret?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Ingress Secret?": {
+      "main": [
+        [
+          {
+            "node": "Booking Reference Present?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Invalid Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Reference Present?": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400 Missing Reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Leads": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Bookings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Bookings": {
+      "main": [
+        [
+          {
+            "node": "Get Business Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Business Config": {
+      "main": [
+        [
+          {
+            "node": "Resolve Lead & Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Lead & Booking": {
+      "main": [
+        [
+          {
+            "node": "Lead Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Found?": {
+      "main": [
+        [
+          {
+            "node": "Booking Already Recorded?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 404 Lead Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Already Recorded?": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Idempotent Replay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Booking Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Booking Row": {
+      "main": [
+        [
+          {
+            "node": "Append Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Booking": {
+      "main": [
+        [
+          {
+            "node": "Prep Lead Booked Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Lead Booked Update": {
+      "main": [
+        [
+          {
+            "node": "Update Lead Booked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead Booked": {
+      "main": [
+        [
+          {
+            "node": "Append Status Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Owner Email Present?": {
+      "main": [
+        [
+          {
+            "node": "Owner Booking Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Owner Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Owner Booking Notification": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Booked",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 200 Booked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Owner Email": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Booked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Status Update": {
+      "main": [
+        [
+          {
+            "node": "Owner Email Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "SuNIguJ8C1KufJr1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "06596203-3dfc-4f53-ae9b-1cf86ffaab19",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "88fdbfb8f9bacae964af8d777638cfdc15061641bcbefecfdd7746e4a39e2b48"
+  },
+  "nodeGroups": [],
+  "id": "t2emFUg50JoXbJU0",
+  "tags": []
+}

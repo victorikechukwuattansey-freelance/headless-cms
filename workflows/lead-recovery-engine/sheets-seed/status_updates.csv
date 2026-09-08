@@ -1,0 +1,2 @@
+update_id,created_at,lead_id,business_id,old_status,new_status,updated_by,notes
+upd_1755700000002,2026-08-21T10:01:00.000Z,lead_1755693000001_a1b2c3d4,biz_lonestar_hvac,new,contacted,operator,Called customer and left voicemail

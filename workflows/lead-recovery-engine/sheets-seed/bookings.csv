@@ -1,0 +1,2 @@
+booking_id,lead_id,business_id,created_at,booking_at,source,status
+bk_1755700000001,lead_1755693000001_a1b2c3d4,biz_lonestar_hvac,2026-08-21T10:00:00.000Z,2026-08-22T09:00:00.000Z,booking_provider,confirmed

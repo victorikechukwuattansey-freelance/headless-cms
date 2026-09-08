@@ -1,0 +1,774 @@
+{
+  "_meta": {
+    "version": "V4.3",
+    "description": "Test payloads for the Texas Home Services Lead Recovery Engine n8n MVP — V4.3 security/configuration patch (01-lead-intake-v4.3). T01–T20 are the preserved V4.2 regression cases; B01–B07 and E01–E04 are the new V4.3 booking-URL and owner-email tests.",
+    "booking_note": "B01–B05/B06–B07 exercise the V4.3 HTTPS-only booking-URL validation. B03/B04/B05 use biz_hillcountry_plumbing (which has an EMPTY config booking_link) so an invalid request link resolves to 'absent'. B06/B07 use biz_lonestar_hvac (which HAS a config booking_link) to verify the trusted-config fallback.",
+    "owner_email_note": "E01–E04 exercise the V4.3 owner-email gate (owner_email AND from_email). E01 uses biz_lonestar_hvac (both present). E02–E04 require business_config rows with the specified email fields blank; create those rows (active=TRUE) before running.",
+    "note": "Each test lists the target workflow, HTTP method, required headers, JSON body, and expected behavior across: workflow_path, http_response, lead_sheet_result, follow_up_result, email_behavior, error_behavior.",
+    "headers_note": "Set X-Lead-Engine-Secret to the value configured as the LEAD_ENGINE_SECRET environment variable on the n8n instance.",
+    "concurrency_note": "Google Sheets duplicate detection is retry-aware but NOT transactionally race-safe under concurrent requests (T07 documents this limitation).",
+    "tenant_scope_note": "All duplicate comparisons (idempotency_key, source_id, phone, email) are scoped by business_id. T03 and T05 verify that identical keys/source IDs across DIFFERENT businesses are NOT treated as duplicates."
+  },
+  "tests": [
+    {
+      "id": "T01",
+      "name": "Valid lead",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-001",
+        "name": "John Carter",
+        "phone": "+1 (512) 555-0142",
+        "email": "john.carter@example.com",
+        "message": "I need an AC quote for my 3,000 sq ft home in Austin.",
+        "service": "HVAC",
+        "city": "Austin",
+        "state": "TX",
+        "zip": "78701",
+        "urgency": "normal"
+      },
+      "expected": {
+        "workflow_path": "Webhook -> secret -> business_id -> config -> normalize -> business valid -> existing leads -> duplicate check -> NOT duplicate -> Append Lead -> Compute Next Follow-up -> Update Lead Next Follow-up -> Respond 200 Created; then fan-out to Prepare Email Content -> customer + owner email branches",
+        "http_response": "200 { status: 'created', lead_id, score, urgency, code: 200 }",
+        "lead_sheet_result": "One row appended to `leads` (status=new, idempotency_key=biz_lonestar_hvac|web_form|form-v42-001).",
+        "follow_up_result": "next_followup_at persisted on that row (now + followup_delay_hours).",
+        "email_behavior": "Customer acknowledgment + owner notification both attempted (independent branches).",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "T02",
+      "name": "Duplicate idempotency key — same business",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "idempotency_key": "idem-v42-same-001",
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "name": "Ana Ruiz",
+        "phone": "5125550200",
+        "email": "ana.ruiz@example.com",
+        "message": "Retry with same idempotency key, same business."
+      },
+      "expected": {
+        "workflow_path": "Send T02 twice with the SAME idempotency_key and SAME business_id. Second call -> idempotency_key + business_id match -> Is Duplicate? TRUE -> Respond 200 Duplicate Accepted",
+        "http_response": "First: 200 created. Second: 200 { status: 'accepted', duplicate: true, reason: 'idempotency_key', lead_id, code: 200 }",
+        "lead_sheet_result": "Exactly ONE lead row across both calls.",
+        "follow_up_result": "next_followup_at set once (first call only).",
+        "email_behavior": "Emails sent only on the first call.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "T03",
+      "name": "Duplicate idempotency key — DIFFERENT business (tenant scope)",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "idempotency_key": "idem-v42-same-001",
+        "business_id": "biz_hillcountry_plumbing",
+        "source_type": "web_form",
+        "name": "Bob Rivera",
+        "phone": "2105550177",
+        "email": "bob.rivera@example.com",
+        "message": "Same idempotency key but a DIFFERENT business. Must NOT be a duplicate."
+      },
+      "expected": {
+        "workflow_path": "idempotency_key matches an existing row, but business_id differs -> NOT a duplicate -> Append Lead -> ... -> Respond 200 Created",
+        "http_response": "200 created (NOT a duplicate response)",
+        "lead_sheet_result": "A NEW lead row is created for biz_hillcountry_plumbing (tenant isolation preserved).",
+        "follow_up_result": "next_followup_at persisted on the new row.",
+        "email_behavior": "Emails attempted for the new lead.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "T04",
+      "name": "Duplicate source ID — same business",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-001",
+        "name": "John Carter",
+        "phone": "+1 (512) 555-0198",
+        "email": "different.email@example.com",
+        "message": "Same upstream source_id re-delivered, same business."
+      },
+      "expected": {
+        "workflow_path": "source_id + source_type + business_id match T01 -> duplicate (source_id)",
+        "http_response": "200 { status: 'accepted', duplicate: true, reason: 'source_id', code: 200 }",
+        "lead_sheet_result": "No new row.",
+        "follow_up_result": "No change.",
+        "email_behavior": "No new emails.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "T05",
+      "name": "Source ID same value — DIFFERENT business (tenant scope)",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_hillcountry_plumbing",
+        "source_type": "web_form",
+        "source_id": "form-v42-001",
+        "name": "Carla Nguyen",
+        "phone": "2105550178",
+        "email": "carla.nguyen@example.com",
+        "message": "Same source_id as T01 but different business. Must NOT be a duplicate."
+      },
+      "expected": {
+        "workflow_path": "source_id matches, but business_id differs -> NOT a duplicate -> Append Lead -> Respond 200 Created",
+        "http_response": "200 created",
+        "lead_sheet_result": "A NEW lead row created for biz_hillcountry_plumbing.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Emails attempted.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "T06",
+      "name": "Duplicate phone (digits-only normalization)",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-006",
+        "name": "Johnny Carter",
+        "phone": "5125550142",
+        "email": "johnny@example.com",
+        "message": "Same phone digits, new source id."
+      },
+      "expected": {
+        "workflow_path": "phone digits match T01 phone after normalization + same business_id -> duplicate (phone)",
+        "http_response": "200 duplicate accepted (reason phone)",
+        "lead_sheet_result": "No new row.",
+        "follow_up_result": "No change.",
+        "email_behavior": "No new emails.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "T07",
+      "name": "Concurrent duplicate limitation (documented, not race-safe)",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-007",
+        "name": "Concurrent User",
+        "phone": "5125550203",
+        "email": "concurrent@example.com",
+        "message": "Fired twice nearly simultaneously."
+      },
+      "expected": {
+        "workflow_path": "Two identical requests sent at the same time can BOTH pass the read-then-append duplicate check before either sees the other's row.",
+        "http_response": "Both may return 200 created (or one duplicate, depending on timing).",
+        "lead_sheet_result": "TWO rows may be created. KNOWN concurrency limitation — retry-aware but not transactionally race-safe.",
+        "follow_up_result": "Both rows get next_followup_at.",
+        "email_behavior": "Emails may be sent twice.",
+        "error_behavior": "None; documented limitation, not a failure. Production fix = unique index on idempotency_key."
+      }
+    },
+    {
+      "id": "T08",
+      "name": "Duplicate email",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-008",
+        "name": "J. Carter",
+        "phone": "5125550202",
+        "email": "  JOHN.CARTER@EXAMPLE.COM  ",
+        "message": "Same normalized email, new phone."
+      },
+      "expected": {
+        "workflow_path": "email lowercased+trimmed matches T01 email + same business_id -> duplicate (email)",
+        "http_response": "200 duplicate accepted (reason email)",
+        "lead_sheet_result": "No new row.",
+        "follow_up_result": "No change.",
+        "email_behavior": "No new emails.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "T09",
+      "name": "Invalid secret",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "WRONG-SECRET", "Content-Type": "application/json" },
+      "body": { "business_id": "biz_lonestar_hvac", "name": "Should Fail", "email": "fail@example.com" },
+      "expected": {
+        "workflow_path": "Valid Ingress Secret? FALSE -> Respond 401 (before any Sheets access)",
+        "http_response": "401 { status: 'error', error: 'unauthorized', code: 401 }",
+        "lead_sheet_result": "None.",
+        "follow_up_result": "None.",
+        "email_behavior": "None.",
+        "error_behavior": "None (expected 401)."
+      }
+    },
+    {
+      "id": "T10",
+      "name": "Missing business ID",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": { "name": "No Biz", "email": "nobiz@example.com", "message": "no business id" },
+      "expected": {
+        "workflow_path": "Business ID Present? FALSE -> Respond 400 Missing business_id",
+        "http_response": "400 { status: 'error', error: 'missing_field', field: 'business_id', code: 400 }",
+        "lead_sheet_result": "None.",
+        "follow_up_result": "None.",
+        "email_behavior": "None.",
+        "error_behavior": "None (expected 400)."
+      }
+    },
+    {
+      "id": "T11",
+      "name": "Unknown business",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": { "business_id": "biz_does_not_exist", "name": "Ghost", "email": "ghost@example.com", "phone": "5125550204", "message": "no such business" },
+      "expected": {
+        "workflow_path": "config not found -> Business Valid & Active? FALSE -> Respond 403",
+        "http_response": "403 { status: 'error', error: 'business_invalid_or_inactive', code: 403 }",
+        "lead_sheet_result": "None.",
+        "follow_up_result": "None.",
+        "email_behavior": "None.",
+        "error_behavior": "None (expected 403)."
+      }
+    },
+    {
+      "id": "T12",
+      "name": "Inactive business",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": { "business_id": "biz_deadwood_remodels", "name": "Closed Biz", "email": "closed@example.com", "phone": "5125550205", "message": "business inactive" },
+      "expected": {
+        "workflow_path": "config found but active=false -> Business Valid & Active? FALSE -> Respond 403",
+        "http_response": "403 business_invalid_or_inactive",
+        "lead_sheet_result": "None.",
+        "follow_up_result": "None.",
+        "email_behavior": "None.",
+        "error_behavior": "None (expected 403)."
+      }
+    },
+    {
+      "id": "T13",
+      "name": "Customer email missing",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-013",
+        "name": "Rita Sosa",
+        "phone": "5125550199",
+        "message": "Furnace not igniting.",
+        "service": "Heating"
+      },
+      "expected": {
+        "workflow_path": "no email -> Customer Email Present? FALSE -> Skip Customer Email; Owner branch still runs; lead persists + responds",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead row persisted.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Customer email SKIPPED; owner notification attempted.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "T14",
+      "name": "Owner email missing",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_hillcountry_plumbing",
+        "source_type": "web_form",
+        "source_id": "form-v42-014",
+        "name": "No Owner",
+        "phone": "5125550213",
+        "email": "noowner@example.com",
+        "message": "Plumbing config has no owner_email."
+      },
+      "expected": {
+        "workflow_path": "Owner Email Present? FALSE -> Skip Owner Email; lead persists + responds",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead row persisted.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Owner notification SKIPPED; customer acknowledgment attempted.",
+        "error_behavior": "None (missing owner email is safe)."
+      }
+    },
+    {
+      "id": "T15",
+      "name": "Customer email failure is isolated",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-015",
+        "name": "Email Fail Customer",
+        "phone": "5125550206",
+        "email": "bad-host@invalid.invalid",
+        "message": "Customer email will fail / SMTP errors.",
+        "service": "HVAC"
+      },
+      "expected": {
+        "workflow_path": "Customer Acknowledgment errors -> onError continueErrorOutput -> Build Customer Email Error Record -> Append Customer Email Error. Owner branch independent. Response already sent.",
+        "http_response": "200 created (email failure does NOT change response)",
+        "lead_sheet_result": "Lead persisted.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Customer email FAILS and is logged; owner notification still attempted.",
+        "error_behavior": "SMTP error sanitized + logged to `errors` (node=Customer Acknowledgment); no leak to customer; no second lead."
+      }
+    },
+    {
+      "id": "T16",
+      "name": "Owner email failure is isolated",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-016",
+        "name": "Owner Fail Test",
+        "phone": "5125550207",
+        "email": "ownerok@example.com",
+        "message": "Owner recipient invalid -> SMTP errors."
+      },
+      "expected": {
+        "workflow_path": "Owner Notification errors -> continueErrorOutput -> Build Owner Email Error Record -> Append Owner Email Error. Customer branch independent.",
+        "http_response": "200 created (owner email failure does NOT change response)",
+        "lead_sheet_result": "Lead persisted.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Owner email FAILS and is logged; customer acknowledgment still attempted.",
+        "error_behavior": "Owner email failure sanitized + logged; lead remains valid."
+      }
+    },
+    {
+      "id": "T17",
+      "name": "HTML injection",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-017",
+        "name": "<img src=x onerror=alert(1)>",
+        "phone": "5125550210",
+        "email": "xss@example.com",
+        "message": "<script>alert('hi')</script> <b>bold</b> & <i>tag</i>",
+        "service": "HVAC & Repairs",
+        "city": "<svg/onload=alert(2)>",
+        "state": "TX",
+        "zip": "78701"
+      },
+      "expected": {
+        "workflow_path": "Normalize stores raw values in the lead row but emits HTML-escaped _esc_* copies for the email templates.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Raw message/name stored unchanged in `leads` (plain storage).",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Emails render ESCAPED values (&lt;script&gt;, &amp;, &quot;) — no HTML/script executes.",
+        "error_behavior": "None; injection neutralized."
+      }
+    },
+    {
+      "id": "T18",
+      "name": "Booking link attribution",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-018",
+        "name": "Booking Link User",
+        "phone": "5125550211",
+        "email": "book@example.com",
+        "message": "Business config has a booking_link.",
+        "service": "HVAC"
+      },
+      "expected": {
+        "workflow_path": "withLeadId() substitutes {{lead_id}} or appends ?lead_id=<id> when the config link lacks a lead identifier.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead stored with booking_link containing its own lead_id.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Customer email includes the booking link; owner email lists it.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "T19",
+      "name": "Malformed / sparse payload",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": { "business_id": "biz_lonestar_hvac" },
+      "expected": {
+        "workflow_path": "No name/email/phone/message. Normalize builds a minimal lead (empty optional fields), deterministic hash key from available fields -> persists.",
+        "http_response": "200 created (score computed from available fields, likely low)",
+        "lead_sheet_result": "Minimal lead row created.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Customer email skipped (no email); owner notification attempted.",
+        "error_behavior": "None (sparse input tolerated by design)."
+      }
+    },
+    {
+      "id": "T20",
+      "name": "Sheets persistence failure (critical)",
+      "workflow": "01-lead-intake-v4.2",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v42-020",
+        "name": "Sheets Down",
+        "phone": "5125550208",
+        "email": "sheets@example.com",
+        "message": "Revoke sheets access / rename leads tab to force failure."
+      },
+      "expected": {
+        "workflow_path": "Append Lead fails -> workflow errors (error workflow 06 captures). No 200 created.",
+        "http_response": "No 200 created (system does NOT falsely report success).",
+        "lead_sheet_result": "No lead row (persistence failed).",
+        "follow_up_result": "No follow-up scheduled.",
+        "email_behavior": "Emails NOT attempted (branch only after persistence).",
+        "error_behavior": "Critical failure surfaced to error workflow, not swallowed."
+      }
+    },
+    {
+      "id": "B01",
+      "name": "Booking link — valid HTTPS accepted with lead_id attribution",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v43-b01",
+        "name": "Book Link HTTPS",
+        "phone": "5125550301",
+        "email": "b01@example.com",
+        "message": "Valid HTTPS booking link supplied in the request.",
+        "service": "HVAC",
+        "booking_link": "https://calendly.com/lonestar/estimate"
+      },
+      "expected": {
+        "workflow_path": "Normalize -> safeBookingLink accepts the https:// URL and appends ?lead_id=<id> (attribution). Lead persists and responds 200.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead stored with booking_link = https://calendly.com/lonestar/estimate?lead_id=<lead_id>.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Customer email includes the HTTPS booking link; owner email lists it. No unsafe scheme.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "B02",
+      "name": "Booking link — existing lead_id preserved (no duplicate param)",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v43-b02",
+        "name": "Book Link Existing ID",
+        "phone": "5125550302",
+        "email": "b02@example.com",
+        "message": "HTTPS booking link that already carries a lead_id query param.",
+        "service": "HVAC",
+        "booking_link": "https://calendly.com/lonestar/estimate?lead_id=existing-abc"
+      },
+      "expected": {
+        "workflow_path": "safeBookingLink preserves the existing lead_id and does NOT append a second one.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead stored with booking_link = https://calendly.com/lonestar/estimate?lead_id=existing-abc (single lead_id).",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Booking link rendered with the existing lead_id only.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "B03",
+      "name": "Booking link — javascript: blocked (treated as absent)",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_hillcountry_plumbing",
+        "source_type": "web_form",
+        "source_id": "form-v43-b03",
+        "name": "Malicious JS Link",
+        "phone": "5125550303",
+        "email": "b03@example.com",
+        "message": "javascript: scheme must never become a clickable href.",
+        "service": "Plumbing",
+        "booking_link": "javascript:alert(1)"
+      },
+      "expected": {
+        "workflow_path": "safeBookingLink rejects javascript: (protocol !== https:). Config booking_link is empty for this business, so booking_link resolves to absent. Lead persists and responds 200.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead stored with EMPTY booking_link (no javascript: value stored).",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "No booking href rendered in either email. Emails are safe.",
+        "error_behavior": "None. Lead is valid despite the malicious booking_link."
+      }
+    },
+    {
+      "id": "B04",
+      "name": "Booking link — data: blocked (treated as absent)",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_hillcountry_plumbing",
+        "source_type": "web_form",
+        "source_id": "form-v43-b04",
+        "name": "Malicious Data Link",
+        "phone": "5125550304",
+        "email": "b04@example.com",
+        "message": "data: scheme must never become a clickable href.",
+        "service": "Plumbing",
+        "booking_link": "data:text/html,<script>alert(1)</script>"
+      },
+      "expected": {
+        "workflow_path": "safeBookingLink rejects data: (protocol !== https:). booking_link resolves to absent. Lead persists and responds 200.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead stored with EMPTY booking_link.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "No booking href rendered.",
+        "error_behavior": "None. Lead is valid."
+      }
+    },
+    {
+      "id": "B05",
+      "name": "Booking link — malformed URL handled safely (treated as absent)",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_hillcountry_plumbing",
+        "source_type": "web_form",
+        "source_id": "form-v43-b05",
+        "name": "Malformed Link",
+        "phone": "5125550305",
+        "email": "b05@example.com",
+        "message": "Malformed URL must be treated as absent, not thrown.",
+        "service": "Plumbing",
+        "booking_link": "not a valid url"
+      },
+      "expected": {
+        "workflow_path": "new URL(...) throws -> safeBookingLink returns ''. booking_link resolves to absent. No unhandled exception. Lead persists and responds 200.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead stored with EMPTY booking_link.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "No booking href rendered.",
+        "error_behavior": "None. No unhandled exception from the malformed URL."
+      }
+    },
+    {
+      "id": "B06",
+      "name": "Booking link — no request link, valid config link used with attribution",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v43-b06",
+        "name": "Config Link Fallback",
+        "phone": "5125550306",
+        "email": "b06@example.com",
+        "message": "No booking_link in the request; the business config link should be used.",
+        "service": "HVAC"
+      },
+      "expected": {
+        "workflow_path": "body.booking_link absent -> fall back to business_config.booking_link (https://book.lonestarhvac.example.com/?lead_id={{lead_id}}), {{lead_id}} substituted with the lead's id.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead stored with booking_link = https://book.lonestarhvac.example.com/?lead_id=<lead_id> (attribution preserved).",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Customer/owner emails include the config booking link with lead_id attribution.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "B07",
+      "name": "Booking link — invalid request link falls back to trusted config link",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v43-b07",
+        "name": "Invalid Request Link",
+        "phone": "5125550307",
+        "email": "b07@example.com",
+        "message": "Request supplies an invalid booking link; the trusted config link should be used instead.",
+        "service": "HVAC",
+        "booking_link": "javascript:alert(1)"
+      },
+      "expected": {
+        "workflow_path": "body.booking_link is invalid (javascript:) -> treated as absent -> fall back to the trusted business_config.booking_link (validated HTTPS).",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead stored with the CONFIG booking link (https://book.lonestarhvac.example.com/?lead_id=<lead_id>), NOT the javascript: value.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Emails include the trusted config booking link; no unsafe href.",
+        "error_behavior": "None. Lead is valid."
+      }
+    },
+    {
+      "id": "E01",
+      "name": "Owner email — owner_email + from_email present -> send",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_lonestar_hvac",
+        "source_type": "web_form",
+        "source_id": "form-v43-e01",
+        "name": "Owner Gate E01",
+        "phone": "5125550311",
+        "email": "e01@example.com",
+        "message": "Business has both owner_email and from_email configured.",
+        "service": "HVAC"
+      },
+      "expected": {
+        "workflow_path": "Owner Email Present? TRUE (owner_email isNotEmpty AND _fromEmailPresent) -> Owner Notification sends.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead persisted.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Owner notification attempted (owner_email + from_email present).",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "E02",
+      "name": "Owner email — owner_email present + from_email missing -> skip (no SMTP, no error)",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_v43_e02_owner_no_from",
+        "source_type": "web_form",
+        "source_id": "form-v43-e02",
+        "name": "Owner Gate E02",
+        "phone": "5125550312",
+        "email": "e02@example.com",
+        "message": "Requires a business_config row with owner_email set and from_email BLANK (active=TRUE)."
+      },
+      "expected": {
+        "workflow_path": "Owner Email Present? FALSE (_fromEmailPresent false despite owner_email) -> Skip Owner Email. No SMTP attempt.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead persisted.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Owner notification SKIPPED cleanly. No SMTP delivery attempted and NO email-failure error generated.",
+        "error_behavior": "None (missing from_email is configuration, not an SMTP failure)."
+      }
+    },
+    {
+      "id": "E03",
+      "name": "Owner email — owner_email missing + from_email present -> skip (no SMTP, no error)",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_v43_e03_no_owner",
+        "source_type": "web_form",
+        "source_id": "form-v43-e03",
+        "name": "Owner Gate E03",
+        "phone": "5125550313",
+        "email": "e03@example.com",
+        "message": "Requires a business_config row with owner_email BLANK and from_email set (active=TRUE)."
+      },
+      "expected": {
+        "workflow_path": "Owner Email Present? FALSE (owner_email empty) -> Skip Owner Email. No SMTP attempt.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead persisted.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Owner notification SKIPPED cleanly. No SMTP delivery attempted and NO email-failure error generated.",
+        "error_behavior": "None."
+      }
+    },
+    {
+      "id": "E04",
+      "name": "Owner email — owner_email + from_email both missing -> skip (no SMTP, no error)",
+      "workflow": "01-lead-intake-v4.3",
+      "path": "/lead-intake",
+      "method": "POST",
+      "headers": { "X-Lead-Engine-Secret": "<LEAD_ENGINE_SECRET>", "Content-Type": "application/json" },
+      "body": {
+        "business_id": "biz_v43_e04_none",
+        "source_type": "web_form",
+        "source_id": "form-v43-e04",
+        "name": "Owner Gate E04",
+        "phone": "5125550314",
+        "email": "e04@example.com",
+        "message": "Requires a business_config row with BOTH owner_email and from_email BLANK (active=TRUE)."
+      },
+      "expected": {
+        "workflow_path": "Owner Email Present? FALSE (both empty) -> Skip Owner Email. No SMTP attempt.",
+        "http_response": "200 created",
+        "lead_sheet_result": "Lead persisted.",
+        "follow_up_result": "next_followup_at persisted.",
+        "email_behavior": "Owner notification SKIPPED cleanly. No SMTP delivery attempted and NO email-failure error generated.",
+        "error_behavior": "None."
+      }
+    }
+  ]
+}

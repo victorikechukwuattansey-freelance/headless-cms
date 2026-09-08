@@ -1,0 +1,229 @@
+{
+  "name": "06 - Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "5fa806bc-ead0-4133-9978-84b144183129",
+      "name": "When an Error Occurs",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Assign this workflow as the error workflow for 01-05 (Settings > Error Workflows, or per-workflow errorWorkflow). Captures execution_id, workflow_id and error message."
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.item.json;\n\nconst execution = err.execution || {};\nconst workflow = err.workflow || {};\nconst executionError = execution.error || {};\nconst trigger = err.trigger || {};\nconst triggerError = trigger.error || {};\n\nfunction sanitize(v) {\n  if (v === null || v === undefined) return '';\n\n  if (typeof v === 'object') {\n    return JSON.stringify(v).replace(\n      /(secret|token|password|api[_ -]?key|authorization|bearer)([\"']?\\s*[:=]\\s*)([^,}\"'\\s]+)/gi,\n      '$1$2[REDACTED]'\n    );\n  }\n\n  return String(v);\n}\n\nconst errorMessage = String(\n  executionError.message ||\n  triggerError.message ||\n  'unknown error'\n).slice(0, 2000);\n\nconst node =\n  execution.lastNodeExecuted ||\n  triggerError.node?.name ||\n  triggerError.node ||\n  '';\n\nconst executionId = execution.id || '';\n\nconst workflowName =\n  workflow.name ||\n  'unknown_workflow';\n\nconst workflowId =\n  workflow.id ||\n  '';\n\nreturn [{\n  json: {\n    error_id:\n      'err_' +\n      Date.now() +\n      '_' +\n      Math.random().toString(36).slice(2, 8),\n\n    created_at: new Date().toISOString(),\n\n    workflow: workflowName,\n\n    workflow_id: workflowId,\n\n    node: String(node),\n\n    business_id: '',\n\n    lead_id: '',\n\n    error_message: errorMessage,\n\n    execution_id: executionId,\n\n    execution_url: execution.url || '',\n\n    payload: sanitize(err).slice(0, 4000),\n\n    resolved: false\n  }\n}];"
+      },
+      "id": "f0cef39c-f623-4383-9d9b-e3cab2ecfd04",
+      "name": "Build & Sanitize Error Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        0
+      ],
+      "notes": "Extracts workflow/node/execution/error, and scrubs secrets from the payload before it is stored or emailed."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2001101880,
+          "mode": "list",
+          "cachedResultName": "errors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=2001101880"
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "error_id",
+              "fieldValue": "={{ $json.error_id }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "workflow",
+              "fieldValue": "={{ $json.workflow }}"
+            },
+            {
+              "fieldId": "node",
+              "fieldValue": "={{ $json.node }}"
+            },
+            {
+              "fieldId": "business_id",
+              "fieldValue": "={{ $json.business_id }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.error_message }}"
+            },
+            {
+              "fieldId": "execution_id",
+              "fieldValue": "={{ $json.execution_id }}"
+            },
+            {
+              "fieldId": "payload",
+              "fieldValue": "={{ $json.payload }}"
+            },
+            {
+              "fieldId": "resolved",
+              "fieldValue": "={{ $json.resolved }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "41bec634-5a63-4eff-87d1-6019d98e7b33",
+      "name": "Append Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        528,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Persists a sanitized error row so no failure silently loses a lead."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.LEAD_ENGINE_ADMIN_FROM }}",
+        "toEmail": "={{ $env.LEAD_ENGINE_ADMIN_EMAIL }}",
+        "subject": "Lead Recovery Engine — Workflow Error",
+        "html": "=<h2>Lead Recovery Engine Error</h2>\n\n<p><strong>Workflow:</strong> {{ $json.workflow }}</p>\n<p><strong>Node:</strong> {{ $json.node }}</p>\n<p><strong>Business ID:</strong> {{ $json.business_id }}</p>\n<p><strong>Lead ID:</strong> {{ $json.lead_id }}</p>\n<p><strong>Execution ID:</strong> {{ $json.execution_id }}</p>\n<p><strong>Time:</strong> {{ $json.created_at }}</p>\n\n<p><strong>Error:</strong></p>\n<pre>{{ $json.error_message }}</pre>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        736,
+        0
+      ],
+      "id": "782a2948-d408-4c0b-9475-6ae223b28481",
+      "name": "Admin Error Notification",
+      "webhookId": "7b201911-093d-43c1-b4ff-1633dd3bfea8",
+      "credentials": {
+        "smtp": {
+          "id": "uRV9Wct3Ugjxu9hk",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When an Error Occurs": [
+      {
+        "json": {
+          "execution": {
+            "id": "366",
+            "url": "https://victor-i-attansey.app.n8n.cloud/workflow/SALWX4B52TcMFKWP/executions/366",
+            "error": {
+              "level": "info",
+              "shouldReport": false,
+              "description": null,
+              "tags": {},
+              "lineNumber": 1,
+              "message": "CONTROLLED ERROR HANDLER TEST [line 1]",
+              "stack": "Error: CONTROLLED ERROR HANDLER TEST\n    at VmCodeWrapper (evalmachine.<anonymous>:1:966)\n    at evalmachine.<anonymous>:2:2\n    at Script.runInContext (node:vm:149:12)\n    at runInContext (node:vm:301:6)\n    at result (/opt/runners/task-runner-javascript/dist/js-task-runner/js-task-runner.js:209:61)\n    at new Promise (<anonymous>)\n    at JsTaskRunner.runForAllItems (/opt/runners/task-runner-javascript/dist/js-task-runner/js-task-runner.js:202:34)\n    at JsTaskRunner.executeTask (/opt/runners/task-runner-javascript/dist/js-task-runner/js-task-runner.js:137:26)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Object.waitingForSettings (/opt/runners/task-runner-javascript/dist/task-runner.js:283:17)"
+            },
+            "lastNodeExecuted": "Code in JavaScript",
+            "mode": "webhook",
+            "executionContext": {
+              "version": 1,
+              "establishedAt": 1787661716828,
+              "source": "webhook",
+              "triggerNode": {
+                "name": "Lead Intake Webhook",
+                "type": "n8n-nodes-base.webhook"
+              },
+              "redaction": {
+                "version": 2,
+                "production": false,
+                "manual": false
+              }
+            }
+          },
+          "workflow": {
+            "id": "SALWX4B52TcMFKWP",
+            "name": "01 - Lead Intake"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When an Error Occurs": {
+      "main": [
+        [
+          {
+            "node": "Build & Sanitize Error Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build & Sanitize Error Record": {
+      "main": [
+        [
+          {
+            "node": "Append Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Error": {
+      "main": [
+        [
+          {
+            "node": "Admin Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "versionId": "7b73d9d4-5b2a-466e-a43a-40a805e3ca5e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "88fdbfb8f9bacae964af8d777638cfdc15061641bcbefecfdd7746e4a39e2b48"
+  },
+  "nodeGroups": [],
+  "id": "SuNIguJ8C1KufJr1",
+  "tags": []
+}

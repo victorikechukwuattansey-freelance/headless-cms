@@ -1,0 +1,16 @@
+{
+  "name": "lre-discovery-prospecting",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lead Recovery Engine - Discovery & Prospecting + Outreach Operations + persistent prospect store & review (no auto-send). Zero runtime dependencies.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test tests/",
+    "review": "node src/cli/review.js",
+    "seed": "node scripts/seed-prospects.js",
+    "batch": "node src/batch-run.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

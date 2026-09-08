@@ -1,0 +1,761 @@
+{
+  "name": "07 - Customer Response",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "customer-response-07",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "085aec12-29dd-4331-8d0a-1be472eed680",
+      "name": "Customer Response Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        32
+      ],
+      "webhookId": "customer-response"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-secret-eq",
+              "leftValue": "={{ $json.headers['x-lead-engine-secret'] }}",
+              "rightValue": "={{ $vars.LEAD_ENGINE_SECRET }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1auth-valid-secret-07",
+      "name": "Valid Ingress Secret?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        32
+      ],
+      "notes": "Security gate BEFORE any Sheets lookup or business logic (mirrors WF01-WF04). Missing or wrong secret -> Respond 401 Invalid Secret."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {status:'error',error:'unauthorized',code:401} }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "c1auth-respond-401-07",
+      "name": "Respond 401 Invalid Secret",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -240,
+        208
+      ],
+      "notes": "Never reveal what the secret is or hint at business data."
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook = $('Customer Response Webhook').first().json;\n\nconst body = webhook.body ?? webhook;\n\nconst businessId = String(body.business_id || '').trim();\nconst leadId = String(body.lead_id || '').trim();\nconst responseMessage = String(body.message || body.response || '').trim();\n\nif (!businessId || !leadId) {\n  return [{\n    json: {\n      _valid: false,\n      error: 'missing_field',\n      field: 'business_id|lead_id',\n      code: 400\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    _valid: true,\n    business_id: businessId,\n    lead_id: leadId,\n    customer_response: responseMessage,\n    received_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "8bae2389-966c-479c-b9f2-64d03087ffc3",
+      "name": "Normalize Customer Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "b6e86be3-c450-4b52-a86f-3007a9397074",
+              "leftValue": "={{ $json._valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "87044ee6-6754-4897-b2b2-a96ba7067d57",
+      "name": "Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {status:'error',error:$json.error,field:$json.field,code:$json.code} }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "fcf3ef62-3578-4948-a416-7e79b38d0b0a",
+      "name": "Respond 400",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Normalize Customer Response').first().json;\nconst rows = $('Read Existing Leads').all();\n\nconst row = rows.find(r =>\n  String(r.json.lead_id || '').trim() === String(input.lead_id || '').trim() &&\n  String(r.json.business_id || '').trim() === String(input.business_id || '').trim()\n);\n\nreturn [\n  {\n    json: {\n      ...input,\n      _leadFound: !!row,\n      lead: row ? row.json : null\n    }\n  }\n];"
+      },
+      "id": "6a485659-1762-49c3-9f4b-9183cd46876b",
+      "name": "Resolve Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._leadFound }}",
+              "operation": "isTrue"
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "id": "978b6b19-609f-4100-ab6d-f8d98604d883",
+      "name": "Lead Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        304,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {status:'error',error:'lead_not_found',code:404} }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "a6a96c62-d7d0-4af0-8ff7-2741ec5643ee",
+      "name": "Respond 404",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        608,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j=$input.first().json;\nconst now=j.received_at||new Date().toISOString();\nreturn [{json:{...j,last_customer_response_at:now,next_followup_at:'',last_contact_at:now,status:j.lead.status||'new',booked:j.lead.booked||false}}];"
+      },
+      "id": "9918a3eb-8c89-4777-8e0d-fc785aeb54e4",
+      "name": "Prepare Response Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "next_followup_at": "={{ $json.next_followup_at }}",
+            "last_contact_at": "={{ $json.last_contact_at }}",
+            "last_customer_response_at": "={{ $json.last_customer_response_at }}",
+            "row_number": 0
+          },
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "business_id",
+              "displayName": "business_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source_type",
+              "displayName": "source_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source_id",
+              "displayName": "source_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "service",
+              "displayName": "service",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "niche",
+              "displayName": "niche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "zip",
+              "displayName": "zip",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "urgency",
+              "displayName": "urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "booking_link",
+              "displayName": "booking_link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "booking_link_sent",
+              "displayName": "booking_link_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "booked",
+              "displayName": "booked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "booked_at",
+              "displayName": "booked_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "owner_notified",
+              "displayName": "owner_notified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "followup_count",
+              "displayName": "followup_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "next_followup_at",
+              "displayName": "next_followup_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_contact_at",
+              "displayName": "last_contact_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_customer_response_at",
+              "displayName": "last_customer_response_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "idempotency_key",
+              "displayName": "idempotency_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "cb0e2e60-cdc1-48fc-a50e-ea631792afc5",
+      "name": "Update Lead Response",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        720,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {status:'updated',lead_id:$json.lead_id,last_customer_response_at:$json.last_customer_response_at,followup_suppressed:true,code:200} }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "161eb1c6-d03c-4494-9ee6-26620d68674f",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        928,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -48,
+        16
+      ],
+      "id": "a87e5540-0fe7-4907-a672-6412754356d3",
+      "name": "Read Existing Leads",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Customer Response Webhook": {
+      "main": [
+        [
+          {
+            "node": "Valid Ingress Secret?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Ingress Secret?": {
+      "main": [
+        [
+          {
+            "node": "Normalize Customer Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Invalid Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Customer Response": {
+      "main": [
+        [
+          {
+            "node": "Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Lead": {
+      "main": [
+        [
+          {
+            "node": "Lead Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Found?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 404",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response Update": {
+      "main": [
+        [
+          {
+            "node": "Update Lead Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead Response": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Leads": {
+      "main": [
+        [
+          {
+            "node": "Resolve Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "SuNIguJ8C1KufJr1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "eb5ae146-df27-4487-aeb6-5b77a57323f8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "88fdbfb8f9bacae964af8d777638cfdc15061641bcbefecfdd7746e4a39e2b48"
+  },
+  "nodeGroups": [],
+  "id": "kpKSxxtabB8sg8Em",
+  "tags": []
+}

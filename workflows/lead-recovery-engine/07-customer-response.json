@@ -1,0 +1,282 @@
+{
+  "name": "07 - Customer Response",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "customer-response",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "customer-response-webhook",
+      "name": "Customer Response Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "webhookId": "customer-response"
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook = $('Customer Response Webhook').first().json;\nconst body = webhook.body ?? webhook;\nconst businessId = String(body.business_id || '').trim();\nconst leadId = String(body.lead_id || '').trim();\nconst responseMessage = String(body.message || body.response || '').trim();\nif (!businessId || !leadId) return [{json:{_valid:false,error:'missing_field',field:'business_id|lead_id',code:400}}];\nreturn [{json:{...body,business_id:businessId,lead_id:leadId,customer_response:responseMessage,received_at:new Date().toISOString(),_valid:true}}];"
+      },
+      "id": "normalize-response",
+      "name": "Normalize Customer Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._valid }}",
+              "operation": "isTrue"
+            }
+          ]
+        }
+      },
+      "id": "request-valid",
+      "name": "Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {status:'error',error:$json.error,field:$json.field,code:$json.code} }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-400",
+      "name": "Respond 400",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -220,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first().json;\nconst rows=$('Read Existing Leads').all();\nconst row=rows.find(r=>String(r.json.lead_id||'').trim()===input.lead_id && String(r.json.business_id||'').trim()===input.business_id);\nreturn [{json:{...input,_leadFound:!!row,lead:row?row.json:null}}];"
+      },
+      "id": "resolve-lead",
+      "name": "Resolve Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._leadFound }}",
+              "operation": "isTrue"
+            }
+          ]
+        }
+      },
+      "id": "lead-found",
+      "name": "Lead Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {status:'error',error:'lead_not_found',code:404} }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "respond-404",
+      "name": "Respond 404",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j=$input.first().json;\nconst now=j.received_at||new Date().toISOString();\nreturn [{json:{...j,last_customer_response_at:now,next_followup_at:'',last_contact_at:now,status:j.lead.status||'new',booked:j.lead.booked||false}}];"
+      },
+      "id": "prepare-update",
+      "name": "Prepare Response Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "update-lead",
+      "name": "Update Lead Response",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {status:'updated',lead_id:$json.lead_id,last_customer_response_at:$json.last_customer_response_at,followup_suppressed:true,code:200} }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-200",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        700,
+        -20
+      ]
+    }
+  ],
+  "connections": {
+    "Customer Response Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Customer Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Customer Response": {
+      "main": [
+        [
+          {
+            "node": "Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Resolve Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Lead": {
+      "main": [
+        [
+          {
+            "node": "Lead Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Found?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 404",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response Update": {
+      "main": [
+        [
+          {
+            "node": "Update Lead Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead Response": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

@@ -1,0 +1,1026 @@
+{
+  "name": "03 - Manual Callback Log",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "onError": "stopWorkflow",
+    "errorWorkflow": "",
+    "timezone": "Africa/Lagos"
+  },
+  "staticData": null,
+  "pinData": {},
+  "tags": [],
+  "meta": { "templateCredsSetupCompleted": true },
+  "id": "wf-manual-callback",
+  "versionId": "",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "manual-callback",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-cb-webhook",
+      "name": "Manual Callback Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1568, 0],
+      "webhookId": "webhook-manual-callback-01",
+      "notes": "POST /manual-callback. Operator or call-center records a missed call / callback request. Header X-Lead-Engine-Secret must match $vars.LEAD_ENGINE_SECRET."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-secret-eq",
+              "leftValue": "={{ $json.headers['x-lead-engine-secret'] }}",
+              "rightValue": "={{ $vars.LEAD_ENGINE_SECRET }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-cb-secret",
+      "name": "Valid Ingress Secret?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-1360, 0],
+      "notes": "Live-validated V4.3 pattern: headers at $json.headers; secret from n8n Variables."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'unauthorized', code: 401 }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "node-cb-401",
+      "name": "Respond 401 Invalid Secret",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-1152, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-biz",
+              "leftValue": "={{ $json.body.business_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-cb-bizid",
+      "name": "Business ID Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-1152, -16],
+      "notes": "Webhook v2 nests payload under body."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'missing_field', field: 'business_id', code: 400 }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "node-cb-400",
+      "name": "Respond 400 Missing business_id",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-944, 160]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "business_config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "node-cb-getconfig",
+      "name": "Get Business Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [-944, -16],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Reads ALL business_config rows; exact-match tenant scoping happens in the Code node (live-validated pattern)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook = $('Manual Callback Webhook').first().json;\nconst body = webhook.body ?? webhook;\n\n// Exact business_id match only.\nconst cfgJson = $('Get Business Config').first()?.json ?? null;\nconst businessId = body.business_id ? String(body.business_id).trim() : '';\nconst cj =\n  cfgJson && String(cfgJson.business_id || '').trim() === businessId ? cfgJson : null;\n\nconst _configFound = !!cj;\nconst _active =\n  _configFound && String(cj.active || '').trim().toLowerCase() === 'true';\n\nconst now = new Date();\n\nfunction rid(prefix) {\n  return prefix + '_' + now.getTime() + '_' + Math.random().toString(36).slice(2, 10);\n}\n\nfunction esc(v) {\n  return String(v == null ? '' : v)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}\n\n// Runtime-compatible booking-link validation.\n// Do NOT use the URL constructor (unavailable in the n8n Cloud Code node sandbox).\nfunction safeBookingLink(value, leadId) {\n  let raw = String(value || '').trim();\n  if (!raw) return '';\n  raw = raw.replace(/\\{\\{\\s*lead_id\\s*\\}\\}/g, encodeURIComponent(leadId));\n  if (!/^https:\\/\\/[^\\s\"'<>]+$/i.test(raw)) return '';\n  if (/[\\r\\n<>\"'`]/.test(raw)) return '';\n  if (/[?&]lead_id=/.test(raw)) return raw;\n  return raw + (raw.includes('?') ? '&' : '?') + 'lead_id=' + encodeURIComponent(leadId);\n}\n\nconst email = String(body.email || '').trim().toLowerCase();\nconst phone = String(body.phone || '').trim();\nconst normPhone = phone.replace(/\\D/g, '');\nconst message = body.message || '';\nconst service = body.service || '';\n\n// Deterministic idempotency key for manual callbacks (explicit key wins).\nconst idempotencyKey = body.idempotency_key\n  ? String(body.idempotency_key)\n  : ['manual_callback', businessId, normPhone, email].join('|');\n\nconst leadId = rid('lead');\nconst bookingLink = safeBookingLink(cj ? cj.booking_link : '', leadId);\n\nconst lead = {\n  lead_id: leadId,\n  business_id: businessId,\n  created_at: now.toISOString(),\n  updated_at: now.toISOString(),\n  source_type: 'manual_callback',\n  source_id: body.source_id ? String(body.source_id).trim() : '',\n  name: body.name || '',\n  phone: phone,\n  email: email,\n  message: message,\n  service: service,\n  niche: body.niche || (cj ? cj.niche || '' : '') || '',\n  city: body.city || '',\n  state: body.state || '',\n  zip: body.zip || '',\n  urgency: 'normal',\n  score: 50,\n  status: 'new',\n  booking_link: bookingLink,\n  booking_link_sent: false,\n  booked: false,\n  followup_count: 0,\n  next_followup_at: '',\n  last_contact_at: '',\n  last_customer_response_at: '',\n  idempotency_key: idempotencyKey,\n  notes: body.notes || 'Manual callback entry'\n};\n\nconst merged = Object.assign({}, lead, {\n  _configFound: _configFound,\n  _active: _active,\n  _autoCustomerEmail:\n    _configFound && String(cj.auto_customer_email || '').trim().toLowerCase() === 'true',\n  _fromEmailPresent: !!(cj && cj.from_email),\n  _replyToPresent: !!(cj && cj.reply_to_email),\n  _bookingLinkPresent: !!bookingLink,\n  business_name: cj ? cj.business_name || '' : '',\n  owner_name: cj ? cj.owner_name || '' : '',\n  owner_email: cj ? cj.owner_email || '' : '',\n  reply_to_email: cj ? cj.reply_to_email || '' : '',\n  from_email: cj ? cj.from_email || '' : '',\n  followup_delay_hours: cj ? Number(cj.followup_delay_hours || 24) || 24 : 24,\n  max_followups: cj ? Number(cj.max_followups || 3) || 3 : 3,\n  timezone: cj ? cj.timezone || 'Africa/Lagos' : 'Africa/Lagos',\n  _esc_lead_id: esc(lead.lead_id),\n  _esc_business_name: esc(cj ? cj.business_name || '' : ''),\n  _esc_name: esc(lead.name),\n  _esc_phone: esc(phone),\n  _esc_email: esc(email),\n  _esc_service: esc(service),\n  _esc_message: esc(message),\n  _esc_booking_link: esc(bookingLink),\n  _esc_created_at: esc(lead.created_at),\n  _esc_notes: esc(lead.notes)\n});\n\nreturn [{ json: merged }];"
+      },
+      "id": "node-cb-normalize",
+      "name": "Resolve Config & Normalize Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-736, -16],
+      "notes": "Manual callbacks use neutral urgency/score. Builds canonical lead, validates the booking link without the URL constructor (live-proven patch pattern), computes a deterministic idempotency key, emits HTML-escaped copies, and exposes _autoCustomerEmail as a strict boolean."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-found",
+              "leftValue": "={{ $json._configFound }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-active",
+              "leftValue": "={{ $json._active }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-cb-valid",
+      "name": "Business Valid & Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-528, -16]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'business_invalid_or_inactive', code: 403 }) }}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "node-cb-403",
+      "name": "Respond 403 Invalid Business",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-320, 160]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "options": {}
+      },
+      "id": "node-cb-readleads",
+      "name": "Read Existing Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [-320, -16],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nconst lead = $('Resolve Config & Normalize Callback').first().json;\nconst key = String(lead.idempotency_key || '');\nconst srcId = String(lead.source_id || '');\nconst bid = String(lead.business_id || '').trim();\nconst normPhone = String(lead.phone || '').replace(/\\D/g, '');\nconst normEmail = String(lead.email || '').trim().toLowerCase();\nlet reason = '';\nconst dup = rows.some((r) => {\n  const j = r.json;\n  const rowBid = String(j.business_id || '').trim();\n  // Tenant-scoped duplicate order matching Lead Intake V4.3.\n  if (key && j.idempotency_key && String(j.idempotency_key) === key && rowBid === bid) { reason = 'idempotency_key'; return true; }\n  if (srcId && j.source_id && String(j.source_id) === srcId && String(j.source_type || '') === 'manual_callback' && rowBid === bid) { reason = 'source_id'; return true; }\n  if (normPhone && j.phone && rowBid === bid && String(j.phone).replace(/\\D/g, '') === normPhone) { reason = 'phone'; return true; }\n  if (normEmail && j.email && rowBid === bid && String(j.email).trim().toLowerCase() === normEmail) { reason = 'email'; return true; }\n  return false;\n});\nreturn [{ json: Object.assign({}, lead, { _isDuplicate: dup, _duplicateReason: reason }) }];"
+      },
+      "id": "node-cb-dedup",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-112, -16],
+      "notes": "Duplicate order (all scoped by business_id): idempotency_key -> source_id+source_type -> digits-only phone -> email."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-dup",
+              "leftValue": "={{ $json._isDuplicate }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-cb-isdup",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [96, -16],
+      "notes": "POLARITY FIX (same defect fixed in Lead Intake V4): TRUE (duplicate) -> Respond 200 Duplicate; FALSE (new) -> Append Lead. The imported version had these inverted, which would re-append duplicates."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'accepted', duplicate: true, reason: $('Check Duplicate').first().json._duplicateReason, lead_id: $('Check Duplicate').first().json.lead_id, code: 200 }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-cb-dupok",
+      "name": "Respond 200 Duplicate Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [304, 176],
+      "notes": "Idempotent: retries of the same callback never create a second lead."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "fieldId": "business_id",
+              "fieldValue": "={{ $json.business_id }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ $json.updated_at }}"
+            },
+            {
+              "fieldId": "source_type",
+              "fieldValue": "={{ $json.source_type }}"
+            },
+            {
+              "fieldId": "source_id",
+              "fieldValue": "={{ $json.source_id }}"
+            },
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $json.name }}"
+            },
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{ $json.phone }}"
+            },
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $json.message }}"
+            },
+            {
+              "fieldId": "service",
+              "fieldValue": "={{ $json.service }}"
+            },
+            {
+              "fieldId": "niche",
+              "fieldValue": "={{ $json.niche }}"
+            },
+            {
+              "fieldId": "city",
+              "fieldValue": "={{ $json.city }}"
+            },
+            {
+              "fieldId": "state",
+              "fieldValue": "={{ $json.state }}"
+            },
+            {
+              "fieldId": "zip",
+              "fieldValue": "={{ $json.zip }}"
+            },
+            {
+              "fieldId": "urgency",
+              "fieldValue": "={{ $json.urgency }}"
+            },
+            {
+              "fieldId": "score",
+              "fieldValue": "={{ $json.score }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "booking_link",
+              "fieldValue": "={{ $json.booking_link }}"
+            },
+            {
+              "fieldId": "booking_link_sent",
+              "fieldValue": "={{ $json.booking_link_sent }}"
+            },
+            {
+              "fieldId": "booked",
+              "fieldValue": "={{ $json.booked }}"
+            },
+            {
+              "fieldId": "followup_count",
+              "fieldValue": "={{ $json.followup_count }}"
+            },
+            {
+              "fieldId": "next_followup_at",
+              "fieldValue": "={{ $json.next_followup_at }}"
+            },
+            {
+              "fieldId": "last_contact_at",
+              "fieldValue": "={{ $json.last_contact_at }}"
+            },
+            {
+              "fieldId": "last_customer_response_at",
+              "fieldValue": "={{ $json.last_customer_response_at }}"
+            },
+            {
+              "fieldId": "idempotency_key",
+              "fieldValue": "={{ $json.idempotency_key }}"
+            },
+            {
+              "fieldId": "notes",
+              "fieldValue": "={{ $json.notes }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-cb-append",
+      "name": "Append Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [304, -16],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Persistence-first: explicit field mapping to the EXACT canonical leads headers (correct spellings per the authoritative column list; live-proven append shape from Lead Intake V4.3)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-auto-flag",
+              "leftValue": "={{ $('Resolve Config & Normalize Callback').first().json._autoCustomerEmail }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-email-present",
+              "leftValue": "={{ $('Resolve Config & Normalize Callback').first().json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-from-present",
+              "leftValue": "={{ $('Resolve Config & Normalize Callback').first().json._fromEmailPresent }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-cb-autocust",
+      "name": "Auto Customer Email Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [512, -16],
+      "notes": "No automated customer email for manual callbacks unless business_config.auto_customer_email is TRUE (computed as a strict boolean because Sheets returns strings), AND the lead has an email AND from_email is configured. References the normalize node — not Sheets output shape."
+    },
+    {
+      "parameters": {},
+      "id": "node-cb-skipcust",
+      "name": "Skip Customer Email",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [720, 176],
+      "notes": "Terminal no-op for the disabled/no-email customer branch."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Resolve Config & Normalize Callback').first().json.from_email }}",
+        "toEmail": "={{ $('Resolve Config & Normalize Callback').first().json.email }}",
+        "subject": "={{ 'We received your callback request — ' + $('Resolve Config & Normalize Callback').first().json.business_name }}",
+        "html": "={{ `<p>Hi ${$json._esc_name || 'there'},</p><p>Thanks for your callback request with <strong>${$json._esc_business_name}</strong>. Our team will reach out soon.</p>${$json.booking_link ? '<p>You can book online now: <a href=\"' + $json._esc_booking_link + '\">Schedule here</a></p>' : ''}<p>Replying to this email reaches us directly.</p><p>— ${$json._esc_business_name}</p>` }}",
+        "options": {
+          "appendAttribution": false,
+          "replyTo": "={{ $('Resolve Config & Normalize Callback').first().json.reply_to_email }}"
+        }
+      },
+      "id": "node-cb-custemail",
+      "name": "Callback Customer Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [720, -16],
+      "webhookId": "d0a3f5b4-6e77-4d88-ae99-5204a3f8ba04",
+      "credentials": {
+        "smtp": {
+          "id": "uRV9Wct3Ugjxu9hk",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "FRESH native Email Send node (replaces obsolete n8n-nodes-base.sendEmail). Proven SMTP credential, attribution disabled, Reply-To reaches the business. onError isolates SMTP failure from owner notification and follow-up scheduling."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-owner-present",
+              "leftValue": "={{ $('Check Duplicate').first().json.owner_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-from-present",
+              "leftValue": "={{ $('Check Duplicate').first().json._fromEmailPresent }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-cb-hasowner",
+      "name": "Owner Email Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [928, -16],
+      "notes": "Owner notification only when BOTH owner_email AND from_email are present. Conditions reference Check Duplicate so both customer-email outputs converge safely here."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Check Duplicate').first().json.from_email }}",
+        "toEmail": "={{ $('Check Duplicate').first().json.owner_email }}",
+        "subject": "={{ 'Manual callback logged — ' + $('Check Duplicate').first().json.business_name + ' — Lead ' + $('Check Duplicate').first().json.lead_id }}",
+        "html": "={{ `<h3>Manual callback</h3><p><b>${$json._esc_business_name}</b></p><table cellpadding=\"4\"><tr><td><b>Lead ID</b></td><td>${$json._esc_lead_id}</td></tr><tr><td><b>Name</b></td><td>${$json._esc_name}</td></tr><tr><td><b>Phone</b></td><td>${$json._esc_phone}</td></tr><tr><td><b>Email</b></td><td>${$json._esc_email}</td></tr><tr><td><b>Service</b></td><td>${$json._esc_service}</td></tr><tr><td><b>Time</b></td><td>${$json._esc_created_at}</td></tr></table><p><b>Notes:</b> ${$json._esc_notes || '—'}</p>${$json.booking_link ? '<p>Booking link: <a href=\"' + $json._esc_booking_link + '\">' + $json._esc_booking_link + '</a></p>' : ''}` }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "node-cb-owneremail",
+      "name": "Owner Callback Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1136, -16],
+      "webhookId": "e1b4a6c5-7f88-4e99-bfaa-6315b4a9cb05",
+      "credentials": {
+        "smtp": {
+          "id": "uRV9Wct3Ugjxu9hk",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "FRESH native Email Send node (replaces obsolete n8n-nodes-base.sendEmail). Evaluated subject expression. onError isolates SMTP failure from follow-up scheduling."
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Check Duplicate').first().json;\nconst delay = Number(lead.followup_delay_hours || 24) || 24;\nconst next = new Date(Date.now() + delay * 3600 * 1000).toISOString();\nreturn [\n  {\n    json: {\n      lead_id: lead.lead_id,\n      next_followup_at: next,\n      updated_at: new Date().toISOString()\n    }\n  }\n];"
+      },
+      "id": "node-cb-next",
+      "name": "Schedule Next Follow-up",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1344, -16],
+      "notes": "Computes next_followup_at = now + business followup_delay_hours from authoritative data (Check Duplicate reference). Owner-email success AND error outputs both converge here."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "columnToMatchOn": "lead_id",
+        "valueToMatchOn": "={{ $json.lead_id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "next_followup_at",
+              "fieldValue": "={{ $json.next_followup_at }}"
+            },
+            {
+              "column": "updated_at",
+              "fieldValue": "={{ $json.updated_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-cb-update",
+      "name": "Update Lead Next Follow-up",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [1552, -16],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Persists next_followup_at on the just-created lead matched by Column to Match On = lead_id ($json is the deterministic output of the preceding Code node)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Check Duplicate').first().json;\nconst sched = $input.first().json;\nreturn [\n  {\n    json: {\n      update_id: 'upd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n      created_at: new Date().toISOString(),\n      lead_id: sched.lead_id,\n      business_id: lead.business_id,\n      old_status: '',\n      new_status: 'new',\n      updated_by: 'manual_callback',\n      notes: lead.notes || ''\n    }\n  }\n];"
+      },
+      "id": "node-cb-statusrecord",
+      "name": "Build Status Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, -16],
+      "notes": "status_updates logging happens after the lead exists and its schedule is persisted."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "status_updates",
+          "mode": "name"
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "update_id",
+              "fieldValue": "={{ $json.update_id }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "fieldId": "business_id",
+              "fieldValue": "={{ $json.business_id }}"
+            },
+            {
+              "fieldId": "old_status",
+              "fieldValue": "={{ $json.old_status }}"
+            },
+            {
+              "fieldId": "new_status",
+              "fieldValue": "={{ $json.new_status }}"
+            },
+            {
+              "fieldId": "updated_by",
+              "fieldValue": "={{ $json.updated_by }}"
+            },
+            {
+              "fieldId": "notes",
+              "fieldValue": "={{ $json.notes }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-cb-statuslog",
+      "name": "Log Status (new)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [1968, -16],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Explicit mapping to exact status_updates headers. If your n8n version has no name mode on this field, reselect the status_updates tab once."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'created', lead_id: $('Schedule Next Follow-up').first().json.lead_id, score: $('Check Duplicate').first().json.score, code: 200 }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-cb-200",
+      "name": "Respond 200 Created",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2176, -16],
+      "notes": "Terminal success response after persistence + scheduling + logging."
+    }
+  ],
+  "connections": {
+    "Manual Callback Webhook": {
+      "main": [
+        [
+          {
+            "node": "Valid Ingress Secret?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Ingress Secret?": {
+      "main": [
+        [
+          {
+            "node": "Business ID Present?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Invalid Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Business ID Present?": {
+      "main": [
+        [
+          {
+            "node": "Get Business Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400 Missing business_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Business Config": {
+      "main": [
+        [
+          {
+            "node": "Resolve Config & Normalize Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Config & Normalize Callback": {
+      "main": [
+        [
+          {
+            "node": "Business Valid & Active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Business Valid & Active?": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 403 Invalid Business",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Leads": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Duplicate Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Lead": {
+      "main": [
+        [
+          {
+            "node": "Auto Customer Email Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Customer Email Enabled?": {
+      "main": [
+        [
+          {
+            "node": "Callback Customer Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Customer Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback Customer Email": {
+      "main": [
+        [
+          {
+            "node": "Owner Email Present?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Owner Email Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Customer Email": {
+      "main": [
+        [
+          {
+            "node": "Owner Email Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Owner Email Present?": {
+      "main": [
+        [
+          {
+            "node": "Owner Callback Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Schedule Next Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Owner Callback Notification": {
+      "main": [
+        [
+          {
+            "node": "Schedule Next Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Schedule Next Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Next Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Update Lead Next Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead Next Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Build Status Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status Record": {
+      "main": [
+        [
+          {
+            "node": "Log Status (new)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Status (new)": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

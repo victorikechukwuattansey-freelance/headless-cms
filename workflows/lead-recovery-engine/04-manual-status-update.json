@@ -1,0 +1,826 @@
+{
+  "name": "04 - Manual Status Update",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "onError": "stopWorkflow",
+    "errorWorkflow": "",
+    "timezone": "Africa/Lagos"
+  },
+  "staticData": null,
+  "pinData": {},
+  "tags": [],
+  "meta": { "templateCredsSetupCompleted": true },
+  "id": "wf-manual-status-update",
+  "versionId": "",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "status-update",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-stu-webhook",
+      "name": "Status Update Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1040, 0],
+      "webhookId": "webhook-status-update-01",
+      "notes": "POST /status-update. Operator updates a lead status. Allowed: new, contacted, qualified, booked, lost, no_response, closed."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-secret-eq",
+              "leftValue": "={{ $json.headers['x-lead-engine-secret'] }}",
+              "rightValue": "={{ $vars.LEAD_ENGINE_SECRET }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-stu-secret",
+      "name": "Valid Ingress Secret?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-832, 0],
+      "notes": "Live-validated V4.3 pattern: headers at $json.headers; secret from n8n Variables ($vars), never hardcoded."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'unauthorized', code: 401 }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "node-stu-401",
+      "name": "Respond 401 Invalid Secret",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-624, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-biz",
+              "leftValue": "={{ $json.body.business_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-lead",
+              "leftValue": "={{ $json.body.lead_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-stu-ids",
+      "name": "business_id & lead_id Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-624, -16],
+      "notes": "Webhook v2 nests payload under body."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'missing_field', field: 'business_id|lead_id', code: 400 }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "node-stu-400",
+      "name": "Respond 400 Missing IDs",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-416, 160]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "business_config",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "node-stu-getconfig",
+      "name": "Get Business Config",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [-416, -16],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Sequential read chain (live-validated topology replaces the unvalidated parallel dead-end branch)."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "options": {}
+      },
+      "id": "node-stu-readleads",
+      "name": "Read Existing Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [-208, -16],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhook = $('Status Update Webhook').first().json;\nconst body = webhook.body ?? webhook;\n\nconst configs = $('Get Business Config').all();\nconst leads = $('Read Existing Leads').all();\n\nconst bid = String(body.business_id || '').trim();\nconst cfgRow =\n  configs.find((c) => String(c.json.business_id || '').trim() === bid) || null;\nconst cj = cfgRow ? cfgRow.json : null;\n\n// Strict tenant-scoped resolution: lead_id + business_id only.\nconst wantId = String(body.lead_id || '').trim();\nconst leadRow =\n  leads.find(\n    (r) =>\n      String(r.json.lead_id || '').trim() === wantId &&\n      String(r.json.business_id || '').trim() === bid\n  ) || null;\n\nconst ALLOWED = ['new', 'contacted', 'qualified', 'booked', 'lost', 'no_response', 'closed'];\nconst newStatus = body.new_status ? String(body.new_status).trim().toLowerCase() : '';\n\nfunction esc(v) {\n  return String(v == null ? '' : v)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}\n\nreturn [\n  {\n    json: {\n      _configFound: !!cj,\n      _active: !!cj && String(cj.active || '').trim().toLowerCase() === 'true',\n      _leadFound: !!leadRow,\n      _statusValid: ALLOWED.indexOf(newStatus) !== -1,\n      // Terminal statuses stop all future follow-ups.\n      _terminal: ['booked', 'lost', 'closed', 'no_response'].indexOf(newStatus) !== -1,\n      lead: leadRow ? leadRow.json : null,\n      old_status: leadRow ? String(leadRow.json.status || '') : '',\n      new_status: newStatus,\n      supplied_booked_at: body.booked_at ? String(body.booked_at) : '',\n      supplied_booking_id: body.booking_id ? String(body.booking_id) : '',\n      updated_by: body.updated_by ? String(body.updated_by) : 'operator',\n      notes_in: body.notes ? String(body.notes) : '',\n      owner_email: cj ? cj.owner_email || '' : '',\n      from_email: cj ? cj.from_email || '' : '',\n      reply_to_email: cj ? cj.reply_to_email || '' : '',\n      business_name: cj ? cj.business_name || '' : '',\n      _esc_business_name: esc(cj ? cj.business_name || '' : ''),\n      _esc_name: leadRow ? esc(leadRow.json.name) : ''\n    }\n  }\n];"
+      },
+      "id": "node-stu-resolve",
+      "name": "Resolve Lead, Config & Validate Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, -16],
+      "notes": "Resolves strictly via lead_id + business_id (never row_number, no cross-business match), reads existing status, whitelists the new status, and flags terminal statuses (booked/lost/closed/no_response)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-cfg",
+              "leftValue": "={{ $json._configFound }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-active",
+              "leftValue": "={{ $json._active }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-stu-valid",
+      "name": "Business Valid & Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [208, -16]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'business_invalid_or_inactive', code: 403 }) }}",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "node-stu-403",
+      "name": "Respond 403 Invalid Business",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [416, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-found",
+              "leftValue": "={{ $json._leadFound }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-stu-leadfound",
+      "name": "Lead Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [416, -16]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'lead_not_found', code: 404 }) }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "node-stu-404",
+      "name": "Respond 404 Lead Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [624, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-status",
+              "leftValue": "={{ $json._statusValid }}",
+              "rightValue": "={{ true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-stu-statusvalid",
+      "name": "Status Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [624, -16],
+      "notes": "Rejects arbitrary status values with 422."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', error: 'invalid_status', allowed: ['new','contacted','qualified','booked','lost','no_response','closed'], code: 422 }) }}",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "id": "node-stu-422",
+      "name": "Respond 422 Invalid Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [832, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst lead = item.lead || {};\nconst nowIso = new Date().toISOString();\n\n// Persisted values: preserve existing data unless this update changes it.\n// booked_at / booking_id are NEVER fabricated — only used when supplied by the request\n// on a transition to booked.\nconst updated = {\n  lead_id: String(lead.lead_id || ''),\n  business_id: String(lead.business_id || ''),\n  status: item.new_status,\n  updated_at: nowIso,\n  notes: item.notes_in || String(lead.notes || ''),\n  next_followup_at: item._terminal ? '' : String(lead.next_followup_at || ''),\n  booked:\n    item.new_status === 'booked' ? 'TRUE' : String(lead.booked == null ? '' : lead.booked),\n  booked_at:\n    item.new_status === 'booked'\n      ? item.supplied_booked_at || String(lead.booked_at || '')\n      : String(lead.booked_at || ''),\n  booking_id:\n    item.new_status === 'booked'\n      ? item.supplied_booking_id || String(lead.booking_id || '')\n      : String(lead.booking_id || '')\n};\n\nreturn [\n  {\n    json: Object.assign({}, updated, {\n      old_status: item.old_status,\n      new_status: item.new_status,\n      updated_by: item.updated_by,\n      owner_email: item.owner_email,\n      from_email: item.from_email,\n      reply_to_email: item.reply_to_email,\n      business_name: item.business_name,\n      _esc_lead_id: esc(updated.lead_id),\n      _esc_business_name: esc(item.business_name),\n      _esc_name: esc(lead.name),\n      _esc_old_status: esc(item.old_status),\n      _esc_new_status: esc(item.new_status),\n      _esc_updated_by: esc(item.updated_by),\n      _esc_notes: esc(updated.notes)\n    })\n  }\n];\n\nfunction esc(v) {\n  return String(v == null ? '' : v)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}"
+      },
+      "id": "node-stu-prep",
+      "name": "Prepare Updated Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [832, -16],
+      "notes": "Applies the new status. Terminal statuses (booked/lost/closed/no_response) clear next_followup_at; non-terminal transitions preserve the existing schedule. booked=TRUE only when status becomes booked; booked_at/booking_id only when supplied by the request."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "columnToMatchOn": "lead_id",
+        "valueToMatchOn": "={{ (($('Status Update Webhook').first().json.body || $('Status Update Webhook').first().json).lead_id || $json.lead_id) }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "column": "updated_at",
+              "fieldValue": "={{ $json.updated_at }}"
+            },
+            {
+              "column": "notes",
+              "fieldValue": "={{ $json.notes }}"
+            },
+            {
+              "column": "next_followup_at",
+              "fieldValue": "={{ $json.next_followup_at }}"
+            },
+            {
+              "column": "booked",
+              "fieldValue": "={{ $json.booked }}"
+            },
+            {
+              "column": "booked_at",
+              "fieldValue": "={{ $json.booked_at }}"
+            },
+            {
+              "column": "booking_id",
+              "fieldValue": "={{ $json.booking_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-stu-update",
+      "name": "Update Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [1040, -16],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Updates the EXISTING row matched by Column to Match On = lead_id (explicit webhook reference first, per live-validated pattern; never row_number)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [\n  {\n    json: {\n      update_id: 'upd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n      created_at: new Date().toISOString(),\n      lead_id: item.lead_id,\n      business_id: item.business_id,\n      old_status: item.old_status,\n      new_status: item.new_status,\n      updated_by: item.updated_by,\n      notes: item.notes || ''\n    }\n  }\n];"
+      },
+      "id": "node-stu-statusrecord",
+      "name": "Build Status Update Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1248, -16]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "status_updates",
+          "mode": "name"
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "update_id",
+              "fieldValue": "={{ $json.update_id }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "fieldId": "business_id",
+              "fieldValue": "={{ $json.business_id }}"
+            },
+            {
+              "fieldId": "old_status",
+              "fieldValue": "={{ $json.old_status }}"
+            },
+            {
+              "fieldId": "new_status",
+              "fieldValue": "={{ $json.new_status }}"
+            },
+            {
+              "fieldId": "updated_by",
+              "fieldValue": "={{ $json.updated_by }}"
+            },
+            {
+              "fieldId": "notes",
+              "fieldValue": "={{ $json.notes }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-stu-appendstatus",
+      "name": "Append Status Update",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [1456, -16],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Explicit mapping to exact status_updates headers. If your n8n version has no name mode on this field, reselect the status_updates tab once."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-owner-present",
+              "leftValue": "={{ $('Prepare Updated Lead').first().json.owner_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-from-present",
+              "leftValue": "={{ $('Prepare Updated Lead').first().json.from_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-stu-hasowner",
+      "name": "Owner Email Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1664, -16],
+      "notes": "Owner notification only when BOTH owner_email AND from_email present (live-validated gating pattern). References Prepare node, not Sheets output shape."
+    },
+    {
+      "parameters": {},
+      "id": "node-stu-skipowner",
+      "name": "Skip Owner Email",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1872, 144],
+      "notes": "Clean skip when config missing; the status change is already committed."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Prepare Updated Lead').first().json.from_email }}",
+        "toEmail": "={{ $('Prepare Updated Lead').first().json.owner_email }}",
+        "subject": "={{ 'Lead status updated: ' + $('Prepare Updated Lead').first().json._esc_new_status + ' — ' + $('Prepare Updated Lead').first().json.business_name + ' — Lead ' + $('Prepare Updated Lead').first().json.lead_id }}",
+        "html": "={{ `<h3>Lead status updated</h3><p><b>${$json._esc_business_name}</b></p><table cellpadding=\"4\"><tr><td><b>Lead ID</b></td><td>${$json._esc_lead_id}</td></tr><tr><td><b>Name</b></td><td>${$json._esc_name}</td></tr><tr><td><b>Old status</b></td><td>${$json._esc_old_status}</td></tr><tr><td><b>New status</b></td><td>${$json._esc_new_status}</td></tr><tr><td><b>Updated by</b></td><td>${$json._esc_updated_by}</td></tr></table>${$json.notes ? '<p>Notes: ' + $json._esc_notes + '</p>' : ''}` }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "node-stu-owneremail",
+      "name": "Owner Status Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1872, -16],
+      "webhookId": "c9f2e4a3-5d66-4c77-9d88-4193f2e7a903",
+      "credentials": {
+        "smtp": {
+          "id": "uRV9Wct3Ugjxu9hk",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "FRESH native Email Send node (replaces obsolete n8n-nodes-base.sendEmail). Proven SMTP credential. Attribution footer disabled. Evaluated subject expression (not literal template text). onError isolates SMTP failure from the committed status change."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'updated', lead_id: $('Prepare Updated Lead').first().json.lead_id, new_status: $('Prepare Updated Lead').first().json.new_status, code: 200 }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-stu-200",
+      "name": "Respond 200 Updated",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2096, -16],
+      "notes": "Terminal success response; owner-email success AND error outputs both converge here via node-reference reads."
+    }
+  ],
+  "connections": {
+    "Status Update Webhook": {
+      "main": [
+        [
+          {
+            "node": "Valid Ingress Secret?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Ingress Secret?": {
+      "main": [
+        [
+          {
+            "node": "business_id & lead_id Present?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Invalid Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "business_id & lead_id Present?": {
+      "main": [
+        [
+          {
+            "node": "Get Business Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400 Missing IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Business Config": {
+      "main": [
+        [
+          {
+            "node": "Read Existing Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Existing Leads": {
+      "main": [
+        [
+          {
+            "node": "Resolve Lead, Config & Validate Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Lead, Config & Validate Status": {
+      "main": [
+        [
+          {
+            "node": "Business Valid & Active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Business Valid & Active?": {
+      "main": [
+        [
+          {
+            "node": "Lead Found?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 403 Invalid Business",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Found?": {
+      "main": [
+        [
+          {
+            "node": "Status Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 404 Lead Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status Valid?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Updated Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 422 Invalid Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Updated Lead": {
+      "main": [
+        [
+          {
+            "node": "Update Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead": {
+      "main": [
+        [
+          {
+            "node": "Build Status Update Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status Update Record": {
+      "main": [
+        [
+          {
+            "node": "Append Status Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Status Update": {
+      "main": [
+        [
+          {
+            "node": "Owner Email Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Owner Email Present?": {
+      "main": [
+        [
+          {
+            "node": "Owner Status Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Owner Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Owner Status Notification": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Updated",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 200 Updated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Owner Email": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Updated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

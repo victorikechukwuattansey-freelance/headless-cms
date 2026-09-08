@@ -1,0 +1,2 @@
+error_id,created_at,workflow,node,business_id,lead_id,error_message,execution_id,payload,resolved
+err_1755700000003_x1y2z3,2026-08-21T10:02:00.000Z,wf_lead_intake,Append Lead,biz_lonestar_hvac,lead_1755693000001_a1b2c3d4,Example error row (safe to delete),exec_0001,"{""business_id"":""biz_lonestar_hvac""}",FALSE
