@@ -23,3 +23,4 @@ export class AiService {
     return this.gateway;
   }
 }
+

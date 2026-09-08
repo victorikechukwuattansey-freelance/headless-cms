@@ -42,7 +42,9 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default("7d"),
   VAULT_MASTER_KEY: z.string().default("base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
   AI_DEFAULT_PROVIDER: z.enum(["ollama", "openai", "anthropic", "gemini"]).default("ollama"),
-  AI_FALLBACK_PROVIDER: z.enum(["ollama", "openai", "anthropic", "gemini", "none"]).default("none"),
+  AI_FALLBACK_PROVIDER: z
+    .preprocess((v) => (v === "" ? "none" : v), z.enum(["ollama", "openai", "anthropic", "gemini", "none"]))
+    .default("none"),
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
