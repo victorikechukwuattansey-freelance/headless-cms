@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A person using the analyzer. MVP: single demo user, no auth.
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  createdAt DateTime  @default(now())
+  projects  Project[]
+}
+
+// A group of logs and reports — one AI agent/system being analyzed.
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  logs        UploadedLog[]
+
+  @@index([userId])
+}
+
+// One uploaded agent log. Raw content is never stored — only metadata,
+// the redaction count, and the parsed execution it produced.
+model UploadedLog {
+  id           String           @id @default(cuid())
+  projectId    String
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileName     String
+  sourceFormat String           // openai | anthropic | langchain | json | text
+  sizeBytes    Int
+  redactions   Int              @default(0)
+  status       String           @default("analyzed") // uploaded | parsed | analyzed | failed
+  createdAt    DateTime         @default(now())
+  execution    ParsedExecution?
+
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+// The normalized, redacted execution timeline produced from one log.
+// `steps` is a JSON array of { index, kind, label, content, outcome, tokensIn, tokensOut }.
+model ParsedExecution {
+  id            String         @id @default(cuid())
+  uploadedLogId String         @unique
+  uploadedLog   UploadedLog    @relation(fields: [uploadedLogId], references: [id], onDelete: Cascade)
+  steps         Json           // redacted timeline entries
+  createdAt     DateTime       @default(now())
+  report        FailureReport?
+}
+
+// The verdict for one execution: failure type, root cause, fix, prevention.
+// `evidence` is a JSON array of { label, detail, severity }.
+model FailureReport {
+  id                 String          @id @default(cuid())
+  executionId        String          @unique
+  execution          ParsedExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  summary            String
+  failureType        String
+  confidence         Float
+  rootCause          String
+  recommendedFix     String
+  preventionStrategy String
+  evidence           Json            // severity-tagged evidence items
+  createdAt          DateTime        @default(now())
+}

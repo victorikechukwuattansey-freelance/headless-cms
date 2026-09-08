@@ -1,0 +1,5 @@
+[
+  { "timestamp": "10:05:01", "level": "info", "tool": "run_python", "message": "executing script with customer data" },
+  { "timestamp": "10:05:02", "level": "error", "status": "error", "message": "NameError: name 'customer_id' is not defined" },
+  { "timestamp": "10:05:03", "level": "error", "status": "error", "message": "KeyError: 'shipping_address' was never provided" }
+]

@@ -1,0 +1,6 @@
+[
+  { "timestamp": "10:00:01", "level": "info", "tool": "search_web", "message": "calling search_web for query" },
+  { "timestamp": "10:00:02", "level": "error", "tool": "search_web", "status": "error", "message": "tool: search_web failed: unknown tool: search_web is not registered" },
+  { "timestamp": "10:00:03", "level": "info", "tool": "query_database", "message": "retrying with query_database" },
+  { "timestamp": "10:00:04", "level": "error", "tool": "query_database", "status": "error", "message": "tool: query_database failed: tool not found: query_database is unavailable" }
+]
