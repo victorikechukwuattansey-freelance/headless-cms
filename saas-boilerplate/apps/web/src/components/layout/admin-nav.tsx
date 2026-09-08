@@ -5,12 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@saas/utils";
 import { Button } from "@saas/ui/components/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "@saas/ui/components/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@saas/ui/components/sheet";
 import {
   Users,
   CreditCard,

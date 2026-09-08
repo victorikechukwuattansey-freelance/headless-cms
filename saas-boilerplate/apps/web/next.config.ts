@@ -3,7 +3,22 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  serverExternalPackages: ["@prisma/client", "prisma", "@prisma/adapter-pg"],
   outputFileTracingRoot: path.join(__dirname, "..", ".."),
+  outputFileTracingIncludes: {
+    "/*": [
+      "../../node_modules/.prisma/client/**/*",
+      "../../node_modules/.pnpm/@prisma+client@6.19.3*/node_modules/.prisma/client/**/*",
+    ],
+    "/api/auth/register": [
+      "../../node_modules/.prisma/client/**/*",
+      "../../node_modules/.pnpm/@prisma+client@6.19.3*/node_modules/.prisma/client/**/*",
+    ],
+    "/api/auth/[...nextauth]": [
+      "../../node_modules/.prisma/client/**/*",
+      "../../node_modules/.pnpm/@prisma+client@6.19.3*/node_modules/.prisma/client/**/*",
+    ],
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

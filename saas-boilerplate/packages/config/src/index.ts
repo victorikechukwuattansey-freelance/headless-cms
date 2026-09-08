@@ -1,12 +1,15 @@
 import { z } from "zod";
 
+const analyticsProviderSchema = z.enum(["posthog", "plausible", "google-analytics"]);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   NEXT_PUBLIC_APP_NAME: z.string().default("SaaS Boilerplate"),
   DATABASE_URL: z.string(),
   STORAGE_PROVIDER: z.enum(["s3", "uploadthing"]).default("s3"),
-  ANALYTICS_PROVIDER: z.enum(["posthog", "plausible", "google-analytics"]).default("posthog"),
+  ANALYTICS_PROVIDER: analyticsProviderSchema.default("posthog"),
+  NEXT_PUBLIC_ANALYTICS_PROVIDER: analyticsProviderSchema.default("posthog"),
   BILLING_PROVIDER: z.enum(["stripe", "lemon-squeezy"]).default("stripe"),
   AUTH_PROVIDER: z.enum(["next-auth", "supabase"]).default("next-auth"),
   AUTH_SECRET: z.string().min(32).optional(),
@@ -44,6 +47,7 @@ const clientSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   NEXT_PUBLIC_APP_NAME: z.string().default("SaaS Boilerplate"),
+  NEXT_PUBLIC_ANALYTICS_PROVIDER: analyticsProviderSchema.default("posthog"),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
   NEXT_PUBLIC_POSTHOG_HOST: z.string().optional(),
@@ -83,7 +87,18 @@ export function getEnv(): Env {
 export function getClientEnv(): ClientEnv {
   if (cachedClientEnv) return cachedClientEnv;
 
-  const result = clientSchema.safeParse(process.env);
+  const result = clientSchema.safeParse({
+    NODE_ENV: process.env.NODE_ENV,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
+    NEXT_PUBLIC_ANALYTICS_PROVIDER: process.env.NEXT_PUBLIC_ANALYTICS_PROVIDER,
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
+    NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    NEXT_PUBLIC_PLAUSIBLE_DOMAIN: process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN,
+    NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
+    NEXT_PUBLIC_FEATURE_FLAGS: process.env.NEXT_PUBLIC_FEATURE_FLAGS,
+  });
 
   if (!result.success) {
     console.error("❌ Invalid client environment variables:", result.error.flatten().fieldErrors);

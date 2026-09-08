@@ -51,5 +51,8 @@
   "engines": {
     "node": ">=20",
     "pnpm": ">=9"
+  },
+  "dependencies": {
+    "preact": "^10.29.8"
   }
 }

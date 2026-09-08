@@ -5,12 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@saas/utils";
 import { Button } from "@saas/ui/components/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "@saas/ui/components/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@saas/ui/components/sheet";
 import {
   LayoutDashboard,
   CreditCard,
@@ -78,12 +73,7 @@ export function DashboardNavSheet() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="lg:hidden"
-          aria-label="Open navigation menu"
-        >
+        <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation menu">
           <Menu className="h-5 w-5" />
         </Button>
       </SheetTrigger>

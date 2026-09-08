@@ -12,7 +12,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", ".prisma/**", "!.next/cache/**", "dist/**"],
+      "env": ["DATABASE_URL", "AUTH_SECRET", "AUTH_URL"]
     },
     "dev": {
       "cache": false,

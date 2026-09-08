@@ -42,13 +42,17 @@ if (existsSync(migrations)) {
     "--exit-code",
   ]);
   if (drift.status !== 0) {
-    console.error("[db:drift] FAILED — schema and migrations have drifted:\n" + drift.stdout + drift.stderr);
+    console.error(
+      "[db:drift] FAILED — schema and migrations have drifted:\n" + drift.stdout + drift.stderr,
+    );
     failed = true;
   } else {
     console.log("[db:drift] migrations are in sync with schema");
   }
 } else {
-  console.log("[db:drift] no migrations directory yet — run `pnpm db:migrate` to create the baseline");
+  console.log(
+    "[db:drift] no migrations directory yet — run `pnpm db:migrate` to create the baseline",
+  );
 }
 
 process.exit(failed ? 1 : 0);

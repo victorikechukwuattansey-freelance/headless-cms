@@ -36,7 +36,20 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+  } catch (error) {
+    console.error(error);
+
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        stack:
+          process.env.NODE_ENV !== "production"
+            ? error instanceof Error
+              ? error.stack
+              : undefined
+            : undefined,
+      },
+      { status: 500 },
+    );
   }
 }

@@ -1,13 +1,515 @@
 generator client {
   provider        = "prisma-client-js"
   engineType      = "client"
-  previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions"]
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [pgcrypto, citext]
+  extensions = [citext, pgcrypto, uuid_ossp(map: "uuid-ossp", schema: "extensions")]
+}
+
+model User {
+  id                      String                       @id @default(cuid())
+  email                   String                       @unique @db.VarChar(255)
+  emailVerified           DateTime?
+  name                    String?
+  image                   String?
+  passwordHash            String?
+  role                    UserRole                     @default(USER)
+  twoFactorEnabled        Boolean                      @default(false)
+  twoFactorSecret         String?
+  lastLoginAt             DateTime?
+  deletedAt               DateTime?
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+  accounts                Account[]
+  announcements           Announcement[]
+  apiKeys                 ApiKey[]
+  auditLogs               AuditLog[]
+  invitations             Invitation[]
+  memberships             Membership[]
+  notificationPreferences NotificationUserPreference[]
+  notifications           Notification[]
+  ownedOrganizations      Organization[]               @relation("OrganizationOwner")
+  profile                 Profile?
+  sessions                Session[]
+  teamMembers             TeamMember[]
+
+  @@index([email])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  bio         String?
+  avatarUrl   String?
+  phone       String?
+  timezone    String   @default("UTC")
+  language    String   @default("en")
+  theme       String   @default("system")
+  company     String?
+  website     String?
+  location    String?
+  socialLinks Json?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+model Organization {
+  id               String           @id @default(cuid())
+  name             String           @db.VarChar(255)
+  slug             String           @unique @db.VarChar(255)
+  logo             String?
+  description      String?
+  planTier         PlanTier         @default(FREE)
+  billingEmail     String?
+  taxId            String?
+  metadata         Json?
+  deletedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  ownerId          String?
+  auditLogs        AuditLog[]
+  billingHistories BillingHistory[]
+  coupons          Coupon[]
+  customers        Customer[]
+  featureFlags     FeatureFlag[]
+  invitations      Invitation[]
+  invoices         Invoice[]
+  memberships      Membership[]
+  owner            User?            @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  subscriptions    Subscription[]
+  webhookEvents    WebhookEvent[]
+
+  @@index([slug])
+  @@index([deletedAt])
+  @@map("organizations")
+}
+
+model Membership {
+  id             String         @id @default(cuid())
+  userId         String
+  organizationId String
+  role           MembershipRole @default(MEMBER)
+  joinedAt       DateTime       @default(now())
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([role])
+  @@map("memberships")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  provider          String  @db.VarChar(100)
+  providerAccountId String  @db.VarChar(255)
+  refreshToken      String?
+  accessToken       String?
+  expiresAt         Int?
+  tokenType         String?
+  scope             String?
+  idToken           String?
+  sessionState      String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  sessionToken String   @unique @db.VarChar(255)
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Subscription {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  provider           PaymentProvider
+  providerId         String?              @unique @db.VarChar(255)
+  status             SubscriptionStatus
+  planTier           PlanTier
+  interval           SubscriptionInterval @default(MONTHLY)
+  quantity           Int                  @default(1)
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  trialStart         DateTime?
+  trialEnd           DateTime?
+  canceledAt         DateTime?
+  canceledReason     String?
+  metadata           Json?
+  deletedAt          DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([providerId])
+  @@index([status])
+  @@index([planTier])
+  @@map("subscriptions")
+}
+
+model Customer {
+  id             String          @id @default(cuid())
+  organizationId String
+  provider       PaymentProvider
+  providerId     String          @unique @db.VarChar(255)
+  email          String          @db.VarChar(255)
+  name           String?
+  metadata       Json?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([providerId])
+  @@index([email])
+  @@map("customers")
+}
+
+model Invoice {
+  id             String          @id @default(cuid())
+  organizationId String
+  provider       PaymentProvider
+  providerId     String          @unique @db.VarChar(255)
+  amount         Int
+  currency       String          @default("usd")
+  status         String          @db.VarChar(50)
+  description    String?
+  paidAt         DateTime?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  metadata       Json?
+  invoiceUrl     String?
+  receiptUrl     String?
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([providerId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String    @db.VarChar(100)
+  key         String    @unique @db.VarChar(255)
+  keyPrefix   String    @db.VarChar(20)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  permissions String[]
+  ipWhitelist String[]
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([key])
+  @@index([keyPrefix])
+  @@map("api_keys")
+}
+
+model Invitation {
+  id             String         @id @default(cuid())
+  organizationId String
+  email          String         @db.VarChar(255)
+  role           MembershipRole @default(MEMBER)
+  token          String         @unique @db.VarChar(255)
+  invitedById    String
+  acceptedAt     DateTime?
+  expiresAt      DateTime
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  invitedBy      User           @relation(fields: [invitedById], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@index([token])
+  @@map("invitations")
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  type      NotificationType    @default(IN_APP)
+  channel   NotificationChannel
+  title     String              @db.VarChar(255)
+  message   String?
+  link      String?
+  readAt    DateTime?
+  deletedAt DateTime?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([channel])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String?
+  userId         String?
+  action         String        @db.VarChar(100)
+  entity         String        @db.VarChar(100)
+  entityId       String?
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  user           User?         @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model WebhookEvent {
+  id             String           @id @default(cuid())
+  organizationId String?
+  provider       PaymentProvider?
+  eventType      String           @db.VarChar(100)
+  payload        Json
+  status         String           @default("pending") @db.VarChar(50)
+  errorMessage   String?
+  processedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  organization   Organization?    @relation(fields: [organizationId], references: [id])
+
+  @@index([status])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("webhook_events")
+}
+
+model FeatureFlag {
+  id             String        @id @default(cuid())
+  name           String        @db.VarChar(100)
+  key            String        @unique @db.VarChar(100)
+  description    String?
+  enabled        Boolean       @default(false)
+  organizationId String?
+  environment    String        @default("production") @db.VarChar(50)
+  rules          Json?
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([key])
+  @@index([organizationId])
+  @@index([environment])
+  @@map("feature_flags")
+}
+
+model Team {
+  id          String       @id @default(cuid())
+  name        String       @db.VarChar(255)
+  slug        String       @unique @db.VarChar(255)
+  description String?
+  image       String?
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  members     TeamMember[]
+
+  @@index([slug])
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String         @id @default(cuid())
+  teamId    String
+  userId    String
+  role      MembershipRole @default(MEMBER)
+  deletedAt DateTime?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  team      Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+model BillingHistory {
+  id             String       @id @default(cuid())
+  organizationId String
+  event          String       @db.VarChar(100)
+  amount         Int?
+  currency       String       @default("usd")
+  description    String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("billing_history")
+}
+
+model Coupon {
+  id                    String        @id @default(cuid())
+  code                  String        @unique @db.VarChar(50)
+  description           String?
+  discountPercent       Float?        @map("discount_percent")
+  discountAmount        Int?          @map("discount_amount_cents")
+  currency              String        @default("usd") @db.VarChar(3)
+  maxRedemptions        Int?          @map("max_redemptions")
+  usedCount             Int           @default(0) @map("used_count")
+  maxRedemptionsPerUser Int?          @default(1) @map("max_redemptions_per_user")
+  minAmount             Int?          @map("min_amount_cents")
+  startsAt              DateTime?     @map("starts_at")
+  expiresAt             DateTime?     @map("expires_at")
+  isActive              Boolean       @default(true) @map("is_active")
+  organizationId        String?       @map("organization_id")
+  deletedAt             DateTime?     @map("deleted_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  organization          Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("coupons")
+}
+
+model Announcement {
+  id          String              @id @default(cuid())
+  title       String              @db.VarChar(255)
+  body        String
+  channel     AnnouncementChannel @default(IN_APP)
+  targetRole  UserRole?
+  publishedAt DateTime?           @map("published_at")
+  scheduledAt DateTime?           @map("scheduled_at")
+  createdById String              @map("created_by_id")
+  deletedAt   DateTime?           @map("deleted_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  createdBy   User                @relation(fields: [createdById], references: [id])
+
+  @@index([publishedAt])
+  @@index([channel])
+  @@map("announcements")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  email     String    @db.VarChar(255)
+  token     String    @unique @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
+model NotificationUserPreference {
+  id        String                     @id @default(cuid())
+  userId    String                     @map("user_id")
+  channel   NotificationChannel
+  types     NotificationDeliveryType[]
+  enabled   Boolean                    @default(true)
+  createdAt DateTime                   @default(now()) @map("created_at")
+  updatedAt DateTime                   @updatedAt @map("updated_at")
+  user      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channel])
+  @@map("notification_user_preferences")
+}
+
+model ContactMessage {
+  id        String    @id @default(cuid())
+  name      String    @db.VarChar(100)
+  email     String    @db.VarChar(255)
+  subject   String    @db.VarChar(150)
+  message   String
+  source    String    @default("marketing-site") @db.VarChar(50)
+  ip        String?   @db.VarChar(45)
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("contact_messages")
+}
+
+model NewsletterSubscriber {
+  id               String           @id @default(cuid())
+  email            String           @unique @db.VarChar(255)
+  status           NewsletterStatus @default(SUBSCRIBED)
+  source           String           @default("marketing-site") @db.VarChar(50)
+  unsubscribeToken String           @unique @map("unsubscribe_token") @db.VarChar(64)
+  createdAt        DateTime         @default(now()) @map("created_at")
+  unsubscribedAt   DateTime?        @map("unsubscribed_at")
+
+  @@index([status])
+  @@map("newsletter_subscribers")
+}
+
+model ContentPost {
+  id          String     @id @default(cuid())
+  slug        String     @unique @db.VarChar(255)
+  title       String     @db.VarChar(255)
+  excerpt     String?    @db.VarChar(500)
+  body        String
+  coverImage  String?    @map("cover_image")
+  status      PostStatus @default(DRAFT)
+  publishedAt DateTime?  @map("published_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([status, publishedAt])
+  @@map("content_posts")
 }
 
 enum UserRole {
@@ -78,485 +580,6 @@ enum AnnouncementChannel {
   BOTH
 }
 
-model User {
-  id               String    @id @default(cuid())
-  email            String    @unique @db.VarChar(255)
-  emailVerified    DateTime?
-  name             String?
-  image            String?
-  passwordHash     String?
-  role             UserRole  @default(USER)
-  twoFactorEnabled Boolean   @default(false)
-  twoFactorSecret  String?
-  lastLoginAt      DateTime?
-  deletedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  accounts                Account[]
-  sessions                Session[]
-  profile                 Profile?
-  memberships             Membership[]
-  invitations             Invitation[]
-  notifications           Notification[]
-  apiKeys                 ApiKey[]
-  auditLogs               AuditLog[]
-  ownedOrganizations      Organization[]               @relation("OrganizationOwner")
-  teamMembers             TeamMember[]
-  announcements           Announcement[]
-  notificationPreferences NotificationUserPreference[]
-
-  @@index([email])
-  @@index([deletedAt])
-  @@map("users")
-}
-
-model Profile {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  bio         String?
-  avatarUrl   String?
-  phone       String?
-  timezone    String   @default("UTC")
-  language    String   @default("en")
-  theme       String   @default("system")
-  company     String?
-  website     String?
-  location    String?
-  socialLinks Json?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("profiles")
-}
-
-model Organization {
-  id           String    @id @default(cuid())
-  name         String    @db.VarChar(255)
-  slug         String    @unique @db.VarChar(255)
-  logo         String?
-  description  String?
-  planTier     PlanTier  @default(FREE)
-  billingEmail String?
-  taxId        String?
-  metadata     Json?
-  deletedAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  ownerId          String?
-  owner            User?            @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  memberships      Membership[]
-  subscriptions    Subscription[]
-  invoices         Invoice[]
-  customers        Customer[]
-  invitations      Invitation[]
-  featureFlags     FeatureFlag[]
-  webhookEvents    WebhookEvent[]
-  auditLogs        AuditLog[]
-  billingHistories BillingHistory[]
-  coupons          Coupon[]
-
-  @@index([slug])
-  @@index([deletedAt])
-  @@map("organizations")
-}
-
-model Membership {
-  id             String         @id @default(cuid())
-  userId         String
-  organizationId String
-  role           MembershipRole @default(MEMBER)
-  joinedAt       DateTime       @default(now())
-  deletedAt      DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, organizationId])
-  @@index([userId])
-  @@index([organizationId])
-  @@index([role])
-  @@map("memberships")
-}
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  provider          String  @db.VarChar(100)
-  providerAccountId String  @db.VarChar(255)
-  refreshToken      String? @db.Text
-  accessToken       String? @db.Text
-  expiresAt         Int?
-  tokenType         String?
-  scope             String?
-  idToken           String? @db.Text
-  sessionState      String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-  @@map("accounts")
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  userId       String
-  sessionToken String   @unique @db.VarChar(255)
-  expiresAt    DateTime
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([expiresAt])
-  @@map("sessions")
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-
-  @@unique([identifier, token])
-  @@map("verification_tokens")
-}
-
-model Subscription {
-  id                 String               @id @default(cuid())
-  organizationId     String
-  provider           PaymentProvider
-  providerId         String?              @unique @db.VarChar(255)
-  status             SubscriptionStatus
-  planTier           PlanTier
-  interval           SubscriptionInterval @default(MONTHLY)
-  quantity           Int                  @default(1)
-  currentPeriodStart DateTime?
-  currentPeriodEnd   DateTime?
-  trialStart         DateTime?
-  trialEnd           DateTime?
-  canceledAt         DateTime?
-  canceledReason     String?
-  metadata           Json?
-  deletedAt          DateTime?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId])
-  @@index([providerId])
-  @@index([status])
-  @@index([planTier])
-  @@map("subscriptions")
-}
-
-model Customer {
-  id             String          @id @default(cuid())
-  organizationId String
-  provider       PaymentProvider
-  providerId     String          @unique @db.VarChar(255)
-  email          String          @db.VarChar(255)
-  name           String?
-  metadata       Json?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId])
-  @@index([providerId])
-  @@index([email])
-  @@map("customers")
-}
-
-model Invoice {
-  id             String          @id @default(cuid())
-  organizationId String
-  provider       PaymentProvider
-  providerId     String          @unique @db.VarChar(255)
-  amount         Int
-  currency       String          @default("usd")
-  status         String          @db.VarChar(50)
-  description    String?
-  paidAt         DateTime?
-  periodStart    DateTime?
-  periodEnd      DateTime?
-  metadata       Json?
-  invoiceUrl     String?
-  receiptUrl     String?
-  deletedAt      DateTime?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId])
-  @@index([providerId])
-  @@index([status])
-  @@map("invoices")
-}
-
-model ApiKey {
-  id          String    @id @default(cuid())
-  userId      String
-  name        String    @db.VarChar(100)
-  key         String    @unique @db.VarChar(255)
-  keyPrefix   String    @db.VarChar(20)
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  permissions String[]
-  ipWhitelist String[]
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([key])
-  @@index([keyPrefix])
-  @@map("api_keys")
-}
-
-model Invitation {
-  id             String         @id @default(cuid())
-  organizationId String
-  email          String         @db.VarChar(255)
-  role           MembershipRole @default(MEMBER)
-  token          String         @unique @db.VarChar(255)
-  invitedById    String
-  acceptedAt     DateTime?
-  expiresAt      DateTime
-  deletedAt      DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invitedBy    User         @relation(fields: [invitedById], references: [id])
-
-  @@index([organizationId])
-  @@index([email])
-  @@index([token])
-  @@map("invitations")
-}
-
-model Notification {
-  id        String              @id @default(cuid())
-  userId    String
-  type      NotificationType    @default(IN_APP)
-  channel   NotificationChannel
-  title     String              @db.VarChar(255)
-  message   String?             @db.Text
-  link      String?
-  readAt    DateTime?
-  deletedAt DateTime?
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, readAt])
-  @@index([channel])
-  @@map("notifications")
-}
-
-model AuditLog {
-  id             String   @id @default(cuid())
-  organizationId String?
-  userId         String?
-  action         String   @db.VarChar(100)
-  entity         String   @db.VarChar(100)
-  entityId       String?
-  metadata       Json?
-  ipAddress      String?
-  userAgent      String?
-  createdAt      DateTime @default(now())
-
-  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-
-  @@index([organizationId])
-  @@index([userId])
-  @@index([action])
-  @@index([createdAt])
-  @@map("audit_logs")
-}
-
-model WebhookEvent {
-  id             String           @id @default(cuid())
-  organizationId String?
-  provider       PaymentProvider?
-  eventType      String           @db.VarChar(100)
-  payload        Json
-  status         String           @default("pending") @db.VarChar(50)
-  errorMessage   String?
-  processedAt    DateTime?
-  createdAt      DateTime         @default(now())
-
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-
-  @@index([status])
-  @@index([eventType])
-  @@index([createdAt])
-  @@map("webhook_events")
-}
-
-model FeatureFlag {
-  id             String   @id @default(cuid())
-  name           String   @db.VarChar(100)
-  key            String   @unique @db.VarChar(100)
-  description    String?
-  enabled        Boolean  @default(false)
-  organizationId String?
-  environment    String   @default("production") @db.VarChar(50)
-  rules          Json?
-  metadata       Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([key])
-  @@index([organizationId])
-  @@index([environment])
-  @@map("feature_flags")
-}
-
-model Team {
-  id          String    @id @default(cuid())
-  name        String    @db.VarChar(255)
-  slug        String    @unique @db.VarChar(255)
-  description String?
-  image       String?
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  members TeamMember[]
-
-  @@index([slug])
-  @@map("teams")
-}
-
-model TeamMember {
-  id        String         @id @default(cuid())
-  teamId    String
-  userId    String
-  role      MembershipRole @default(MEMBER)
-  deletedAt DateTime?
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([teamId, userId])
-  @@map("team_members")
-}
-
-model BillingHistory {
-  id             String   @id @default(cuid())
-  organizationId String
-  event          String   @db.VarChar(100)
-  amount         Int?
-  currency       String   @default("usd")
-  description    String?
-  metadata       Json?
-  createdAt      DateTime @default(now())
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId])
-  @@index([createdAt])
-  @@map("billing_history")
-}
-
-model Coupon {
-  id                    String    @id @default(cuid())
-  code                  String    @unique @db.VarChar(50)
-  description           String?
-  discountPercent       Float?    @map("discount_percent")
-  discountAmount        Int?      @map("discount_amount_cents")
-  currency              String    @default("usd") @db.VarChar(3)
-  maxRedemptions        Int?      @map("max_redemptions")
-  usedCount             Int       @default(0) @map("used_count")
-  maxRedemptionsPerUser Int?      @default(1) @map("max_redemptions_per_user")
-  minAmount             Int?      @map("min_amount_cents")
-  startsAt              DateTime? @map("starts_at")
-  expiresAt             DateTime? @map("expires_at")
-  isActive              Boolean   @default(true) @map("is_active")
-  organizationId        String?   @map("organization_id")
-  deletedAt             DateTime? @map("deleted_at")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([code])
-  @@index([organizationId])
-  @@index([isActive])
-  @@map("coupons")
-}
-
-model Announcement {
-  id          String              @id @default(cuid())
-  title       String              @db.VarChar(255)
-  body        String              @db.Text
-  channel     AnnouncementChannel @default(IN_APP)
-  targetRole  UserRole?
-  publishedAt DateTime?           @map("published_at")
-  scheduledAt DateTime?           @map("scheduled_at")
-  createdById String              @map("created_by_id")
-  deletedAt   DateTime?           @map("deleted_at")
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
-
-  createdBy User @relation(fields: [createdById], references: [id])
-
-  @@index([publishedAt])
-  @@index([channel])
-  @@map("announcements")
-}
-
-model PasswordResetToken {
-  id        String    @id @default(cuid())
-  email     String    @db.VarChar(255)
-  token     String    @unique @db.VarChar(255)
-  expiresAt DateTime  @map("expires_at")
-  usedAt    DateTime? @map("used_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  @@index([email])
-  @@index([token])
-  @@map("password_reset_tokens")
-}
-
-model NotificationUserPreference {
-  id        String                     @id @default(cuid())
-  userId    String                     @map("user_id")
-  channel   NotificationChannel
-  types     NotificationDeliveryType[]
-  enabled   Boolean                    @default(true)
-  createdAt DateTime                   @default(now()) @map("created_at")
-  updatedAt DateTime                   @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, channel])
-  @@map("notification_user_preferences")
-}
-
 enum NewsletterStatus {
   SUBSCRIBED
   UNSUBSCRIBED
@@ -566,48 +589,4 @@ enum NewsletterStatus {
 enum PostStatus {
   DRAFT
   PUBLISHED
-}
-
-model ContactMessage {
-  id        String   @id @default(cuid())
-  name      String   @db.VarChar(100)
-  email     String   @db.VarChar(255)
-  subject   String   @db.VarChar(150)
-  message   String   @db.Text
-  source    String   @default("marketing-site") @db.VarChar(50)
-  ip        String?  @db.VarChar(45)
-  readAt    DateTime? @map("read_at")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([createdAt])
-  @@map("contact_messages")
-}
-
-model NewsletterSubscriber {
-  id               String           @id @default(cuid())
-  email            String           @unique @db.VarChar(255)
-  status           NewsletterStatus @default(SUBSCRIBED)
-  source           String           @default("marketing-site") @db.VarChar(50)
-  unsubscribeToken String           @unique @map("unsubscribe_token") @db.VarChar(64)
-  createdAt        DateTime         @default(now()) @map("created_at")
-  unsubscribedAt   DateTime?        @map("unsubscribed_at")
-
-  @@index([status])
-  @@map("newsletter_subscribers")
-}
-
-model ContentPost {
-  id          String     @id @default(cuid())
-  slug        String     @unique @db.VarChar(255)
-  title       String     @db.VarChar(255)
-  excerpt     String?    @db.VarChar(500)
-  body        String     @db.Text
-  coverImage  String?    @map("cover_image")
-  status      PostStatus @default(DRAFT)
-  publishedAt DateTime?  @map("published_at")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-
-  @@index([status, publishedAt])
-  @@map("content_posts")
 }

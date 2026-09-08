@@ -61,7 +61,9 @@ for (const [name, pkgPath] of workspacePackages) {
     for (const [dep, spec] of Object.entries(pkg[section] ?? {})) {
       if (typeof spec === "string" && spec.startsWith("workspace:")) {
         if (!workspacePackages.has(dep)) {
-          failures.push(`${pkgPath}: workspace:* dependency "${dep}" does not exist in the workspace`);
+          failures.push(
+            `${pkgPath}: workspace:* dependency "${dep}" does not exist in the workspace`,
+          );
         }
       }
     }
@@ -115,7 +117,9 @@ try {
     { cwd: repoRoot, stdio: "pipe", shell: process.platform === "win32" },
   );
 } catch {
-  failures.push("lockfile out of sync with manifests — run `pnpm install` (frozen-lockfile failed)");
+  failures.push(
+    "lockfile out of sync with manifests — run `pnpm install` (frozen-lockfile failed)",
+  );
 }
 
 if (failures.length > 0) {

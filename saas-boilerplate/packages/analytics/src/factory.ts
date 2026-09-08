@@ -1,4 +1,4 @@
-import { getEnv } from "@saas/config";
+import { getClientEnv } from "@saas/config";
 import type { AnalyticsService } from "./service";
 
 let instance: AnalyticsService | null = null;
@@ -8,8 +8,8 @@ export function createAnalyticsService(): Promise<AnalyticsService> {
   if (instance) return Promise.resolve(instance);
   if (loadPromise) return loadPromise;
 
-  const env = getEnv();
-  const provider = env.ANALYTICS_PROVIDER ?? "posthog";
+  const env = getClientEnv();
+  const provider = env.NEXT_PUBLIC_ANALYTICS_PROVIDER ?? "posthog";
 
   loadPromise = (async () => {
     let adapter: AnalyticsService;

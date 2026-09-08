@@ -18,14 +18,14 @@
     "schema": "prisma/schema.prisma"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^6.7.0",
-    "@prisma/client": "^6.7.0",
+    "@prisma/client": "6.19.3",
+    "@prisma/adapter-pg": "6.19.3",
     "pg": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/pg": "^8.20.3",
-    "prisma": "^6.7.0",
+    "prisma": "^6.19.3",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
   },

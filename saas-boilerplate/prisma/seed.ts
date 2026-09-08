@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../packages/database/src/client";
 import {
   seedUsers,
   seedOrganizations,
@@ -11,9 +11,7 @@ import {
   seedBillingHistory,
   seedCoupons,
   seedAnnouncements,
-} from "./seed";
-
-const prisma = new PrismaClient();
+} from "./seed/index";
 
 async function main() {
   console.log("🌱 Starting seed...\n");

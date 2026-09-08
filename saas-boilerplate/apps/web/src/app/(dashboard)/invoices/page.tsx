@@ -90,12 +90,12 @@ function InvoicesTableSkeleton() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="h-6 w-40 animate-pulse rounded bg-muted" />
+        <CardTitle className="bg-muted h-6 w-40 animate-pulse rounded" />
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
           {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-10 animate-pulse rounded bg-muted" />
+            <div key={i} className="bg-muted h-10 animate-pulse rounded" />
           ))}
         </div>
       </CardContent>
