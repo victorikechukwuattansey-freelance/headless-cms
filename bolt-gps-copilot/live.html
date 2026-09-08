@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="description" content="Highlander Bolt GPS Copilot — Live field mode. Advisory only. Offline-capable.">
+<title>Live Copilot</title>
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg:#0b1220; --panel:#121a2b; --panel2:#0f1626; --ink:#e8edf7; --mut:#8b96b0;
+    --acc:#37d67a; --acc-dim:#1c3a2b; --warn:#ffb454; --warn-dim:#3a2d18;
+    --danger:#ff5a5a; --danger-dim:#3a1c1c; --line:#22304a; --blue:#5aa2ff;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    min-height:100dvh; overflow-x:hidden; }
+  body { padding-bottom:max(72px, env(safe-area-inset-bottom)); }
+
+  .appbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; justify-content:space-between;
+    gap:8px; padding:env(safe-area-inset-top) 14px 10px; background:linear-gradient(180deg,#0d1425, rgba(11,18,32,.96));
+    border-bottom:1px solid var(--line); }
+  .brand { font-weight:800; letter-spacing:.02em; font-size:15px; }
+  .brand small { color:var(--mut); font-weight:600; margin-left:6px; }
+  .pills { display:flex; gap:6px; flex-wrap:nowrap; }
+  .pill { font-size:11px; font-weight:800; letter-spacing:.03em; padding:5px 9px; border-radius:999px; border:1px solid var(--line);
+    color:var(--mut); white-space:nowrap; }
+  .pill.ok { color:#0a1720; background:var(--acc); border-color:var(--acc); }
+  .pill.warn { color:#201303; background:var(--warn); border-color:var(--warn); }
+  .pill.bad { color:#fff; background:var(--danger); border-color:var(--danger); }
+  .pill.sim { color:#cfe0ff; background:#16233c; border-color:#2c4270; }
+
+  main { padding:12px 12px 0; display:flex; flex-direction:column; gap:12px; max-width:520px; margin:0 auto; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; }
+  .panel h2 { margin:0 0 10px; font-size:11px; letter-spacing:.14em; color:var(--mut); font-weight:800; }
+
+  /* hero */
+  .hero { padding:16px 14px; position:relative; overflow:hidden; }
+  .hero .kind { display:inline-block; font-weight:900; letter-spacing:.06em; font-size:13px; padding:5px 12px;
+    border-radius:999px; background:var(--warn-dim); color:var(--warn); border:1px solid #6b4c14; }
+  .hero .kind.stay { background:#12293b; color:#8fd0ff; border-color:#1d4a6e; }
+  .hero .kind.keep { background:var(--danger-dim); color:var(--danger); border-color:#6b2323; }
+  .hero .line { font-size:20px; font-weight:800; margin:10px 0 2px; }
+  .hero .pay { font-size:30px; font-weight:900; color:var(--acc); }
+  .hero .pay .tag { font-size:12px; color:var(--mut); font-weight:600; margin-left:6px; }
+  .hero .meta { color:var(--mut); font-size:13px; margin-top:4px; }
+  .hero .note { font-size:13px; color:var(--ink); background:var(--panel2); border:1px solid var(--line);
+    border-radius:10px; padding:8px 10px; margin:10px 0 0; }
+  .hero .not-yet { color:var(--mut); font-size:14px; }
+  .hero-actions { display:flex; gap:8px; margin-top:10px; }
+  .hero-actions .btn { flex:1; }
+
+  /* buttons */
+  .btn { min-height:48px; border-radius:12px; border:1px solid var(--line); background:var(--panel2);
+    color:var(--ink); font-size:14px; font-weight:800; letter-spacing:.02em; cursor:pointer; margin:0; }
+  .btn:active { transform:scale(.985); }
+  .btn.primary { background:var(--acc); border-color:var(--acc); color:#06200f; }
+  .btn.warn { background:var(--warn); border-color:var(--warn); color:#201303; }
+  .btn.danger { background:var(--danger); border-color:var(--danger); color:#2a0505; }
+  .btn.armed { background:var(--danger); border-color:var(--danger); color:#fff; animation:pulse .8s ease 3; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn[hidden]{ display:none; }
+  @keyframes pulse { 50% { transform:scale(1.04); } }
+
+  /* shift panels */
+  .shift-status { font-size:26px; font-weight:900; }
+  .shift-status.idle { color:var(--mut); }
+  .shift-status.on { color:var(--acc); }
+  .shift-status.pause { color:var(--warn); }
+  .facts { display:grid; grid-template-columns:1fr 1fr; gap:6px 14px; margin:10px 0; }
+  .fact { display:flex; justify-content:space-between; gap:8px; border-bottom:1px dashed #1c2840; padding:4px 0; }
+  .fact b { font-variant-numeric:tabular-nums; }
+  .row { display:flex; gap:8px; }
+  .row .btn { flex:1; }
+
+  /* keypad / money */
+  .money { font-size:34px; font-weight:900; text-align:right; font-variant-numeric:tabular-nums;
+    border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--panel2); margin-bottom:10px; }
+  .money .cur { color:var(--mut); font-size:16px; font-weight:700; margin-right:4px; }
+  .keypad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .keypad .key { min-height:52px; font-size:19px; font-weight:800; }
+  .label { display:flex; justify-content:space-between; align-items:center; margin:10px 0 6px; font-size:12px; font-weight:800; color:var(--mut); letter-spacing:.08em; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { min-height:44px; padding:8px 14px; border-radius:999px; border:1px solid var(--line); background:var(--panel2);
+    color:var(--ink); font-size:13px; font-weight:700; cursor:pointer; }
+  .chip.on { background:var(--acc-dim); color:var(--acc); border-color:var(--acc); }
+  .eval { margin-top:10px; border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--panel2); font-size:13px; }
+  .eval .rec-badge { font-weight:900; }
+  .eval.accept .rec-badge { color:var(--acc); }
+  .eval.decline .rec-badge { color:var(--danger); }
+
+  /* radar */
+  .radar { width:100%; height:auto; display:block; border-radius:12px; background:var(--panel2); border:1px solid var(--line); }
+  .radar-head { display:flex; justify-content:space-between; color:var(--mut); font-size:12px; margin-bottom:8px; }
+
+  /* footer action bar */
+  .actionbar { position:fixed; left:0; right:0; bottom:0; z-index:30; display:flex; gap:8px;
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:linear-gradient(0deg,#0a101d, rgba(10,16,29,.94));
+    border-top:1px solid var(--line); max-width:560px; margin:0 auto; }
+  .actionbar .btn { flex:1; min-height:50px; }
+
+  /* driving overlay */
+  #drive-overlay { position:fixed; inset:0; z-index:60; display:none; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; background:rgba(6,9,16,.92); text-align:center; padding:24px; }
+  #drive-overlay.show { display:flex; }
+  #drive-overlay .msg { font-size:20px; font-weight:900; }
+  #drive-overlay .sub { color:var(--mut); max-width:300px; }
+
+  /* diagnostics */
+  details { border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--panel2); }
+  summary { cursor:pointer; font-weight:800; font-size:13px; }
+  pre { white-space:pre-wrap; word-break:break-word; font:11px/1.4 ui-monospace,Consolas,monospace; color:var(--mut); max-height:260px; overflow:auto; }
+
+  /* toasts */
+  #toasts { position:fixed; top:calc(env(safe-area-inset-top) + 8px); left:12px; right:12px; z-index:70; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+  .toast { background:#1a243a; border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:10px 12px;
+    font-size:13px; font-weight:700; box-shadow:0 6px 18px rgba(0,0,0,.4); }
+
+  .mut { color:var(--mut); } .small { font-size:12px; }
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <div class="brand">LIVE COPILOT<small>v1 · advisory</small></div>
+  <div class="pills">
+    <span id="pill-gps" class="pill">GPS ···</span>
+    <span id="pill-mode" class="pill">ACTUAL</span>
+    <span id="pill-net" class="pill">ONLINE</span>
+  </div>
+</header>
+
+<div id="toasts"></div>
+
+<main>
+  <!-- ===================== HERO / RECOMMENDATION ===================== -->
+  <section class="panel hero" id="hero">
+    <span id="rec-kind" class="kind">—</span>
+    <div id="rec-line" class="line not-yet">No live advice yet.</div>
+    <div id="rec-pay" class="pay"></div>
+    <div id="rec-meta" class="meta"></div>
+    <div id="rec-note" class="note" hidden></div>
+    <div id="rec-target" class="note" hidden></div>
+    <div id="hero-actions" class="hero-actions"></div>
+  </section>
+
+  <!-- ===================== SHIFT ===================== -->
+  <section class="panel" id="shift-panel">
+    <h2>SHIFT</h2>
+    <div class="shift-status" id="shift-status">IDLE</div>
+    <div id="shift-facts" class="facts"></div>
+    <div id="start-fields" class="row">
+      <div class="fact" style="flex:1 1 50%;">
+        <span>Fuel left (L) — start</span>
+        <button id="fuel-level-minus" class="chip" type="button">−&nbsp;</button><b id="start-fuel-level">—</b><button id="fuel-level-plus" class="chip" type="button">&nbsp;+</button>
+      </div>
+    </div>
+    <div class="row">
+      <button id="btn-start" class="btn primary" type="button">START SHIFT</button>
+      <button id="btn-pause" class="btn warn" type="button" hidden>PAUSE</button>
+      <button id="btn-resume" class="btn warn" type="button" hidden>RESUME</button>
+      <button id="btn-end" class="btn danger" type="button" hidden>END SHIFT</button>
+    </div>
+  </section>
+
+  <!-- ===================== TRIP OFFER ===================== -->
+  <section class="panel" id="trip-panel">
+    <h2>TRIP OFFER</h2>
+    <div class="label"><span>RIDER FARE (₦)</span><button id="trip-clear" class="chip" type="button">CLEAR</button></div>
+    <div class="money" id="fare-screen">₦ <span id="fare-val">0</span></div>
+    <div class="keypad" id="fare-pad"></div>
+    <div class="label">PICKUP ZONE</div>
+    <div class="chips" id="pickup-chips"></div>
+    <div class="label">DROP ZONE</div>
+    <div class="chips" id="dropoff-chips"></div>
+    <button id="btn-offer" class="btn primary" type="button" style="width:100%;margin-top:10px;">EVALUATE OFFER</button>
+    <div id="trip-eval" hidden></div>
+  </section>
+
+  <!-- ===================== FIELD LOG ===================== -->
+  <section class="panel" id="field-panel">
+    <h2>FIELD LOG</h2>
+
+    <div class="label">FUEL BOUGHT</div>
+    <div class="money">₦ <span id="fuel-cost-val">0</span></div>
+    <div class="keypad" id="fuel-pad"></div>
+    <div class="label">LITRES (optional)</div>
+    <div class="chips" id="fuel-litres-chips"></div>
+    <button id="btn-fuel-save" class="btn primary" type="button" style="width:100%;margin-top:10px;">SAVE FUEL</button>
+
+    <div class="label" style="margin-top:16px;">ODOMETER</div>
+    <div class="money"><span id="odo-val">0</span> <span class="small mut">km</span></div>
+    <div class="keypad" id="odo-pad"></div>
+    <div class="row" style="margin-top:10px;">
+      <button id="btn-odo-start" class="btn" type="button">LOG START</button>
+      <button id="btn-odo-end" class="btn" type="button">LOG END</button>
+    </div>
+  </section>
+
+  <!-- ===================== ZONE RADAR ===================== -->
+  <section class="panel" id="radar-panel">
+    <h2>ZONE RADAR</h2>
+    <div class="radar-head"><span id="radar-center">—</span><span id="radar-near">—</span></div>
+    <svg class="radar" id="radar" viewBox="0 0 300 300" role="img" aria-label="Zone radar: modelled Abuja zones, your position at centre"></svg>
+  </section>
+
+  <!-- ===================== DIAGNOSTICS ===================== -->
+  <section class="panel" id="diag">
+    <h2>DATA &amp; DIAGNOSTICS</h2>
+    <div class="row">
+      <button id="btn-recs" class="btn" type="button">ADD REC</button>
+      <button id="btn-reload" class="btn" type="button">REFRESH</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button id="btn-export-json" class="btn" type="button">EXPORT JSON</button>
+      <button id="btn-export-csv" class="btn" type="button">EXPORT CSV</button>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button id="btn-export-mtd" class="btn" type="button">MTD SNAPSHOT</button>
+      <button id="btn-wipe" class="btn danger" type="button">ERASE DATA</button>
+    </div>
+    <div class="label" style="margin-top:12px;">MTD (ACTUAL sessions only)</div>
+    <div id="mtd-facts" class="facts"></div>
+    <details style="margin-top:12px;">
+      <summary>Raw state</summary>
+      <pre id="raw-state"></pre>
+    </details>
+  </section>
+</main>
+
+<footer class="actionbar" id="actionbar"></footer>
+
+<div id="drive-overlay" role="alert">
+  <div class="msg">DRIVING</div>
+  <div class="sub">Inputs are suppressed while moving — keep your eyes on the road. The shift keeps logging automatically.</div>
+  <button id="btn-parked" class="btn primary" type="button" style="width:220px;">I'M PARKED — DISMISS</button>
+</div>
+
+<script src="engine.js"></script>
+<script src="live-core.js"></script>
+<script src="live-ui.js"></script>
+<script>
+/* PWA service worker — requires http(s)/localhost; silently inert on file:// */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () { /* unsupported or file:// */ });
+  });
+}
+</script>
+</body>
+</html>

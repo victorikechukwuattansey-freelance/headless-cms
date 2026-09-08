@@ -1,0 +1,15 @@
+{
+  "name": "Bolt GPS Copilot — Live Mode",
+  "short_name": "Live Copilot",
+  "description": "Phone-first live advisory for Bolt drivers, powered by the frozen Highlander economic engine. Advisory only — never instructs, always informs.",
+  "start_url": "live.html",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
