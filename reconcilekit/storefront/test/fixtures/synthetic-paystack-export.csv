@@ -1,0 +1,4 @@
+Reference,Transaction Date,Amount Paid,Currency,Status,Source Identifier,Customer Email
+T545417640929891,2026-08-18T06:09:15Z,100000,NGN,success,sr_alpha_01,customer-a@example.com
+T545417640929892,2026-08-18T06:11:20Z,25000,NGN,failed,sr_beta_02,customer-b@example.com
+T545417640929893,2026-08-18T06:14:05Z,97500,NGN,success,sr_gamma_03,customer-c@example.com
