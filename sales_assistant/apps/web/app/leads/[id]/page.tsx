@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation';
-import { apiRequest, type Lead } from '@sales_assistant/api-client';
+import { apiRequest, type Agent, type Lead } from '@sales_assistant/api-client';
 import { getSession } from '@/src/lib/session';
 import { Card } from '@/src/components/card';
 import { Badge } from '@/src/components/badge';
@@ -18,7 +18,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     apiRequest('/agents', { token, query: { limit: 100 } }),
   ]);
   if (leadResult.status === 404) notFound();
-  const lead = leadResult.json?.data as Lead;
+  const lead = (leadResult.json as { data?: Lead } | null)?.data as Lead;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
@@ -60,7 +60,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </dl>
       </Card>
       <Card title="Actions">
-        <LeadActions lead={lead} agents={agentsResult.json?.data ?? []} />
+        <LeadActions lead={lead} agents={(agentsResult.json as { data?: Agent[] } | null)?.data ?? []} />
         <p className="mt-2 text-xs text-neutral-400">Refresh the page to see changes.</p>
       </Card>
     </div>

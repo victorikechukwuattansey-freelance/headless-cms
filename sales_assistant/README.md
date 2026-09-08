@@ -141,6 +141,16 @@ Per-user (authenticated) or per-IP (anonymous), Redis-backed with in-memory fall
 Exempt: `/health`, `/metrics`, `/docs`, `/openapi.json`.
 Tunable via `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`.
 
+By default rate-limit keys use the socket address; set `TRUST_PROXY=true` only when running behind a trusted reverse proxy that overwrites `X-Forwarded-For` (otherwise clients can spoof fresh buckets per request).
+
+## Security Notes
+
+- **Secrets:** `JWT_SECRET` and `INTEGRATION_TOKEN_ENCRYPTION_KEY` have no defaults — token operations throw if unset, and the API refuses to boot in production without both (min 32 chars).
+- **Request bodies** are capped at `MAX_BODY_BYTES` (default 1 MB).
+- **Metrics buffer** keeps the most recent 5,000 samples to bound memory.
+- **Queue jobs** are schema-validated before execution; payloads cannot inject roles.
+- **Web session:** httpOnly cookie (`sa_session`); forged cookies are rejected by the API's signature check. Mobile stores the session in SecureStore on native, `localStorage` on web (dev convenience only).
+
 ## Web Dashboard
 
 `apps/web` — Next.js App Router + Tailwind v4 dashboard. Server components fetch the API through an internal proxy using the session token; client components call `/api/*` and `router.refresh()`.
@@ -155,7 +165,7 @@ npm run dev:web  # web only
 Login with the seeded credentials (see above; `admin@acme.test / password123` for full access).
 
 - **Session:** httpOnly cookie `sa_session` set on login, 1-hour expiry, no refresh — re-login when it expires.
-- **Proxy:** `/api/*` forwards to `API_URL` (default `http://localhost:3000`), injecting the session token. No CORS needed.
+- **Proxy:** `/api/*` forwards to `API_URL` (default `http://localhost:3000` in dev; **required in production**), injecting the session token. No CORS needed.
 - **Pages:** Dashboard, Leads (list + detail — assign, score, transition), Agents (availability), Reminders (generate + dismiss), Deals (stage transition), Activity (admin-only audit feed — every event as a sentence with entity links), Users (admin-only create user).
 
 ### Run locally in VSCode
@@ -174,8 +184,8 @@ cp .env.example .env.local
 npx expo start      # w = web, a = Android emulator, i = iOS simulator
 ```
 
-- **Environment:** `EXPO_PUBLIC_API_URL` (default `http://localhost:3000`) — inlined at bundle time by Metro, so restart `expo start` after changing `.env.local`. The default points at the local dev API (root `npm run dev` must be running); physical devices need the host machine's LAN IP.
-- **Architecture:** `packages/api-client` TypeScript source is consumed directly by Metro (no build step). `src/config.ts` bridges `EXPO_PUBLIC_API_URL` onto `process.env.API_URL`, which api-client's `apiUrl()` reads. The session lives in `expo-secure-store` under `sa_session`.
+- **Environment:** `EXPO_PUBLIC_API_URL` (default `http://localhost:3000` in dev; **required in production builds** — the app throws without it) — inlined at bundle time by Metro, so restart `expo start` after changing `.env.local`. The default points at the local dev API (root `npm run dev` must be running); physical devices need the host machine's LAN IP.
+- **Architecture:** `packages/api-client` TypeScript source is consumed directly by Metro (no build step). `src/config.ts` bridges `EXPO_PUBLIC_API_URL` onto `process.env.API_URL`, which api-client's `apiUrl()` reads. The session lives in `expo-secure-store` on native / `localStorage` on web under `sa_session`.
 
 Verify:
 

@@ -11,15 +11,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: { code: 'VALIDATION', message: 'email and password are required' } }, { status: 400 });
   }
   const result = await apiRequest('/auth/token', { method: 'POST', body: { email, password } });
-  if (result.status !== 200 || !result.json?.token) {
+  const json = result.json as { token?: string; expiresAt?: string; role?: 'USER' | 'AGENT' | 'ADMIN' } | null;
+  if (result.status !== 200 || !json?.token || !json.expiresAt || !json.role) {
     return NextResponse.json(
       result.json ?? { error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } },
       { status: result.status },
     );
   }
-  const expiresAt = result.json.expiresAt as string;
-  const role = result.json.role as 'USER' | 'AGENT' | 'ADMIN';
+  const expiresAt = json.expiresAt;
+  const role = json.role;
   const store = await cookies();
-  store.set(SESSION_COOKIE, JSON.stringify({ token: result.json.token, expiresAt, role }), sessionCookieOptions(expiresAt));
+  store.set(SESSION_COOKIE, JSON.stringify({ token: json.token, expiresAt, role }), sessionCookieOptions(expiresAt));
   return NextResponse.json({ role });
 }

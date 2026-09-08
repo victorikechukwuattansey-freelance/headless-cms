@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { apiRequest } from '@sales_assistant/api-client';
+import { apiRequest, type Agent, type Lead, type Paginated } from '@sales_assistant/api-client';
 import { getSession } from '@/src/lib/session';
 import { LeadsTable } from './leads-table';
 
@@ -18,7 +18,10 @@ export default async function LeadsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
       <h1 className="text-lg font-semibold">Leads</h1>
-      <LeadsTable initial={leads.json} agents={agents.json?.data ?? []} />
+      <LeadsTable
+        initial={leads.json as Paginated<Lead>}
+        agents={(agents.json as { data?: Agent[] } | null)?.data ?? []}
+      />
     </div>
   );
 }

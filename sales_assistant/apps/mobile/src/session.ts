@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 export interface Session {
@@ -8,12 +9,28 @@ export interface Session {
 
 const KEY = 'sa_session';
 
+const isWeb = Platform.OS === 'web';
+
+const webStorage = {
+  async getItem(key: string): Promise<string | null> {
+    return window.localStorage.getItem(key);
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    window.localStorage.setItem(key, value);
+  },
+  async removeItem(key: string): Promise<void> {
+    window.localStorage.removeItem(key);
+  },
+};
+
 export async function saveSession(session: Session): Promise<void> {
-  await SecureStore.setItemAsync(KEY, JSON.stringify(session));
+  const raw = JSON.stringify(session);
+  if (isWeb) await webStorage.setItem(KEY, raw);
+  else await SecureStore.setItemAsync(KEY, raw);
 }
 
 export async function getSession(): Promise<Session | null> {
-  const raw = await SecureStore.getItemAsync(KEY);
+  const raw = isWeb ? await webStorage.getItem(KEY) : await SecureStore.getItemAsync(KEY);
   if (!raw) return null;
   try {
     const session = JSON.parse(raw) as Session;
@@ -29,5 +46,6 @@ export async function getSession(): Promise<Session | null> {
 }
 
 export async function clearSession(): Promise<void> {
-  await SecureStore.deleteItemAsync(KEY);
+  if (isWeb) await webStorage.removeItem(KEY);
+  else await SecureStore.deleteItemAsync(KEY);
 }

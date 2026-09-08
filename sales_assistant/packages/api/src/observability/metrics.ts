@@ -1,24 +1,36 @@
+const MAX_LINES = 5_000;
 const lines: string[] = [];
 
+function push(line: string): void {
+  lines.push(line);
+  if (lines.length > MAX_LINES) {
+    lines.splice(0, lines.length - MAX_LINES);
+  }
+}
+
+function escapeLabel(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+}
+
 export function recordHttpRequest(path: string, statusCode: number, durationMs: number): void {
-  lines.push(`http_requests_total{path="${path}",status="${statusCode}"} 1`);
-  lines.push(`http_request_duration_ms{path="${path}"} ${durationMs}`);
+  push(`http_requests_total{path="${escapeLabel(path)}",status="${statusCode}"} 1`);
+  push(`http_request_duration_ms{path="${escapeLabel(path)}"} ${durationMs}`);
 }
 
 export function recordQueueJob(jobType: string, succeeded: boolean): void {
-  lines.push(`queue_jobs_total{type="${jobType}",succeeded="${succeeded}"} 1`);
+  push(`queue_jobs_total{type="${escapeLabel(jobType)}",succeeded="${succeeded}"} 1`);
 }
 
 export function recordQueueDepth(depth: number): void {
-  lines.push(`queue_depth ${depth}`);
+  push(`queue_depth ${depth}`);
 }
 
 export function recordQueueJobDuration(jobType: string, durationMs: number): void {
-  lines.push(`queue_job_duration_ms{type="${jobType}"} ${durationMs}`);
+  push(`queue_job_duration_ms{type="${escapeLabel(jobType)}"} ${durationMs}`);
 }
 
 export function recordAiUsage(organizationId: string, model: string, tokensIn: number, tokensOut: number): void {
-  lines.push(`ai_usage_tokens_total{organization="${organizationId}",model="${model}"} ${tokensIn + tokensOut}`);
+  push(`ai_usage_tokens_total{organization="${escapeLabel(organizationId)}",model="${escapeLabel(model)}"} ${tokensIn + tokensOut}`);
 }
 
 export function renderPrometheusMetrics(): string {

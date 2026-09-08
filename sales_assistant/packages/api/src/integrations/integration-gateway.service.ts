@@ -1,7 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
 function secretKey(): Buffer {
-  const secret = process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY ?? 'dev-only-key-change-me';
+  const secret = process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY;
+  if (!secret) {
+    throw new Error('INTEGRATION_TOKEN_ENCRYPTION_KEY is not configured; refusing to encrypt or decrypt integration tokens');
+  }
   return createHash('sha256').update(secret).digest();
 }
 

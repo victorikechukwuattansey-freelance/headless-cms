@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { apiRequest } from '@sales_assistant/api-client';
+import { apiRequest, type ApiResponse } from '@sales_assistant/api-client';
 import { getSession } from '@/src/lib/session';
 import { Card } from '@/src/components/card';
 import { Badge } from '@/src/components/badge';
@@ -11,6 +11,10 @@ import { DismissReminderButton } from '@/src/components/reminder-actions';
 export const dynamic = 'force-dynamic';
 
 const STATUSES = ['new', 'assigned', 'contacted', 'qualified', 'converted', 'lost'] as const;
+
+function asPaginated(result: ApiResponse): { total?: number; data?: unknown[] } {
+  return (result.json ?? {}) as { total?: number; data?: unknown[] };
+}
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -30,15 +34,15 @@ export default async function DashboardPage() {
   const reminders = results[STATUSES.length + 2];
   const recent = results[STATUSES.length + 3];
 
-  const totals = Object.fromEntries(STATUSES.map((status, i) => [status, statusResults[i].json?.total ?? 0])) as Record<
+  const totals = Object.fromEntries(STATUSES.map((status, i) => [status, asPaginated(statusResults[i]).total ?? 0])) as Record<
     (typeof STATUSES)[number],
     number
   >;
-  const agentsTotal = agents.json?.total ?? 0;
-  const openDeals = deals.json?.total ?? 0;
-  const pendingReminders = reminders.json?.total ?? 0;
-  const recentLeads = (recent.json?.data ?? []) as { id: string; phone: string; name: string | null; status: string; score: number }[];
-  const reminderItems = (reminders.json?.data ?? []) as { id: string; message: string; dueAt: string; status: string }[];
+  const agentsTotal = asPaginated(agents).total ?? 0;
+  const openDeals = asPaginated(deals).total ?? 0;
+  const pendingReminders = asPaginated(reminders).total ?? 0;
+  const recentLeads = (asPaginated(recent).data ?? []) as { id: string; phone: string; name: string | null; status: string; score: number }[];
+  const reminderItems = (asPaginated(reminders).data ?? []) as { id: string; message: string; dueAt: string; status: string }[];
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">

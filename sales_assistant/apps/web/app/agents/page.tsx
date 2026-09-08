@@ -14,7 +14,7 @@ export default async function AgentsPage() {
   if (!session) redirect('/login');
   const token = session.token;
   const result = await apiRequest('/agents', { token, query: { limit: 100 } });
-  const agents = (result.json?.data ?? []) as { id: string; name: string; status: 'idle' | 'busy'; createdAt: string }[];
+  const agents = ((result.json as { data?: unknown[] } | null)?.data ?? []) as { id: string; name: string; status: 'idle' | 'busy'; createdAt: string }[];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">

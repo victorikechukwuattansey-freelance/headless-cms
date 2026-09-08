@@ -18,7 +18,11 @@ export interface TokenClaims {
 }
 
 function jwtSecret(): string {
-  return process.env.JWT_SECRET ?? 'dev-only-jwt-secret';
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not configured; refusing to sign or verify tokens');
+  }
+  return secret;
 }
 
 export function hashRefreshToken(refreshToken: string): string {
@@ -79,7 +83,9 @@ export class AuthService {
     }
     const [payload, signature] = parts;
     const expected = createHmac('sha256', jwtSecret()).update(payload).digest('base64url');
-    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    const signatureBuf = Buffer.from(signature);
+    const expectedBuf = Buffer.from(expected);
+    if (signatureBuf.length !== expectedBuf.length || !timingSafeEqual(signatureBuf, expectedBuf)) {
       throw new DomainError('UNAUTHORIZED', 'Invalid token signature');
     }
     let claims: TokenClaims;

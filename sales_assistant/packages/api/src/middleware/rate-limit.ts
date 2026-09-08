@@ -76,6 +76,7 @@ export class RateLimiter {
   private checkMemory(key: string): RateLimitResult {
     const now = Date.now();
     const windowStart = Math.floor(now / this.windowMs) * this.windowMs;
+    this.evictStaleEntries(windowStart);
     let entry = this.memory.get(key);
     if (!entry || entry.windowStart !== windowStart) {
       entry = { count: 0, windowStart };
@@ -83,6 +84,15 @@ export class RateLimiter {
     }
     entry.count += 1;
     return this.result(entry.count, windowStart);
+  }
+
+  private evictStaleEntries(currentWindowStart: number): void {
+    if (this.memory.size < 1024) return;
+    for (const [key, entry] of this.memory) {
+      if (entry.windowStart !== currentWindowStart) {
+        this.memory.delete(key);
+      }
+    }
   }
 
   private result(count: number, windowStart: number): RateLimitResult {

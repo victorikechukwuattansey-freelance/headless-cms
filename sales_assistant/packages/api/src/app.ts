@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { recordHttpRequest, renderPrometheusMetrics } from './observability/metrics.js';
 import { structuredLogger } from './observability/logger.js';
 import { authenticate } from './middleware/authenticate.js';
@@ -56,13 +56,37 @@ const DOCS_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+const MAX_BODY_BYTES = parsePositiveIntEnv('MAX_BODY_BYTES', 1_048_576);
+const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
+const DUMMY_PASSWORD_HASH = '$2b$10$RgWD4wIbR0evU23EWg8RF.lMN50ioP94/1Ha/IVn.CCYzRxV7X3ke';
+
 function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let data = '';
+    let size = 0;
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      fn();
+    };
     req.on('data', (chunk) => {
+      if (settled) return;
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        req.resume();
+        settle(() => reject(new DomainError('VALIDATION', `Request body exceeds ${MAX_BODY_BYTES} bytes`)));
+        return;
+      }
       data += chunk;
     });
-    req.on('end', () => resolve(data));
+    req.on('end', () => settle(() => resolve(data)));
+    req.on('error', () => settle(() => reject(new DomainError('VALIDATION', 'Failed to read request body'))));
   });
 }
 
@@ -113,17 +137,22 @@ function handleError(res: ServerResponse, err: unknown): void {
   sendJson(res, 500, { error: { code: 'INTERNAL', message: 'Internal error' } });
 }
 
+function clientIp(req: IncomingMessage): string {
+  if (TRUST_PROXY) {
+    const forwarded = req.headers['x-forwarded-for'];
+    const first = ((Array.isArray(forwarded) ? forwarded[0] : forwarded) ?? '').split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return req.socket.remoteAddress ?? 'unknown';
+}
+
 async function assertRateLimit(
   req: IncomingMessage,
   res: ServerResponse,
   limiter: RateLimiter,
   userId?: string,
 ): Promise<void> {
-  const forwarded = req.headers['x-forwarded-for'];
-  const ip = ((Array.isArray(forwarded) ? forwarded[0] : forwarded) ?? '').split(',')[0]?.trim()
-    || req.socket.remoteAddress
-    || 'unknown';
-  const key = userId ? `user:${userId}` : `ip:${ip}`;
+  const key = userId ? `user:${userId}` : `ip:${clientIp(req)}`;
   const result = await limiter.check(key);
   if (!result.allowed) {
     res.setHeader('retry-after', String(Math.max(1, Math.ceil(result.retryAfterMs / 1000))));
@@ -132,6 +161,17 @@ async function assertRateLimit(
     res.setHeader('x-ratelimit-reset', String(Math.ceil((Date.now() + result.retryAfterMs) / 1000)));
     throw new DomainError('RATE_LIMITED', 'Too many requests, retry later');
   }
+}
+
+function isMetricsAuthorized(req: IncomingMessage): boolean {
+  const token = process.env.METRICS_TOKEN;
+  if (!token) return process.env.NODE_ENV !== 'production';
+  const header = req.headers['authorization'];
+  const provided = Array.isArray(header) ? header[0] : header;
+  if (!provided?.startsWith('Bearer ')) return false;
+  const presented = Buffer.from(provided.slice('Bearer '.length));
+  const expected = Buffer.from(token);
+  return presented.length === expected.length && timingSafeEqual(presented, expected);
 }
 
 function createdLeadPayload(lead: Awaited<ReturnType<LeadProfileService['create']>>) {
@@ -190,6 +230,11 @@ export function createApp(options: AppOptions = {}) {
     const segments = url.pathname.split('/').filter(Boolean);
 
     if (url.pathname === '/metrics' && req.method === 'GET') {
+      if (!isMetricsAuthorized(req)) {
+        sendJson(res, 404, { error: { code: 'NOT_FOUND', message: 'Route not found' } });
+        recordHttpRequest(url.pathname, res.statusCode, Date.now() - started);
+        return;
+      }
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end(renderPrometheusMetrics());
       recordHttpRequest(url.pathname, res.statusCode, Date.now() - started);
@@ -267,6 +312,7 @@ async function routeAuthToken(
   const input = parseOrThrow(loginSchema, body);
   const user = await users.findByEmail(input.email.trim().toLowerCase());
   if (!user?.passwordHash) {
+    await authService.verifyPassword(input.password, DUMMY_PASSWORD_HASH);
     throw new DomainError('UNAUTHORIZED', 'Invalid email or password');
   }
   const valid = await authService.verifyPassword(input.password, user.passwordHash);

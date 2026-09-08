@@ -14,7 +14,7 @@ export default async function DealsPage() {
   if (!session) redirect('/login');
   const token = session.token;
   const result = await apiRequest('/deals', { token, query: { limit: 100 } });
-  const deals = (result.json?.data ?? []) as { id: string; amount: number; stage: 'proposed' | 'won' | 'lost'; createdAt: string }[];
+  const deals = ((result.json as { data?: unknown[] } | null)?.data ?? []) as { id: string; amount: number; stage: 'proposed' | 'won' | 'lost'; createdAt: string }[];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">

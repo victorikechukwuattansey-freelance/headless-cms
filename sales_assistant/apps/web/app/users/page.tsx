@@ -20,7 +20,7 @@ export default async function UsersPage() {
   if (session.role !== 'ADMIN') redirect('/');
   const token = session.token;
   const result = await apiRequest('/users', { token, query: { limit: 100 } });
-  const users = (result.json?.data ?? []) as { id: string; email: string; name: string | null; role: 'ADMIN' | 'AGENT' | 'USER'; createdAt: string }[];
+  const users = ((result.json as { data?: unknown[] } | null)?.data ?? []) as { id: string; email: string; name: string | null; role: 'ADMIN' | 'AGENT' | 'USER'; createdAt: string }[];
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">

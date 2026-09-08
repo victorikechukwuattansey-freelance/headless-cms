@@ -32,15 +32,28 @@ export interface RequestOptions {
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
   token?: string;
+  timeoutMs?: number;
 }
 
-export interface ApiResponse {
+export interface ApiResponse<T = unknown> {
   status: number;
-  json: any;
+  json: T | null;
 }
 
 export function apiUrl(): string {
-  return process.env.API_URL ?? 'http://localhost:3000';
+  const url = process.env.API_URL;
+  if (url) return url;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('API_URL must be set in production builds');
+  }
+  return 'http://localhost:3000';
+}
+
+function requestTimeoutMs(explicit?: number): number {
+  if (explicit && explicit > 0) return explicit;
+  const fromEnv = Number(process.env.API_TIMEOUT_MS);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  return 15_000;
 }
 
 export async function apiRequest(path: string, options: RequestOptions = {}): Promise<ApiResponse> {
@@ -52,13 +65,21 @@ export async function apiRequest(path: string, options: RequestOptions = {}): Pr
   const headers: Record<string, string> = {};
   if (options.token) headers.authorization = `Bearer ${options.token}`;
   if (options.body !== undefined) headers['content-type'] = 'application/json';
-  const response = await fetch(`${apiUrl()}${path}${queryString}`, {
-    method: options.method ?? 'GET',
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), requestTimeoutMs(options.timeoutMs));
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl()}${path}${queryString}`, {
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   const text = await response.text();
-  let json: any = null;
+  let json: unknown = null;
   if (text) {
     try {
       json = JSON.parse(text);

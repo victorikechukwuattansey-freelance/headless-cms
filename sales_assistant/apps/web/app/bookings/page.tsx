@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { listBookings, listLeads } from '@sales_assistant/api-client';
+import { listBookings, listLeads, type Booking, type Lead, type Paginated } from '@sales_assistant/api-client';
 import { getSession } from '@/src/lib/session';
 import { Card } from '@/src/components/card';
 import { BookingsTable } from './bookings-table';
@@ -17,14 +17,15 @@ export default async function BookingsPage() {
     listBookings(token, { limit: PAGE_SIZE }),
     listLeads(token, { limit: 100 }),
   ]);
+  const leadItems = (leads.json as { data?: Lead[] } | null)?.data ?? [];
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <h1 className="text-lg font-semibold">Bookings</h1>
       <Card title="Book a call">
-        <CreateBookingForm leads={leads.json?.data ?? []} />
+        <CreateBookingForm leads={leadItems} />
       </Card>
       <Card>
-        <BookingsTable initial={bookings.json} leads={leads.json?.data ?? []} />
+        <BookingsTable initial={bookings.json as Paginated<Booking>} leads={leadItems} />
       </Card>
     </div>
   );

@@ -25,16 +25,17 @@ export default function LoginScreen() {
     setError('');
     try {
       const res = await apiLogin(email.trim(), password);
-      if (res.status === 200 && res.json?.token) {
+      const json = res.json as { token?: string; expiresAt?: string; role?: string; error?: { message?: string } } | null;
+      if (res.status === 200 && json?.token && json.expiresAt) {
         await saveSession({
-          token: res.json.token,
-          expiresAt: res.json.expiresAt,
-          role: res.json.role ?? 'USER',
+          token: json.token,
+          expiresAt: json.expiresAt,
+          role: json.role ?? 'USER',
         });
         router.replace('/');
         return;
       }
-      setError(res.json?.error?.message ?? `Sign-in failed (${res.status})`);
+      setError(json?.error?.message ?? `Sign-in failed (${res.status})`);
     } catch {
       setError('Cannot reach the API. Check EXPO_PUBLIC_API_URL and that the dev stack is running.');
     } finally {

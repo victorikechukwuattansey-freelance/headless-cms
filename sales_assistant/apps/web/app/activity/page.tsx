@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { listAuditEvents } from '@sales_assistant/api-client';
+import { listAuditEvents, type AuditEvent, type Paginated } from '@sales_assistant/api-client';
 import { getSession } from '@/src/lib/session';
 import { Card } from '@/src/components/card';
 import { ActivityList } from './activity-list';
@@ -17,7 +17,7 @@ export default async function ActivityPage() {
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <h1 className="text-lg font-semibold">Activity</h1>
       <Card>
-        <ActivityList initial={audit.json} />
+        <ActivityList initial={audit.json as Paginated<AuditEvent>} />
       </Card>
     </div>
   );

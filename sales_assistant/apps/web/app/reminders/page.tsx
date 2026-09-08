@@ -14,7 +14,7 @@ export default async function RemindersPage() {
   if (!session) redirect('/login');
   const token = session.token;
   const result = await apiRequest('/reminders', { token, query: { limit: 100 } });
-  const reminders = (result.json?.data ?? []) as {
+  const reminders = ((result.json as { data?: unknown[] } | null)?.data ?? []) as {
     id: string;
     message: string;
     dueAt: string;

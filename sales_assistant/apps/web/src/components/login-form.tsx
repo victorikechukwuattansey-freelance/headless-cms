@@ -27,7 +27,7 @@ export function LoginForm() {
       return;
     }
     const next = searchParams.get('next');
-    router.push(next && next.startsWith('/') ? next : '/');
+    router.push(next && next.startsWith('/') && !next.startsWith('//') ? next : '/');
     router.refresh();
   }
 

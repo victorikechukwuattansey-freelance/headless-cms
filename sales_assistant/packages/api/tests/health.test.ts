@@ -4,6 +4,9 @@ import { decryptSecret, encryptSecret } from '../src/integrations/integration-ga
 import { AuthService } from '../src/services/auth.service.js';
 import { assertSameOrganization } from '../src/domain/resource-policy.service.js';
 
+process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'unit-test-secret';
+process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY = process.env.INTEGRATION_TOKEN_ENCRYPTION_KEY ?? 'unit-test-encryption-key';
+
 test('integration gateway round-trips an encrypted secret', () => {
   const payload = encryptSecret('super-secret');
   assert.notEqual(payload.ciphertext, 'super-secret');

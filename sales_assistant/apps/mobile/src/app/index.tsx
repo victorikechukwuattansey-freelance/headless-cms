@@ -1,6 +1,7 @@
 import '../config';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { listLeads } from '@sales_assistant/api-client';
 import { clearSession, getSession } from '../session';
 
@@ -14,6 +15,7 @@ interface Lead {
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
@@ -24,10 +26,11 @@ export default function HomeScreen() {
       if (!session) return;
       setError('');
       const res = await listLeads(session.token, { limit: 50 });
-      if (res.status === 200 && res.json?.leads) {
-        setLeads(res.json.leads);
+      const json = res.json as { data?: Lead[]; error?: { message?: string } } | null;
+      if (res.status === 200 && json?.data) {
+        setLeads(json.data);
       } else {
-        setError(res.json?.error?.message ?? `Failed to load leads (${res.status})`);
+        setError(json?.error?.message ?? `Failed to load leads (${res.status})`);
       }
     } catch {
       setError('Cannot reach the API.');
@@ -73,6 +76,7 @@ export default function HomeScreen() {
         style={styles.logout}
         onPress={async () => {
           await clearSession();
+          router.replace('/login');
         }}
       >
         <Text style={styles.logoutText}>Log out</Text>
