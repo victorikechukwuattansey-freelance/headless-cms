@@ -27,6 +27,15 @@ Brain/
 .playwright-mcp/
 .belt/
 
+# pnpm store & local logs
+.pnpm-store/
+logs/
+
+# Generated test/audit output (keep .md reports, skip raw run output)
+workflows/**/test-results.txt
+workflows/**/test-output.txt
+bolt-gps-copilot/audit/results-*.txt
+
 # OS
 Thumbs.db
 .DS_Store
@@ -39,3 +48,9 @@ saas-boilerplate/apps/web/test-results/
 mc-danfo/
 mc-danfo-old/
 blaise-crest-enterprises/
+handi_work/
+
+# Real merchant/transaction & prospect data — never commit
+reconcilekit/merchant.csv
+reconcilekit/merchant-reconcilekit.csv
+workflows/lead-recovery-engine/batch.csv
