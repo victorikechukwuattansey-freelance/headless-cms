@@ -1,0 +1,300 @@
+{
+  "name": "Lead Recovery Engine — Approved Outreach Handoff V1",
+  "nodes": [
+    {
+      "parameters": {
+        "event": "workflow"
+      },
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f01",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": ""
+        },
+        "operation": "read",
+        "sheetName": {
+          "cachedResultName": "Verified Leads",
+          "mode": "name",
+          "value": "Verified Leads"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f02",
+      "name": "Read Verified Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst counters = {\n  verified_examined: items.length,\n  eligible: 0,\n  ineligible_not_qualified: 0,\n  ineligible_missing_business_name: 0,\n  ineligible_missing_city: 0,\n  ineligible_missing_state: 0,\n  ineligible_missing_country: 0,\n  ineligible_no_contact_path: 0\n};\n\nconst eligible = [];\n\nfor (const item of items) {\n  const lead = item.json || {};\n\n  const businessName = String(lead.business_name || '').trim();\n  const city = String(lead.city || '').trim();\n  const state = String(lead.state || '').trim();\n  const country = String(lead.country || '').trim();\n  const hasWebsite = String(lead.website || '').trim() !== '';\n  const hasPhone = String(lead.phone || '').trim() !== '';\n  const hasContactPath = hasWebsite || hasPhone;\n  const isQualified = String(lead.qualification_status || '').trim().toUpperCase() === 'QUALIFIED';\n\n  if (!isQualified) {\n    counters.ineligible_not_qualified += 1;\n    continue;\n  }\n  if (!businessName) {\n    counters.ineligible_missing_business_name += 1;\n    continue;\n  }\n  if (!city) {\n    counters.ineligible_missing_city += 1;\n    continue;\n  }\n  if (!state) {\n    counters.ineligible_missing_state += 1;\n    continue;\n  }\n  if (!country) {\n    counters.ineligible_missing_country += 1;\n    continue;\n  }\n  if (!hasContactPath) {\n    counters.ineligible_no_contact_path += 1;\n    continue;\n  }\n\n  eligible.push(item);\n  counters.eligible += 1;\n}\n\nif (eligible.length === 0) {\n  return [{\n    json: {\n      _noNewApproved: true,\n      _message: 'No new eligible leads for Approved Outreach',\n      _control: counters\n    }\n  }];\n}\n\nreturn eligible.map((item) => ({\n  json: Object.assign({}, item.json, { _control: counters })\n}));"
+      },
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f03",
+      "name": "Filter Eligible Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": ""
+        },
+        "operation": "read",
+        "sheetName": {
+          "cachedResultName": "Approved Outreach",
+          "mode": "name",
+          "value": "Approved Outreach"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f04",
+      "name": "Read Approved Outreach",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const approvedItems = $input.all();\nconst eligibleItems = $('Filter Eligible Leads').all();\n\nconst filterCounters = {};\nfor (const item of eligibleItems) {\n  const control = (item.json || {})._control;\n  if (control && typeof control === 'object') Object.assign(filterCounters, control);\n}\n\nconst existingIds = new Set();\nfor (const item of approvedItems) {\n  const id = String((item.json || {}).lead_id || '').trim();\n  if (id) existingIds.add(id);\n}\n\nconst eligible = eligibleItems.filter((item) => !((item.json || {})._noNewApproved === true));\n\nconst counters = {\n  eligible_incoming: eligible.length,\n  already_approved: 0,\n  duplicate_in_batch: 0,\n  newly_approved: 0\n};\n\nif (eligible.length === 0) {\n  return [{\n    json: {\n      _noNewApproved: true,\n      _message: 'No new eligible leads for Approved Outreach',\n      _control: Object.assign({}, filterCounters, counters)\n    }\n  }];\n}\n\nconst seenThisRun = new Set();\nconst newRows = [];\n\nfor (const item of eligible) {\n  const lead = item.json || {};\n  const leadId = String(lead.lead_id || '').trim();\n\n  if (!leadId) {\n    counters.duplicate_in_batch += 1;\n    continue;\n  }\n  if (existingIds.has(leadId)) {\n    counters.already_approved += 1;\n    continue;\n  }\n  if (seenThisRun.has(leadId)) {\n    counters.duplicate_in_batch += 1;\n    continue;\n  }\n\n  seenThisRun.add(leadId);\n  newRows.push(item);\n  counters.newly_approved += 1;\n}\n\nif (newRows.length === 0) {\n  return [{\n    json: {\n      _noNewApproved: true,\n      _message: 'All eligible leads are already in Approved Outreach',\n      _control: Object.assign({}, filterCounters, counters)\n    }\n  }];\n}\n\nreturn newRows.map((item) => ({\n  json: Object.assign({}, item.json, { _control: Object.assign({}, filterCounters, counters) })\n}));"
+      },
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f05",
+      "name": "Dedup Against Approved Outreach",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst isNoOp =\n  items.length === 1 &&\n  items[0].json &&\n  items[0].json._noNewApproved === true;\n\nif (isNoOp) {\n  return items;\n}\n\nconst approvedAt = new Date().toISOString();\n\nreturn items.map((item) => {\n  const lead = item.json || {};\n\n  return {\n    json: {\n      lead_id: String(lead.lead_id || '').trim(),\n      business_name: String(lead.business_name || '').trim(),\n      niche: String(lead.niche || '').trim(),\n      city: String(lead.city || '').trim(),\n      state: String(lead.state || '').trim(),\n      country: String(lead.country || '').trim(),\n      website: String(lead.website || '').trim(),\n      phone: String(lead.phone || '').trim(),\n      email: '',\n      contact_name: '',\n      contact_title: '',\n      email_source: '',\n      email_verified: '',\n      contact_form: '',\n      linkedin_url: '',\n      lead_score: lead.score ?? '',\n      qualification_status: String(lead.qualification_status || '').trim(),\n      outreach_channel: '',\n      outreach_status: 'not_ready',\n      approved_at: approvedAt,\n      notes: ''\n    }\n  };\n});"
+      },
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f06",
+      "name": "Prepare Approved Outreach Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-handoff-01",
+              "leftValue": "={{ $json._noNewApproved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f07",
+      "name": "Has New Approved Leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": ""
+        },
+        "operation": "append",
+        "sheetName": {
+          "cachedResultName": "Approved Outreach",
+          "mode": "name",
+          "value": "Approved Outreach"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "business_name": "={{ $json.business_name }}",
+            "niche": "={{ $json.niche }}",
+            "city": "={{ $json.city }}",
+            "state": "={{ $json.state }}",
+            "country": "={{ $json.country }}",
+            "website": "={{ $json.website }}",
+            "phone": "={{ $json.phone }}",
+            "email": "={{ $json.email }}",
+            "contact_name": "={{ $json.contact_name }}",
+            "contact_title": "={{ $json.contact_title }}",
+            "email_source": "={{ $json.email_source }}",
+            "email_verified": "={{ $json.email_verified }}",
+            "contact_form": "={{ $json.contact_form }}",
+            "linkedin_url": "={{ $json.linkedin_url }}",
+            "lead_score": "={{ $json.lead_score }}",
+            "qualification_status": "={{ $json.qualification_status }}",
+            "outreach_channel": "={{ $json.outreach_channel }}",
+            "outreach_status": "={{ $json.outreach_status }}",
+            "approved_at": "={{ $json.approved_at }}",
+            "notes": "={{ $json.notes }}"
+          }
+        }
+      },
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f08",
+      "name": "Write Approved Outreach",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {},
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f09",
+      "name": "No-Op End",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1540, 220]
+    },
+    {
+      "parameters": {},
+      "id": "1f3a5c2e-9b4d-4f1a-8c9a-5d0e2b3a7f10",
+      "name": "Handoff Complete End",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1760, 0]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Verified Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Verified Leads": {
+      "main": [
+        [
+          {
+            "node": "Filter Eligible Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Eligible Leads": {
+      "main": [
+        [
+          {
+            "node": "Read Approved Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Approved Outreach": {
+      "main": [
+        [
+          {
+            "node": "Dedup Against Approved Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Against Approved Outreach": {
+      "main": [
+        [
+          {
+            "node": "Prepare Approved Outreach Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Approved Outreach Rows": {
+      "main": [
+        [
+          {
+            "node": "Has New Approved Leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Approved Leads?": {
+      "main": [
+        [
+          {
+            "node": "Write Approved Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No-Op End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Approved Outreach": {
+      "main": [
+        [
+          {
+            "node": "Handoff Complete End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "pinData": {},
+  "meta": {
+    "instanceId": "",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

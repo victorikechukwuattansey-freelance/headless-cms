@@ -1,0 +1,256 @@
+{
+  "name": "Lead Recovery Engine — Outreach Execution & Delivery V1",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "event": ""
+      },
+      "id": "exec-manual-0000000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const mode = ($json && $json.mode) || 'DRY_RUN';\nconst provider = ($json && $json.provider) || 'NOT_CONFIGURED';\nconst message_variants = ($json && $json.message_variants) || {};\nreturn [{ json: { mode, provider, message_variants } }];"
+      },
+      "id": "exec-init-mode-00001",
+      "name": "Initialize Execution Mode",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list"
+        },
+        "operation": "read",
+        "sheetName": {
+          "mode": "name",
+          "value": "Approved Outreach"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "exec-read-approved-0001",
+      "name": "Read Approved Outreach",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        260,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list"
+        },
+        "operation": "read",
+        "sheetName": {
+          "mode": "name",
+          "value": "Outreach Log"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "exec-read-outreach-0001",
+      "name": "Read Outreach Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const approvedItems = $('Read Approved Outreach').all();\nconst outreachItems = $('Read Outreach Log').all();\nconst modeRef = $('Initialize Execution Mode');\nconst modeItem = (modeRef && modeRef.item) || {};\n\nconst approvedRows = approvedItems.map((item) => (item && item.json) || {});\nconst outreachRows = outreachItems.map((item) => (item && item.json) || {});\n\nconst normalize = (value) => (value === undefined || value === null ? '' : String(value).trim());\n\nconst READY = 'READY';\nconst NOT_READY = 'NOT_READY';\nconst BLOCKED = 'BLOCKED';\nconst EMAIL = 'email';\nconst CALL = 'call';\nconst NONE = 'none';\nconst MIN_PHONE_DIGITS = 7;\n\nconst countDigits = (value) => String(value).replace(/\\D+/g, '').length;\n\nconst parseScore = (value) => {\n  const n = Number(String(value));\n  return Number.isFinite(n) ? n : 0;\n};\n\nconst isVerifiedEmail = (record) => normalize(record.email_verified) !== '';\nconst isUsablePhone = (record) => {\n  const phone = normalize(record.phone);\n  return phone !== '' && countDigits(phone) >= MIN_PHONE_DIGITS;\n};\nconst isSuppressed = (record) => normalize(record.outreach_status) === 'suppressed';\n\nconst readinessFor = (record) => {\n  if (isSuppressed(record)) return { available_channel: NONE, readiness_status: BLOCKED, reason: 'suppressed' };\n  if (isVerifiedEmail(record)) return { available_channel: EMAIL, readiness_status: READY, reason: 'verified email available' };\n  if (isUsablePhone(record)) return { available_channel: CALL, readiness_status: READY, reason: 'phone available' };\n  return { available_channel: NONE, readiness_status: NOT_READY, reason: 'no available channel' };\n};\n\nconst buildApprovalIndex = (rows) => {\n  const index = new Map();\n  const malformed = [];\n  const duplicates = [];\n  rows.forEach((row, i) => {\n    const leadId = normalize(row.lead_id);\n    const approvedAt = normalize(row.approved_at);\n    if (!leadId || !approvedAt) {\n      malformed.push({ lead_id: leadId, business_name: normalize(row.business_name), outreach_status: normalize(row.outreach_status), approved_at: approvedAt });\n      return;\n    }\n    if (index.has(leadId)) {\n      duplicates.push({ lead_id: leadId, business_name: normalize(row.business_name), approved_at: approvedAt });\n      return;\n    }\n    index.set(leadId, { row: Object.assign({}, row), index: i, leadId, approvedAt });\n  });\n  return { index, malformed, duplicates };\n};\n\nconst buildHistoryIndex = (rows) => {\n  const malformed = [];\n  const byLead = new Map();\n  rows.forEach((row, i) => {\n    const leadId = normalize(row.lead_id);\n    const sentAt = normalize(row.sent_at);\n    if (!leadId || !sentAt) {\n      malformed.push({ lead_id: leadId, outreach_id: normalize(row.outreach_id), business_name: normalize(row.business_name) });\n      return;\n    }\n    if (!byLead.has(leadId)) byLead.set(leadId, []);\n    byLead.get(leadId).push({ leadId, sentAt, channel: normalize(row.channel), outcome: normalize(row.outcome), outreach_id: normalize(row.outreach_id), rowIndex: i });\n  });\n  for (const records of byLead.values()) {\n    records.sort((a, b) => (a.sentAt < b.sentAt ? -1 : a.sentAt > b.sentAt ? 1 : a.rowIndex - b.rowIndex));\n  }\n  return { index: byLead, malformed };\n};\n\nconst buildHistory = (records) => {\n  if (!records || records.length === 0) return { outreach_count: 0, last_outreach_at: '', latest_channel: '', latest_outcome: '' };\n  const latest = records[records.length - 1];\n  return { outreach_count: records.length, last_outreach_at: latest.sentAt, latest_channel: latest.channel, latest_outcome: latest.outcome };\n};\n\nconst findOrphans = (historyIndex, approvalIndex) => {\n  const orphans = [];\n  for (const [leadId, records] of historyIndex) {\n    if (approvalIndex.has(leadId)) continue;\n    for (const record of records) {\n      orphans.push({ lead_id: record.leadId, outreach_id: record.outreach_id, sent_at: record.sentAt, channel: record.channel });\n    }\n  }\n  orphans.sort((a, b) => (a.lead_id < b.lead_id ? -1 : a.lead_id > b.lead_id ? 1 : a.sent_at < b.sent_at ? -1 : 1));\n  return orphans;\n};\n\nconst sortLeads = (a, b) => {\n  const scoreDiff = parseScore(b.row.lead_score) - parseScore(a.row.lead_score);\n  if (scoreDiff !== 0) return scoreDiff;\n  if (a.approvedAt < b.approvedAt) return -1;\n  if (a.approvedAt > b.approvedAt) return 1;\n  return a.leadId < b.leadId ? -1 : a.leadId > b.leadId ? 1 : 0;\n};\n\nconst buildQueue = (approvalIndex, historyIndex, queuedAt) => {\n  const sortedForQueue = [...approvalIndex.values()].sort(sortLeads);\n  return sortedForQueue.map((entry, i) => {\n    const row = entry.row;\n    const readiness = readinessFor(row);\n    const history = buildHistory(historyIndex.get(entry.leadId));\n    return {\n      queue_id: entry.leadId,\n      lead_id: entry.leadId,\n      business_name: normalize(row.business_name),\n      niche: normalize(row.niche),\n      city: normalize(row.city),\n      state: normalize(row.state),\n      country: normalize(row.country),\n      lead_score: normalize(row.lead_score),\n      qualification_status: normalize(row.qualification_status),\n      available_channel: readiness.available_channel,\n      readiness_status: readiness.readiness_status,\n      priority: i + 1,\n      approved_at: entry.approvedAt,\n      queued_at: queuedAt,\n      last_outreach_at: history.last_outreach_at,\n      outreach_count: history.outreach_count,\n      latest_channel: history.latest_channel,\n      latest_outcome: history.latest_outcome,\n      enrichment_required: readiness.available_channel === NONE && readiness.readiness_status === NOT_READY,\n      reason: readiness.reason,\n      notes: normalize(row.notes),\n    };\n  });\n};\n\nconst sortExceptionsList = (a, b) => {\n  const ka = [a.exception_type || '', a.lead_id || '', a.details || ''];\n  const kb = [b.exception_type || '', b.lead_id || '', b.details || ''];\n  for (let i = 0; i < ka.length; i += 1) {\n    if (ka[i] < kb[i]) return -1;\n    if (ka[i] > kb[i]) return 1;\n  }\n  return 0;\n};\n\nconst runAt = new Date().toISOString();\nconst runId = 'EXECUTION-' + runAt.replace(/[^\\d]/g, '').slice(0, 14);\n\nlet approvedError = '';\nlet outreachError = '';\nif (approvedItems.length === 1 && approvedItems[0].json && approvedItems[0].json._source_read_error) approvedError = String(approvedItems[0].json._source_read_error);\nif (outreachItems.length === 1 && outreachItems[0].json && outreachItems[0].json._source_read_error) outreachError = String(outreachItems[0].json._source_read_error);\n\nconst MODE = normalize(modeItem.mode) || 'DRY_RUN';\nconst RUN_MODE = MODE === 'REAL' ? 'REAL' : 'DRY_RUN';\nconst PROVIDER_MODE = normalize(modeItem.provider) || 'NOT_CONFIGURED';\nconst providerConfigured = PROVIDER_MODE === 'SUCCESS' || PROVIDER_MODE === 'FAILURE';\nconst message_variants = (modeItem.message_variants) || {};\n\nconst EXECUTION_STATUS = {\n  SKIPPED: 'EXECUTION_SKIPPED',\n  REJECTED: 'EXECUTION_REJECTED',\n  FAILED: 'EXECUTION_FAILED',\n  SUCCEEDED: 'EXECUTION_SUCCEEDED',\n  DUPLICATE_SUPPRESSED: 'DUPLICATE_SUPPRESSED',\n};\n\nconst outreachIdFor = (leadId, channel) => 'EX-' + normalize(leadId) + '-' + (normalize(channel) || '?');\n\nconst buildSentIndex = (rows) => {\n  const index = new Map();\n  rows.forEach((obj) => {\n    const row = obj || {};\n    const leadId = normalize(row.lead_id);\n    const sentAt = normalize(row.sent_at);\n    if (!leadId || !sentAt) return;\n    const channel = normalize(row.channel);\n    index.set(leadId + '\\u0000' + channel, { lead_id: leadId, channel, sent_at: sentAt });\n  });\n  return index;\n};\n\nconst notConfiguredError = (msg) => ({ success: false, error_code: 'PROVIDER_NOT_CONFIGURED', error_message: msg || 'No real provider adapter is configured; execution is refused. This is the safe default — nothing was sent.' });\n\nconst mockExecute = (channel, payload) => {\n  if (PROVIDER_MODE === 'FAILURE') return { success: false, error_code: 'MOCK_PROVIDER_FAILURE', error_message: 'mock provider returned failure mode; no message was sent' };\n  if (PROVIDER_MODE === 'NOT_CONFIGURED') return notConfiguredError();\n  return { success: true, provider_status: 'accepted', provider_message_id: 'mock:' + runId };\n};\n\nconst validatePayload = (item) => {\n  if (item.available_channel === EMAIL) {\n    if (!item.email || !item.message_variant) return { ok: false, detail: 'email channel requires a non-empty email and an explicit message_variant' };\n  } else if (item.available_channel === CALL) {\n    if (!item.phone) return { ok: false, detail: 'call channel requires a non-empty phone' };\n  }\n  return { ok: true, detail: '' };\n};\n\nconst buildPayload = (item) => {\n  const payload = { execution_id: runId, outreach_id: item.outreach_id, lead_id: item.lead_id, business_name: item.business_name, contact_name: item.contact_name, channel: item.available_channel, message_variant: item.message_variant };\n  if (item.available_channel === EMAIL) payload.email = item.email;\n  if (item.available_channel === CALL) payload.phone = item.phone;\n  return payload;\n};\n\nconst resultView = (r) => ({ success: Boolean(r && r.success), provider_status: (r && r.provider_status) || '', provider_message_id: (r && r.provider_message_id) || '', error_code: (r && r.error_code) || '', error_message: (r && r.error_message) || '' });\n\nconst buildLogRow = (item) => ({\n  outreach_id: item.outreach_id,\n  lead_id: item.lead_id,\n  business_name: item.business_name,\n  contact_name: item.contact_name,\n  channel: item.available_channel,\n  email: item.available_channel === EMAIL ? item.email : '',\n  phone: item.available_channel === CALL ? item.phone : '',\n  message_variant: item.message_variant,\n  sent_at: runAt,\n  follow_up_date: '',\n  follow_up_number: '',\n  reply_status: '',\n  reply_date: '',\n  pain_admitted: '',\n  call_booked: '',\n  call_date: '',\n  paid_pilot_interest: '',\n  objection: '',\n  outcome: '',\n  notes: '',\n});\n\nconst gate = (item, index) => {\n  if (item.readiness_status === BLOCKED) return { ok: false, status: EXECUTION_STATUS.SKIPPED, reason: 'BLOCKED', detail: 'blocked: suppressed lead; no execution' };\n  if (item.readiness_status === NOT_READY) return { ok: false, status: EXECUTION_STATUS.SKIPPED, reason: 'NOT_READY', detail: 'not ready: ' + (item.reason || 'no available channel') };\n  if (item.available_channel !== EMAIL && item.available_channel !== CALL) return { ok: false, status: EXECUTION_STATUS.REJECTED, reason: 'NO_CHANNEL', detail: 'queue record has no supported channel' };\n  if (index.has(item.lead_id + '\\u0000' + item.available_channel)) return { ok: false, status: EXECUTION_STATUS.DUPLICATE_SUPPRESSED, reason: 'DUPLICATE', detail: 'existing committed outreach log row for lead_id+channel; suppressed' };\n  return { ok: true };\n};\n\nconst resultCard = (item, partial) => Object.assign({ lead_id: item.lead_id, outreach_id: item.outreach_id, business_name: item.business_name, channel: item.available_channel, readiness_status: item.readiness_status, status: '', reason: '', detail: '', payload: null, provider_call: null, sent_at: '' }, partial);\n\nif (approvedError || outreachError) {\n  const nullMetrics = { approved_total: null, queue_total: null, ready_candidates: null, executed_attempted: null, executed_succeeded: null, executed_failed: null, executed_skipped: null, executed_rejected: null, duplicate_suppressed: null, log_rows_written: null, provider_calls: null };\n  return [\n    { json: Object.assign({ run_id: runId, status: 'EXECUTION_INCOMPLETE', run_at: runAt, mode: RUN_MODE, provider: PROVIDER_MODE, provider_configured: providerConfigured }, nullMetrics, { results: [], log_rows: [], exceptions: [], sources: { approved_ok: !approvedError, outreach_ok: !outreachError, approved_read_error: approvedError, outreach_read_error: outreachError } }) },\n    { json: { run_id: runId, log_rows: [], log_rows_written: 0 } },\n  ];\n}\n\nconst approved = buildApprovalIndex(approvedRows);\nconst history = buildHistoryIndex(outreachRows);\nconst orphans = findOrphans(history.index, approved.index);\nconst queue = buildQueue(approved.index, history.index, runAt);\n\nconst exceptionRows = [];\nfor (const o of orphans) exceptionRows.push({ run_id: runId, lead_id: o.lead_id, outreach_id: o.outreach_id, exception_type: 'OUTREACH_WITHOUT_APPROVAL', severity: 'ERROR', details: 'Outreach Log has a record but no matching Approved Outreach row' });\nfor (const m of history.malformed) exceptionRows.push({ run_id: runId, lead_id: m.lead_id, outreach_id: m.outreach_id, exception_type: 'MALFORMED_OUTREACH', severity: 'ERROR', details: 'outreach record missing lead_id or sent_at' });\nfor (const m of approved.malformed) exceptionRows.push({ run_id: runId, lead_id: m.lead_id, business_name: m.business_name, approved_status: m.outreach_status, exception_type: 'MALFORMED_APPROVAL', severity: 'ERROR', details: 'approved row missing lead_id or approved_at' });\nexceptionRows.sort(sortExceptionsList);\n\nconst byApprovedLead = new Map();\napprovedRows.forEach((obj) => {\n  const row = obj || {};\n  const leadId = normalize(row.lead_id);\n  if (!leadId || byApprovedLead.has(leadId)) return;\n  byApprovedLead.set(leadId, row);\n});\n\nconst merged = queue.map((q) => {\n  const a = byApprovedLead.get(q.lead_id) || {};\n  const item = Object.assign({}, q, {\n    email: normalize(a.email),\n    phone: normalize(a.phone),\n    contact_name: normalize(a.contact_name),\n    message_variant: message_variants[q.lead_id] !== undefined ? normalize(message_variants[q.lead_id]) : '',\n  });\n  item.outreach_id = outreachIdFor(item.lead_id, item.available_channel);\n  return item;\n});\n\nconst sentIndex = buildSentIndex(outreachRows);\nlet attempts = 0;\nconst results = [];\nconst logRows = [];\n\nfor (const item of merged) {\n  const g = gate(item, sentIndex);\n  if (!g.ok) { results.push(resultCard(item, { status: g.status, reason: g.reason, detail: g.detail })); continue; }\n  const check = validatePayload(item);\n  if (!check.ok) { results.push(resultCard(item, { status: EXECUTION_STATUS.REJECTED, reason: 'INVALID_PAYLOAD', detail: check.detail, payload: buildPayload(item) })); continue; }\n  const payload = buildPayload(item);\n  if (RUN_MODE === 'DRY_RUN') { results.push(resultCard(item, { status: EXECUTION_STATUS.SKIPPED, reason: 'DRY_RUN', detail: 'dry run: provider not called, no Outreach Log write', payload })); continue; }\n  attempts += 1;\n  const view = resultView(mockExecute(item.available_channel, payload));\n  if (view.success) {\n    const row = buildLogRow(item);\n    logRows.push(row);\n    results.push(resultCard(item, { status: EXECUTION_STATUS.SUCCEEDED, reason: 'EXECUTION_SUCCESS', detail: 'provider confirmed the attempt; Outreach Log row staged', payload, provider_call: view, sent_at: runAt }));\n  } else {\n    const notConfigured = view.error_code === 'PROVIDER_NOT_CONFIGURED';\n    results.push(resultCard(item, { status: EXECUTION_STATUS.FAILED, reason: notConfigured ? 'PROVIDER_NOT_CONFIGURED' : 'PROVIDER_FAILURE', detail: notConfigured ? 'provider is not configured; execution refused, nothing was sent' : 'provider reported failure (' + (view.error_code || 'unknown') + '); nothing was sent', payload, provider_call: view }));\n  }\n}\n\nconst outputs = {\n  run_id: runId,\n  status: 'COMPLETED',\n  run_at: runAt,\n  mode: RUN_MODE,\n  provider: PROVIDER_MODE,\n  provider_configured: providerConfigured,\n  approved_total: approvedRows.length,\n  queue_total: queue.length,\n  ready_candidates: queue.filter((q) => q.readiness_status === READY).length,\n  executed_attempted: attempts,\n  executed_succeeded: results.filter((r) => r.status === EXECUTION_STATUS.SUCCEEDED).length,\n  executed_failed: results.filter((r) => r.status === EXECUTION_STATUS.FAILED).length,\n  executed_skipped: results.filter((r) => r.status === EXECUTION_STATUS.SKIPPED).length,\n  executed_rejected: results.filter((r) => r.status === EXECUTION_STATUS.REJECTED).length,\n  duplicate_suppressed: results.filter((r) => r.status === EXECUTION_STATUS.DUPLICATE_SUPPRESSED).length,\n  log_rows_written: logRows.length,\n  provider_calls: attempts,\n  results,\n  log_rows: logRows,\n  exceptions: exceptionRows,\n  sources: { approved_ok: true, outreach_ok: true, approved_read_error: '', outreach_read_error: '' },\n};\n\nreturn [\n  { json: outputs },\n  { json: { run_id: runId, log_rows: logRows, log_rows_written: logRows.length } },\n];"
+      },
+      "id": "exec-execute-000000001",
+      "name": "Execute Ready Queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json || {};\nconst logRows = Array.isArray(input.log_rows) ? input.log_rows : [];\nconst out = [\"outreach_id\",\"lead_id\",\"business_name\",\"contact_name\",\"channel\",\"email\",\"phone\",\"message_variant\",\"sent_at\",\"follow_up_date\",\"follow_up_number\",\"reply_status\",\"reply_date\",\"pain_admitted\",\"call_booked\",\"call_date\",\"paid_pilot_interest\",\"objection\",\"outcome\",\"notes\"];\nreturn logRows.map((row) => {\n  const item = {};\n  for (const c of out) item[c] = row[c] === undefined || row[c] === null ? '' : String(row[c]);\n  return { json: item };\n});"
+      },
+      "id": "exec-prepare-log-00001",
+      "name": "Prepare Outreach Log Write",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list"
+        },
+        "operation": "append",
+        "sheetName": {
+          "mode": "name",
+          "value": "Outreach Log"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "options": {}
+      },
+      "id": "exec-write-outreach-00001",
+      "name": "Write Outreach Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        980,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "exec-complete-00000001",
+      "name": "Execution Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Execution Mode",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Approved Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Outreach Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Execution Mode": {
+      "main": [
+        [
+          {
+            "node": "Execute Ready Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Approved Outreach": {
+      "main": [
+        [
+          {
+            "node": "Execute Ready Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Outreach Log": {
+      "main": [
+        [
+          {
+            "node": "Execute Ready Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Ready Queue": {
+      "main": [
+        [
+          {
+            "node": "Prepare Outreach Log Write",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execution Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Outreach Log Write": {
+      "main": [
+        [
+          {
+            "node": "Write Outreach Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Outreach Log": {
+      "main": [
+        [
+          {
+            "node": "Execution Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "artifact": "Outreach-Execution-and-Delivery V1",
+    "spreadsheetId": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+    "defaultMode": "DRY_RUN",
+    "defaultProvider": "NOT_CONFIGURED",
+    "generatedBy": "scripts/build-execution-workflow.js"
+  }
+}

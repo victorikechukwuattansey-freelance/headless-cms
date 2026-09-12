@@ -1,0 +1,166 @@
+{
+  "name": "Lead Recovery Engine — Response Reconciliation V1",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "event": ""
+      },
+      "id": "resp-recon-manual-0000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list"
+        },
+        "operation": "read",
+        "sheetName": {
+          "mode": "name",
+          "value": "Response Log"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "resp-recon-read-response-0001",
+      "name": "Read Response Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        260,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list"
+        },
+        "operation": "read",
+        "sheetName": {
+          "mode": "name",
+          "value": "Outreach Log"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "resp-recon-read-outreach-0001",
+      "name": "Read Outreach Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\nconst triggerItems = $('Manual Trigger').all();\nconst responseLogItems = $('Read Response Log').all();\nconst outreachLogItems = $('Read Outreach Log').all();\n\nconst str = (value) => (value === undefined || value === null ? '' : String(value));\nconst digits14 = (value) => String(value).replace(/\\D/g, '').slice(0, 14).padEnd(14, '0');\nconst RUN_LABEL = 'RESPRECON';\nconst SUPPORTED_CHANNELS = ['email', 'call'];\nconst STATUS = { COMPLETED: 'COMPLETED', INCOMPLETE: 'INCOMPLETE' };\nconst RECONCILIATION_STATUS = {\n  VERIFIED: 'VERIFIED',\n  VIOLATION: 'VIOLATION',\n  NOT_VERIFIABLE: 'NOT_VERIFIABLE',\n};\nconst CATEGORY = {\n  RESPONSE_WITH_VALID_OUTREACH: 'RESPONSE_WITH_VALID_OUTREACH',\n  RESPONSE_OUTREACH_NOT_FOUND: 'RESPONSE_OUTREACH_NOT_FOUND',\n  RESPONSE_LEAD_NOT_FOUND: 'RESPONSE_LEAD_NOT_FOUND',\n  RESPONSE_WITHOUT_OUTREACH_ID: 'RESPONSE_WITHOUT_OUTREACH_ID',\n  CHANNEL_MISMATCH: 'CHANNEL_MISMATCH',\n  OUTREACH_ID_FORMAT_INVALID: 'OUTREACH_ID_FORMAT_INVALID',\n  DUPLICATE_RESPONSE: 'DUPLICATE_RESPONSE',\n  DUPLICATE_OUTREACH_ID: 'DUPLICATE_OUTREACH_ID',\n  INVALID_RESPONSE_RECORD: 'INVALID_RESPONSE_RECORD',\n  INVALID_OUTREACH_RECORD: 'INVALID_OUTREACH_RECORD',\n  READ_FAILURE: 'READ_FAILURE',\n};\nconst SEVERITY = { ERROR: 'ERROR', WARNING: 'WARNING' };\nconst CATEGORY_SEVERITY = {};\nCATEGORY_SEVERITY[CATEGORY.RESPONSE_WITH_VALID_OUTREACH] = SEVERITY.WARNING;\nCATEGORY_SEVERITY[CATEGORY.RESPONSE_OUTREACH_NOT_FOUND] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.RESPONSE_LEAD_NOT_FOUND] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.RESPONSE_WITHOUT_OUTREACH_ID] = SEVERITY.WARNING;\nCATEGORY_SEVERITY[CATEGORY.CHANNEL_MISMATCH] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.OUTREACH_ID_FORMAT_INVALID] = SEVERITY.WARNING;\nCATEGORY_SEVERITY[CATEGORY.DUPLICATE_RESPONSE] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.DUPLICATE_OUTREACH_ID] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.INVALID_RESPONSE_RECORD] = SEVERITY.WARNING;\nCATEGORY_SEVERITY[CATEGORY.INVALID_OUTREACH_RECORD] = SEVERITY.WARNING;\nCATEGORY_SEVERITY[CATEGORY.READ_FAILURE] = SEVERITY.ERROR;\nconst VIOLATION_CATEGORIES = [\n  CATEGORY.RESPONSE_OUTREACH_NOT_FOUND,\n  CATEGORY.RESPONSE_LEAD_NOT_FOUND,\n  CATEGORY.CHANNEL_MISMATCH,\n  CATEGORY.DUPLICATE_RESPONSE,\n  CATEGORY.DUPLICATE_OUTREACH_ID,\n];\nconst CATEGORY_REASON = {};\nCATEGORY_REASON[CATEGORY.RESPONSE_WITH_VALID_OUTREACH] = 'Response references an Outreach Log attempt whose OUTREACH identifier resolves exactly.';\nCATEGORY_REASON[CATEGORY.RESPONSE_OUTREACH_NOT_FOUND] = 'Response references an outreach_id that has no matching attempt in the Outreach Log; the claimed attempt cannot be proven.';\nCATEGORY_REASON[CATEGORY.RESPONSE_LEAD_NOT_FOUND] = 'Response references a lead_id with no outbound history at all in the Outreach Log.';\nCATEGORY_REASON[CATEGORY.RESPONSE_WITHOUT_OUTREACH_ID] = 'Response carries only a lead-level reference; no specific outbound attempt is referenced.';\nCATEGORY_REASON[CATEGORY.CHANNEL_MISMATCH] = 'Channel parsed from the response outreach_id contradicts the response channel.';\nCATEGORY_REASON[CATEGORY.OUTREACH_ID_FORMAT_INVALID] = 'Response outreach_id is not in the canonical EX-<lead_id>-<channel> format.';\nCATEGORY_REASON[CATEGORY.DUPLICATE_RESPONSE] = 'More than one durable Response Log row shares the same canonical inbound idempotency key.';\nCATEGORY_REASON[CATEGORY.DUPLICATE_OUTREACH_ID] = 'More than one Outreach Log row shares the same canonical outreach_id; the echoed attempt is ambiguous.';\nCATEGORY_REASON[CATEGORY.INVALID_RESPONSE_RECORD] = 'Response Log row is missing required identity fields or carries a non-canonical response_status.';\nCATEGORY_REASON[CATEGORY.INVALID_OUTREACH_RECORD] = 'Outreach Log row is missing required identity fields, lacks a confirmed sent_at, or carries a malformed outreach_id.';\nCATEGORY_REASON[CATEGORY.READ_FAILURE] = 'A required reconciliation source could not be read.';\nconst OUTREACH_ID_REGEX = /^EX-(.+)-(email|call)$/;\nconst RESPONSE_STATUSES = ['CAPTURED', 'UNMATCHED'];\n\nconst isSupportedChannel = (channel) => channel !== '' && SUPPORTED_CHANNELS.indexOf(channel) !== -1;\n\nconst exception = (category, record, evidence) => ({\n  category,\n  severity: CATEGORY_SEVERITY[category] || SEVERITY.WARNING,\n  response_id: record.response_id || '',\n  lead_id: record.lead_id || '',\n  outreach_id: record.outreach_id || '',\n  channel: record.channel || '',\n  reason: CATEGORY_REASON[category],\n  evidence: evidence || {},\n});\n\nconst card = (record, reconciliationStatus, relationship, reason) => ({\n  response_id: record.response_id,\n  lead_id: record.lead_id,\n  outreach_id: record.outreach_id,\n  channel: record.channel,\n  response_status: record.response_status,\n  reconciliation_status: reconciliationStatus,\n  relationship,\n  reason,\n});\n\nconst normalizeResponseRows = (rows) =>\n  (Array.isArray(rows) ? rows : []).map((row) => ({\n    response_id: str(row.response_id),\n    idempotency_key: str(row.idempotency_key),\n    lead_id: str(row.lead_id),\n    outreach_id: str(row.outreach_id),\n    channel: str(row.channel).toLowerCase(),\n    response_status: str(row.response_status).toUpperCase(),\n    received_at: str(row.received_at),\n    matched: row.matched === true || str(row.matched) === 'true',\n  }));\n\nconst normalizeOutreachRows = (rows) =>\n  (Array.isArray(rows) ? rows : []).map((row) => ({\n    lead_id: str(row.lead_id),\n    outreach_id: str(row.outreach_id),\n    channel: str(row.channel).toLowerCase(),\n    sent_at: str(row.sent_at),\n  }));\n\nconst isResponseRecordValid = (record) =>\n  record.response_id !== '' &&\n  record.idempotency_key !== '' &&\n  isSupportedChannel(record.channel) &&\n  RESPONSE_STATUSES.indexOf(record.response_status) !== -1;\n\nconst isOutreachRowValid = (row) =>\n  row.lead_id !== '' &&\n  row.outreach_id !== '' &&\n  OUTREACH_ID_REGEX.test(row.outreach_id) &&\n  isSupportedChannel(row.channel) &&\n  row.sent_at !== '';\n\nconst sortedBy = (list, keys) =>\n  list.slice().sort((a, b) => {\n    for (const key of keys) {\n      const av = a[key] || '';\n      const bv = b[key] || '';\n      if (av < bv) return -1;\n      if (av > bv) return 1;\n    }\n    return 0;\n  });\n\nconst sortedExceptions = (exceptions) =>\n  exceptions\n    .map((e) => Object.assign({}, e))\n    .sort((a, b) => {\n      const keys = ['category', 'response_id', 'outreach_id', 'channel', 'lead_id', 'reason'];\n      for (const key of keys) {\n        const av = a[key];\n        const bv = b[key];\n        if (av < bv) return -1;\n        if (av > bv) return 1;\n      }\n      return JSON.stringify(a.evidence || {}).localeCompare(JSON.stringify(b.evidence || {}));\n    });\n\nconst classifyResponses = (rows, context) => {\n  const sortedRows = sortedBy(rows, ['response_id', 'idempotency_key', 'lead_id', 'outreach_id', 'channel']);\n  const seenKeys = new Set();\n  const canonicalKeyId = new Map();\n  const results = [];\n  const rowExceptions = [];\n\n  let matched = 0;\n  let unmatched = 0;\n  let notVerifiable = 0;\n  let invalid = 0;\n  let duplicate = 0;\n  let violationRows = 0;\n  let linked = 0;\n  let eligible = 0;\n\n  for (const rec of sortedRows) {\n    if (!isResponseRecordValid(rec)) {\n      invalid += 1;\n      results.push(\n        card(rec, RECONCILIATION_STATUS.NOT_VERIFIABLE, 'invalid durable response record', CATEGORY_REASON[CATEGORY.INVALID_RESPONSE_RECORD]),\n      );\n      rowExceptions.push(\n        exception(CATEGORY.INVALID_RESPONSE_RECORD, rec, {\n          source: 'response log',\n          reason: 'missing response_id, idempotency_key, channel, or non-canonical response_status',\n        }),\n      );\n      continue;\n    }\n\n    if (seenKeys.has(rec.idempotency_key)) {\n      duplicate += 1;\n      results.push(\n        card(rec, RECONCILIATION_STATUS.VIOLATION, 'duplicate inbound message identity', CATEGORY_REASON[CATEGORY.DUPLICATE_RESPONSE]),\n      );\n      rowExceptions.push(\n        exception(CATEGORY.DUPLICATE_RESPONSE, rec, {\n          canonical_response_id: canonicalKeyId.get(rec.idempotency_key),\n        }),\n      );\n      continue;\n    }\n    seenKeys.add(rec.idempotency_key);\n    canonicalKeyId.set(rec.idempotency_key, rec.response_id);\n\n    if (rec.response_status === 'UNMATCHED' || rec.lead_id === '') {\n      notVerifiable += 1;\n      if (rec.response_status === 'UNMATCHED') unmatched += 1;\n      results.push(\n        card(rec, RECONCILIATION_STATUS.NOT_VERIFIABLE, 'capture-level unmatched; no identity to reconcile', 'Response was recorded UNMATCHED at capture; it carries no reconcilable identity.'),\n      );\n      continue;\n    }\n\n    eligible += 1;\n    if (context.leadSet.has(rec.lead_id)) linked += 1;\n\n    const outreachId = rec.outreach_id;\n    if (outreachId === '') {\n      if (context.leadSet.has(rec.lead_id)) {\n        notVerifiable += 1;\n        results.push(\n          card(rec, RECONCILIATION_STATUS.NOT_VERIFIABLE, 'lead-level relationship only; no specific attempt referenced', CATEGORY_REASON[CATEGORY.RESPONSE_WITHOUT_OUTREACH_ID]),\n        );\n        rowExceptions.push(\n          exception(CATEGORY.RESPONSE_WITHOUT_OUTREACH_ID, rec, {\n            log_rows_for_lead: context.leadRowCounts.get(rec.lead_id) || 0,\n          }),\n        );\n      } else {\n        violationRows += 1;\n        results.push(\n          card(rec, RECONCILIATION_STATUS.VIOLATION, 'lead has no outbound history at all', CATEGORY_REASON[CATEGORY.RESPONSE_LEAD_NOT_FOUND]),\n        );\n        rowExceptions.push(exception(CATEGORY.RESPONSE_LEAD_NOT_FOUND, rec, {}));\n      }\n      continue;\n    }\n\n    const parsed = OUTREACH_ID_REGEX.exec(outreachId);\n    if (!parsed) {\n      notVerifiable += 1;\n      results.push(\n        card(rec, RECONCILIATION_STATUS.NOT_VERIFIABLE, 'malformed outreach reference; cannot verify', CATEGORY_REASON[CATEGORY.OUTREACH_ID_FORMAT_INVALID]),\n      );\n      rowExceptions.push(\n        exception(CATEGORY.OUTREACH_ID_FORMAT_INVALID, rec, { outreach_id: outreachId }),\n      );\n      continue;\n    }\n\n    const referencedChannel = parsed[2];\n    if (referencedChannel !== rec.channel) {\n      violationRows += 1;\n      results.push(\n        card(rec, RECONCILIATION_STATUS.VIOLATION, 'channel mismatch between response and referenced attempt', CATEGORY_REASON[CATEGORY.CHANNEL_MISMATCH]),\n      );\n      rowExceptions.push(\n        exception(CATEGORY.CHANNEL_MISMATCH, rec, {\n          referenced_channel: referencedChannel,\n          response_channel: rec.channel,\n        }),\n      );\n      continue;\n    }\n\n    const bucket = context.indexByOutreach.get(outreachId) || { rows: [], ambiguous: false };\n    if (bucket.rows.length > 0) {\n      if (bucket.ambiguous) {\n        notVerifiable += 1;\n        results.push(\n          card(rec, RECONCILIATION_STATUS.NOT_VERIFIABLE, 'duplicate outreach id; echoed attempt is ambiguous', CATEGORY_REASON[CATEGORY.DUPLICATE_OUTREACH_ID]),\n        );\n      } else {\n        matched += 1;\n        results.push(\n          card(rec, RECONCILIATION_STATUS.VERIFIED, 'outreach_id resolves to exactly one confirmed Outreach Log attempt', CATEGORY_REASON[CATEGORY.RESPONSE_WITH_VALID_OUTREACH]),\n        );\n      }\n      continue;\n    }\n\n    const raw = context.rawByOutreach.get(outreachId) || [];\n    if (raw.length > 0) {\n      notVerifiable += 1;\n      results.push(\n        card(rec, RECONCILIATION_STATUS.NOT_VERIFIABLE, 'outreach row found; send not confirmed (no sent_at)', 'An Outreach Log row exists for the referenced attempt but has no confirmed sent_at.'),\n      );\n      continue;\n    }\n\n    if (context.leadSet.has(rec.lead_id)) {\n      violationRows += 1;\n      results.push(\n        card(rec, RECONCILIATION_STATUS.VIOLATION, 'specific outreach attempt not found; lead has other outbound history', CATEGORY_REASON[CATEGORY.RESPONSE_OUTREACH_NOT_FOUND]),\n      );\n      rowExceptions.push(exception(CATEGORY.RESPONSE_OUTREACH_NOT_FOUND, rec, {}));\n    } else {\n      violationRows += 1;\n      results.push(\n        card(rec, RECONCILIATION_STATUS.VIOLATION, 'lead has no outbound history at all', CATEGORY_REASON[CATEGORY.RESPONSE_LEAD_NOT_FOUND]),\n      );\n      rowExceptions.push(exception(CATEGORY.RESPONSE_LEAD_NOT_FOUND, rec, {}));\n    }\n  }\n\n  return {\n    results,\n    rowExceptions,\n    matched,\n    unmatched,\n    notVerifiable,\n    invalid,\n    duplicate,\n    violationRows,\n    linked,\n    eligible,\n  };\n};\n\nconst indexOutreach = (rows) => {\n  const leadSet = new Set();\n  const leadRowCounts = new Map();\n  const indexByOutreach = new Map();\n  const rawByOutreach = new Map();\n  const outreachExceptions = [];\n  let invalidOutreach = 0;\n  let duplicatesOutreach = 0;\n\n  for (const row of rows) {\n    if (row.outreach_id !== '') {\n      if (!rawByOutreach.has(row.outreach_id)) rawByOutreach.set(row.outreach_id, []);\n      rawByOutreach.get(row.outreach_id).push(row);\n    }\n    if (!isOutreachRowValid(row)) {\n      invalidOutreach += 1;\n      outreachExceptions.push(\n        exception(CATEGORY.INVALID_OUTREACH_RECORD, row, {\n          source: 'outreach log',\n          outreach_id: row.outreach_id,\n          reason: 'missing lead_id/outreach_id/channel/sent_at or malformed outreach_id',\n        }),\n      );\n      continue;\n    }\n    leadSet.add(row.lead_id);\n    leadRowCounts.set(row.lead_id, (leadRowCounts.get(row.lead_id) || 0) + 1);\n    if (!indexByOutreach.has(row.outreach_id)) {\n      indexByOutreach.set(row.outreach_id, { rows: [], ambiguous: false });\n    }\n    indexByOutreach.get(row.outreach_id).rows.push(row);\n  }\n\n  for (const bucket of indexByOutreach.values()) {\n    if (bucket.rows.length <= 1) continue;\n    bucket.ambiguous = true;\n    const ordered = sortedBy(bucket.rows, ['lead_id', 'sent_at', 'channel']);\n    for (const extra of ordered.slice(1)) {\n      duplicatesOutreach += 1;\n      outreachExceptions.push(\n        exception(CATEGORY.DUPLICATE_OUTREACH_ID, extra, {\n          source: 'outreach log',\n          outreach_id: extra.outreach_id,\n          row_count: ordered.length,\n        }),\n      );\n    }\n  }\n\n  return {\n    leadSet,\n    leadRowCounts,\n    indexByOutreach,\n    rawByOutreach,\n    outreachExceptions,\n    invalidOutreach,\n    duplicatesOutreach,\n  };\n};\n\nlet responseReadError = '';\nlet outreachReadError = '';\nfor (const item of triggerItems) {\n  const j = (item && item.json) || {};\n  if (typeof j.response_log_read_error === 'string' && j.response_log_read_error !== '') responseReadError = j.response_log_read_error;\n  if (typeof j.outreach_log_read_error === 'string' && j.outreach_log_read_error !== '') outreachReadError = j.outreach_log_read_error;\n}\n\nconst responseRows = responseLogItems.map((item) => (item && item.json) || {});\nconst outreachRows = outreachLogItems.map((item) => (item && item.json) || {});\nconst nowMs = Date.now();\nconst runIdFinal = RUN_LABEL + '-' + digits14(String(nowMs));\n\nconst buildReadFailureReport = (responseReadError, outreachReadError, runAt) => {\n  const failureExceptions = [];\n  if (responseReadError) {\n    failureExceptions.push(exception(CATEGORY.READ_FAILURE, {}, { source: 'response log', error: responseReadError }));\n  }\n  if (outreachReadError) {\n    failureExceptions.push(exception(CATEGORY.READ_FAILURE, {}, { source: 'outreach log', error: outreachReadError }));\n  }\n  const reported = sortedExceptions(failureExceptions).map((e) =>\n    Object.assign({}, e, { detected_at: runAt, run_id: runIdFinal }),\n  );\n  return {\n    run_id: runIdFinal,\n    run_at: runAt,\n    detected_at: runAt,\n    status: STATUS.INCOMPLETE,\n    sources: {\n      response_log_ok: !responseReadError,\n      response_log_read_error: responseReadError,\n      outreach_log_ok: !outreachReadError,\n      outreach_log_read_error: outreachReadError,\n    },\n    summary: {\n      response_records: null,\n      matched_records: null,\n      unmatched_records: null,\n      linked_records: null,\n      not_verifiable: null,\n      invalid_records: null,\n      duplicate_records: null,\n      violations: null,\n      coverage_rate: null,\n      exception_count: reported.length,\n    },\n    results: [],\n    exceptions: reported,\n  };\n};\n\nconst buildReport = (responseRows, outreachContext, classification, runAt) => {\n  const allExceptions = classification.rowExceptions.concat(outreachContext.outreachExceptions);\n  const reported = sortedExceptions(allExceptions).map((e) =>\n    Object.assign({}, e, { detected_at: runAt, run_id: runIdFinal }),\n  );\n\n  const coverageRate = classification.eligible > 0 ? Number((classification.linked / classification.eligible).toFixed(4)) : null;\n\n  const summary = {\n    response_records: responseRows.length,\n    matched_records: classification.matched,\n    unmatched_records: classification.unmatched,\n    linked_records: classification.linked,\n    not_verifiable: classification.notVerifiable,\n    invalid_records: classification.invalid,\n    duplicate_records: classification.duplicate,\n    violations: reported.filter((e) => VIOLATION_CATEGORIES.indexOf(e.category) !== -1).length,\n    coverage_rate: coverageRate,\n    exception_count: reported.length,\n  };\n\n  return {\n    run_id: runIdFinal,\n    run_at: runAt,\n    detected_at: runAt,\n    status: STATUS.COMPLETED,\n    sources: {\n      response_log_ok: true,\n      response_log_read_error: '',\n      outreach_log_ok: true,\n      outreach_log_read_error: '',\n    },\n    summary,\n    results: sortedBy(classification.results, ['response_id', 'lead_id', 'outreach_id', 'channel']),\n    exceptions: reported,\n  };\n};\n\nconst responseErr = str(responseReadError);\nconst outreachErr = str(outreachReadError);\nconst runAt = new Date(nowMs).toISOString();\n\nlet report;\nif (responseErr || outreachErr) {\n  report = buildReadFailureReport(responseErr, outreachErr, runAt);\n} else {\n  const responseRowsFinal = normalizeResponseRows(responseRows);\n  const outreachRowsFinal = normalizeOutreachRows(outreachRows);\n  const outreachContext = indexOutreach(outreachRowsFinal);\n  const classification = classifyResponses(responseRowsFinal, outreachContext);\n  report = buildReport(responseRowsFinal, outreachContext, classification, runAt);\n}\n\nreturn [\n  { json: report },\n  { json: { run_id: report.run_id, exception_count: report.summary.exception_count, exceptions: report.exceptions } },\n];\n"
+      },
+      "id": "resp-recon-reconcile-0000001",
+      "name": "Reconcile Responses",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        520,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "resp-recon-complete-0000001",
+      "name": "Response Reconciliation Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        780,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Response Log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Outreach Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Response Log": {
+      "main": [
+        [
+          {
+            "node": "Reconcile Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Outreach Log": {
+      "main": [
+        [
+          {
+            "node": "Reconcile Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconcile Responses": {
+      "main": [
+        [
+          {
+            "node": "Response Reconciliation Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "artifact": "Response-Reconciliation V1",
+    "spreadsheetId": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+    "readOnly": true,
+    "sheets": [
+      "Response Log",
+      "Outreach Log"
+    ],
+    "capturesReportedBy": "OUTREACH-RESPONSE-CAPTURE-V1",
+    "readErrorsCarriedBy": "Manual Trigger (response_log_read_error / outreach_log_read_error)",
+    "emptyReadBehavior": "alwaysOutputData on Reconcile Responses — empty successful reads yield COMPLETED with valid zero metrics",
+    "generatedBy": "scripts/build-response-reconciliation-workflow.js"
+  }
+}

@@ -1,0 +1,273 @@
+{
+  "name": "Lead Recovery Engine — Outreach Response Capture V1",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "event": ""
+      },
+      "id": "resp-capture-manual-0000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json || {};\nconst mode = typeof input.mode === 'string' && input.mode.toUpperCase() === 'REAL' ? 'REAL' : 'DRY_RUN';\nconst events = Array.isArray(input.events) ? input.events : [];\nconst identity_lookup = input.identity_lookup && typeof input.identity_lookup === 'object' ? input.identity_lookup : {};\nconst response_log_read_error = typeof input.response_log_read_error === 'string' ? input.response_log_read_error : '';\nreturn [{ json: { mode, events, identity_lookup, response_log_read_error } }];"
+      },
+      "id": "resp-capture-init-0000001",
+      "name": "Initialize Response Capture",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list"
+        },
+        "operation": "read",
+        "sheetName": {
+          "mode": "name",
+          "value": "Response Log"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "resp-capture-read-log-0001",
+      "name": "Read Response Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\nconst initItems = $('Initialize Response Capture').all();\nconst logItems = $('Read Response Log').all();\n\nconst str = (value) => (value === undefined || value === null ? '' : String(value));\nconst RUN_LABEL = 'RESPCAP';\nconst SUPPORTED_CHANNELS = ['email', 'call'];\nconst RESPONSE_STATUS = { CAPTURED: 'CAPTURED', UNMATCHED: 'UNMATCHED', INVALID: 'INVALID', DUPLICATE: 'DUPLICATE' };\nconst ERROR_CODE = {\n  MISSING_EVENT_ID: 'MISSING_EVENT_ID',\n  MISSING_CHANNEL: 'MISSING_CHANNEL',\n  INVALID_CHANNEL: 'INVALID_CHANNEL',\n  INVALID_TIMESTAMP: 'INVALID_TIMESTAMP',\n  MISSING_RESPONSE: 'MISSING_RESPONSE',\n  UNMATCHED_IDENTITY: 'UNMATCHED_IDENTITY',\n  DUPLICATE_EVENT: 'DUPLICATE_EVENT',\n  SOURCE_READ_FAILURE: 'SOURCE_READ_FAILURE',\n};\nconst SEVERITY = { ERROR: 'ERROR', WARNING: 'WARNING' };\nconst ERROR_CODE_SEVERITY = {};\nERROR_CODE_SEVERITY[ERROR_CODE.MISSING_EVENT_ID] = SEVERITY.ERROR;\nERROR_CODE_SEVERITY[ERROR_CODE.MISSING_CHANNEL] = SEVERITY.ERROR;\nERROR_CODE_SEVERITY[ERROR_CODE.INVALID_CHANNEL] = SEVERITY.ERROR;\nERROR_CODE_SEVERITY[ERROR_CODE.INVALID_TIMESTAMP] = SEVERITY.ERROR;\nERROR_CODE_SEVERITY[ERROR_CODE.MISSING_RESPONSE] = SEVERITY.ERROR;\nERROR_CODE_SEVERITY[ERROR_CODE.UNMATCHED_IDENTITY] = SEVERITY.WARNING;\nERROR_CODE_SEVERITY[ERROR_CODE.DUPLICATE_EVENT] = SEVERITY.WARNING;\nERROR_CODE_SEVERITY[ERROR_CODE.SOURCE_READ_FAILURE] = SEVERITY.ERROR;\nconst ERROR_CODE_REASON = {};\nERROR_CODE_REASON[ERROR_CODE.MISSING_EVENT_ID] = 'Event is missing event_id; it cannot be tracked or deduped.';\nERROR_CODE_REASON[ERROR_CODE.MISSING_CHANNEL] = 'Event is missing channel; the response channel is unknown.';\nERROR_CODE_REASON[ERROR_CODE.INVALID_CHANNEL] = 'Channel value is not a supported response channel.';\nERROR_CODE_REASON[ERROR_CODE.INVALID_TIMESTAMP] = 'received_at could not be parsed as a timestamp.';\nERROR_CODE_REASON[ERROR_CODE.MISSING_RESPONSE] = 'Event carries no response text; there is nothing to capture.';\nERROR_CODE_REASON[ERROR_CODE.UNMATCHED_IDENTITY] = 'No lead identity could be resolved for the event; it is captured without a lead.';\nERROR_CODE_REASON[ERROR_CODE.DUPLICATE_EVENT] = 'Event idempotency key already exists; a durable row was never created again.';\nERROR_CODE_REASON[ERROR_CODE.SOURCE_READ_FAILURE] = 'The Response Log could not be read; capture is refused because dedupe cannot be trusted.';\n\nconst digitsOnly = (value) => str(value).replace(/\\D/g, '');\nconst digits14 = (value) => digitsOnly(value).slice(0, 14).padEnd(14, '0');\nconst looksLikePhone = (value) => {\n  const s = str(value).trim();\n  return s !== '' && /^\\+?[\\d\\s\\-().]+$/.test(s);\n};\nconst toIsoUtc = (value) => {\n  const s = str(value).trim();\n  if (s === '') return null;\n  const d = new Date(s);\n  if (Number.isNaN(d.getTime())) return null;\n  return d.toISOString();\n};\nconst fnv1a32Hex = (input) => {\n  let hash = 0x811c9dc5;\n  for (let i = 0; i < input.length; i += 1) {\n    hash ^= input.charCodeAt(i);\n    hash = Math.imul(hash, 0x01000193);\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n};\nconst idempotencyKeyFor = (event) => {\n  const providerId = str(event.provider_message_id).trim();\n  const eventId = str(event.event_id).trim();\n  const source = str(event.source).trim();\n  return (providerId || eventId) + '::' + source;\n};\nconst responseIdFor = (event) => 'RESP-' + fnv1a32Hex(idempotencyKeyFor(event));\n\nconst normalizeEvent = (event) => {\n  const src = (event && typeof event === 'object') ? event : {};\n  const normalized = {};\n  for (const field of [\n    'event_id', 'source', 'channel', 'provider_message_id', 'lead_id',\n    'outreach_id', 'sender', 'recipient', 'received_at', 'response_text', 'raw_reference',\n  ]) {\n    normalized[field] = str(src[field]).trim();\n  }\n  return normalized;\n};\n\nconst buildLookupIndex = (identityLookup) => {\n  const exact = new Map();\n  const digit = new Map();\n  const lookup = identityLookup && typeof identityLookup === 'object' ? identityLookup : {};\n  for (const key of Object.keys(lookup)) {\n    const contact = str(key).trim();\n    const leadId = str(lookup[key]).trim();\n    if (contact === '' || leadId === '') continue;\n    exact.set(contact, leadId);\n    if (looksLikePhone(contact)) digit.set(digitsOnly(contact), leadId);\n  }\n  return { exact, digit };\n};\n\nconst parsedOutreachLead = (outreachId, channel) => {\n  const s = str(outreachId).trim();\n  if (s === '') return null;\n  const match = /^EX-(.+)-(email|call)$/.exec(s);\n  if (!match) return null;\n  if (match[1] === '' || match[2] !== channel) return null;\n  return match[1];\n};\n\nconst resolveIdentity = (event, index) => {\n  const explicitLead = str(event.lead_id).trim();\n  if (explicitLead !== '') return { lead_id: explicitLead };\n\n  const fromOutreach = parsedOutreachLead(event.outreach_id, event.channel);\n  if (fromOutreach) return { lead_id: fromOutreach };\n\n  const sender = str(event.sender).trim();\n  const recipient = str(event.recipient).trim();\n\n  if (sender !== '' && index.exact.has(sender)) return { lead_id: index.exact.get(sender) };\n  if (sender !== '' && looksLikePhone(sender) && index.digit.has(digitsOnly(sender))) {\n    return { lead_id: index.digit.get(digitsOnly(sender)) };\n  }\n  if (recipient !== '' && index.exact.has(recipient)) return { lead_id: index.exact.get(recipient) };\n  if (recipient !== '' && looksLikePhone(recipient) && index.digit.has(digitsOnly(recipient))) {\n    return { lead_id: index.digit.get(digitsOnly(recipient)) };\n  }\n\n  return null;\n};\n\nconst responseRowFor = (event, resolved, idemKey) => {\n  const leadId = resolved ? resolved.lead_id : '';\n  return {\n    response_id: 'RESP-' + fnv1a32Hex(idemKey),\n    idempotency_key: idemKey,\n    lead_id: leadId,\n    outreach_id: resolved ? 'EX-' + leadId + '-' + event.channel : '',\n    channel: event.channel,\n    provider_message_id: event.provider_message_id,\n    received_at: event.received_at_iso,\n    response_text: event.response_text,\n    response_status: resolved ? RESPONSE_STATUS.CAPTURED : RESPONSE_STATUS.UNMATCHED,\n    source: event.source,\n    matched: resolved ? true : false,\n    notes: '',\n  };\n};\n\nconst exceptionFor = (code, event, evidence) => ({\n  category: code,\n  severity: ERROR_CODE_SEVERITY[code],\n  event_id: str(event && event.event_id),\n  channel: str(event && event.channel),\n  lead_id: str(event && event.lead_id),\n  outreach_id: str(event && event.outreach_id),\n  response_id: responseIdFor(event || {}),\n  reason: ERROR_CODE_REASON[code],\n  evidence: evidence || {},\n});\n\nconst sortedExceptions = (exceptions) =>\n  exceptions.slice().sort((a, b) => {\n    for (const key of ['category', 'event_id', 'channel', 'lead_id', 'reason']) {\n      const av = a[key];\n      const bv = b[key];\n      if (av < bv) return -1;\n      if (av > bv) return 1;\n    }\n    return JSON.stringify(a.evidence).localeCompare(JSON.stringify(b.evidence));\n  });\n\nconst sortedBy = (list, keys) =>\n  list.slice().sort((a, b) => {\n    for (const key of keys) {\n      const av = a[key] || '';\n      const bv = b[key] || '';\n      if (av < bv) return -1;\n      if (av > bv) return 1;\n    }\n    return 0;\n  });\n\nlet mode = 'DRY_RUN';\nlet events = [];\nlet identity_lookup = {};\nlet response_log_read_error = '';\nfor (const item of initItems) {\n  const j = (item && item.json) || {};\n  if (typeof j.mode === 'string') mode = j.mode.toUpperCase() === 'REAL' ? 'REAL' : 'DRY_RUN';\n  if (Array.isArray(j.events)) events = j.events;\n  if (j.identity_lookup && typeof j.identity_lookup === 'object') identity_lookup = j.identity_lookup;\n  if (typeof j.response_log_read_error === 'string') response_log_read_error = j.response_log_read_error;\n}\nconst logRows = logItems.map((item) => (item && item.json) || {});\n\nconst runAt = new Date().toISOString();\nconst runId = RUN_LABEL + '-' + digits14(runAt);\n\nif (str(response_log_read_error).trim() !== '') {\n  const e = exceptionFor(ERROR_CODE.SOURCE_READ_FAILURE, {}, { source: 'response log', error: response_log_read_error });\n  const reported = sortedExceptions([e]).map((ex) => Object.assign({}, ex, { detected_at: runAt, run_id: runId }));\n  return [{\n    json: {\n      run_id: runId,\n      run_at: runAt,\n      mode,\n      status: 'FAILED',\n      sources: { response_log_ok: false, response_log_read_error },\n      summary: {\n        events_processed: null, captured: null, unmatched: null, invalid: null,\n        duplicate: null, staged: null, persisted: null, exception_count: reported.length,\n      },\n      results: [],\n      response_rows: [],\n      exceptions: reported,\n    },\n  }];\n}\n\nconst index = buildLookupIndex(identity_lookup);\nconst seenKeys = new Set(logRows.map((row) => str(row && row.idempotency_key).trim()).filter(Boolean));\n\nconst results = [];\nconst stagedRows = [];\nconst exceptions = [];\n\nfor (const raw of events) {\n  const event = normalizeEvent(raw);\n\n  const result = {\n    event_id: event.event_id,\n    source: event.source,\n    channel: event.channel,\n    status: RESPONSE_STATUS.INVALID,\n    status_reason: '',\n    matched: false,\n    idempotency_key: idempotencyKeyFor(event),\n    would_persist: false,\n  };\n  results.push(result);\n  const resultStatus = (status, reason, extra) => {\n    result.status = status;\n    result.status_reason = reason;\n    Object.assign(result, extra || {});\n  };\n\n  if (event.event_id === '') {\n    resultStatus(RESPONSE_STATUS.INVALID, ERROR_CODE.MISSING_EVENT_ID);\n    exceptions.push(exceptionFor(ERROR_CODE.MISSING_EVENT_ID, event, { source: event.source, error_code: ERROR_CODE.MISSING_EVENT_ID }));\n    continue;\n  }\n\n  if (event.channel === '') {\n    resultStatus(RESPONSE_STATUS.INVALID, ERROR_CODE.MISSING_CHANNEL);\n    exceptions.push(exceptionFor(ERROR_CODE.MISSING_CHANNEL, event, { source: event.source, error_code: ERROR_CODE.MISSING_CHANNEL }));\n    continue;\n  }\n\n  if (SUPPORTED_CHANNELS.indexOf(event.channel) === -1) {\n    resultStatus(RESPONSE_STATUS.INVALID, ERROR_CODE.INVALID_CHANNEL);\n    exceptions.push(exceptionFor(ERROR_CODE.INVALID_CHANNEL, event, { source: event.source, error_code: ERROR_CODE.INVALID_CHANNEL, channel: event.channel }));\n    continue;\n  }\n\n  const receivedAtIso = toIsoUtc(event.received_at);\n  if (receivedAtIso === null) {\n    resultStatus(RESPONSE_STATUS.INVALID, ERROR_CODE.INVALID_TIMESTAMP);\n    exceptions.push(exceptionFor(ERROR_CODE.INVALID_TIMESTAMP, event, { source: event.source, error_code: ERROR_CODE.INVALID_TIMESTAMP, received_at: event.received_at }));\n    continue;\n  }\n  event.received_at_iso = receivedAtIso;\n\n  if (event.response_text === '') {\n    resultStatus(RESPONSE_STATUS.INVALID, ERROR_CODE.MISSING_RESPONSE);\n    exceptions.push(exceptionFor(ERROR_CODE.MISSING_RESPONSE, event, { source: event.source, error_code: ERROR_CODE.MISSING_RESPONSE }));\n    continue;\n  }\n\n  const idemKey = idempotencyKeyFor(event);\n  if (seenKeys.has(idemKey)) {\n    resultStatus(RESPONSE_STATUS.DUPLICATE, ERROR_CODE.DUPLICATE_EVENT);\n    result.idempotency_key = idemKey;\n    exceptions.push(exceptionFor(ERROR_CODE.DUPLICATE_EVENT, event, { source: event.source, error_code: ERROR_CODE.DUPLICATE_EVENT, idempotency_key: idemKey }));\n    continue;\n  }\n  seenKeys.add(idemKey);\n\n  const resolved = resolveIdentity(event, index);\n  result.idempotency_key = idemKey;\n  result.response_id = 'RESP-' + fnv1a32Hex(idemKey);\n  result.matched = resolved ? true : false;\n  result.lead_id = resolved ? resolved.lead_id : '';\n  result.outreach_id = resolved ? 'EX-' + resolved.lead_id + '-' + event.channel : '';\n\n  if (!resolved) {\n    resultStatus(RESPONSE_STATUS.UNMATCHED, ERROR_CODE.UNMATCHED_IDENTITY, {\n      response_id: result.response_id,\n      would_persist: true,\n    });\n    exceptions.push(exceptionFor(ERROR_CODE.UNMATCHED_IDENTITY, event, { source: event.source, error_code: ERROR_CODE.UNMATCHED_IDENTITY }));\n    stagedRows.push(responseRowFor(event, null, idemKey));\n    continue;\n  }\n\n  resultStatus(RESPONSE_STATUS.CAPTURED, '', {\n    response_id: result.response_id,\n    would_persist: true,\n  });\n  stagedRows.push(responseRowFor(event, resolved, idemKey));\n}\n\nconst sortedResults = sortedBy(results, ['event_id', 'source', 'channel']);\nconst sortedRows = sortedBy(stagedRows, ['idempotency_key']);\nconst reportedExceptions = sortedExceptions(exceptions).map((e) => Object.assign({}, e, { detected_at: runAt, run_id: runId }));\n\nconst captured = results.filter((r) => r.status === RESPONSE_STATUS.CAPTURED).length;\nconst unmatched = results.filter((r) => r.status === RESPONSE_STATUS.UNMATCHED).length;\nconst invalid = results.filter((r) => r.status === RESPONSE_STATUS.INVALID).length;\nconst duplicate = results.filter((r) => r.status === RESPONSE_STATUS.DUPLICATE).length;\nconst staged = captured + unmatched;\nconst persisted = mode === 'REAL' ? staged : 0;\n\nconst report = {\n  run_id: runId,\n  run_at: runAt,\n  mode,\n  status: 'COMPLETED',\n  sources: { response_log_ok: true, response_log_read_error: '' },\n  summary: {\n    events_processed: events.length,\n    captured,\n    unmatched,\n    invalid,\n    duplicate,\n    staged,\n    persisted,\n    exception_count: reportedExceptions.length,\n  },\n  results: sortedResults,\n  response_rows: mode === 'REAL' ? sortedRows : [],\n  exceptions: reportedExceptions,\n};\n\nreturn [{ json: report }];\n"
+      },
+      "id": "resp-capture-capture-000001",
+      "name": "Capture Inbound Responses",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {},
+          "conditions": [
+            {
+              "id": "resp-capture-if-cond-0001",
+              "leftValue": "={{ $json.mode }}",
+              "rightValue": "DRY_RUN",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "resp-capture-if-mode-00001",
+      "name": "DRY_RUN?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        760,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "resp-capture-build-000001",
+      "name": "Build Capture Result",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const report = $('Capture Inbound Responses').item || {};\nconst rows = Array.isArray(report.response_rows) ? report.response_rows : [];\nconst out = [\"response_id\",\"idempotency_key\",\"lead_id\",\"outreach_id\",\"channel\",\"provider_message_id\",\"received_at\",\"response_text\",\"response_status\",\"source\",\"matched\",\"notes\"];\nreturn rows.map((row) => {\n  const item = {};\n  for (const c of out) item[c] = row[c] === undefined || row[c] === null ? '' : String(row[c]);\n  return { json: item };\n});"
+      },
+      "id": "resp-capture-prepare-00001",
+      "name": "Prepare Response Log Write",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list"
+        },
+        "operation": "append",
+        "sheetName": {
+          "mode": "name",
+          "value": "Response Log"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "options": {}
+      },
+      "id": "resp-capture-write-00001",
+      "name": "Write Response Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1240,
+        280
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "resp-capture-complete-0001",
+      "name": "Response Capture Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1480,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Response Capture",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Response Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Response Capture": {
+      "main": [
+        [
+          {
+            "node": "Capture Inbound Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Response Log": {
+      "main": [
+        [
+          {
+            "node": "Capture Inbound Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture Inbound Responses": {
+      "main": [
+        [
+          {
+            "node": "DRY_RUN?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DRY_RUN?": {
+      "main": [
+        [
+          {
+            "node": "Build Capture Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Response Log Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Capture Result": {
+      "main": [
+        [
+          {
+            "node": "Response Capture Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response Log Write": {
+      "main": [
+        [
+          {
+            "node": "Write Response Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Response Log": {
+      "main": [
+        [
+          {
+            "node": "Response Capture Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "artifact": "Response-Capture V1",
+    "spreadsheetId": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+    "defaultMode": "DRY_RUN",
+    "defaultReadError": "operator-supplied response_log_read_error via Initialize Response Capture when the Response Log cannot be read",
+    "generatedBy": "scripts/build-response-capture-workflow.js"
+  }
+}

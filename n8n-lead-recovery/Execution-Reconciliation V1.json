@@ -1,0 +1,145 @@
+{
+  "name": "Lead Recovery Engine — Execution Reconciliation V1",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "event": ""
+      },
+      "id": "exec-recon-manual-0000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const execution_reports = $json && Array.isArray($json.execution_reports) ? $json.execution_reports : [];\nconst evidence_available = $json && typeof $json.evidence_available === 'boolean' ? $json.evidence_available : true;\nreturn [{ json: { execution_reports, evidence_available } }];"
+      },
+      "id": "exec-recon-init-evidence-0001",
+      "name": "Initialize Execution Evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list"
+        },
+        "operation": "read",
+        "sheetName": {
+          "mode": "name",
+          "value": "Outreach Log"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "exec-recon-read-outreach-0001",
+      "name": "Read Outreach Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\nconst evidenceItems = $('Initialize Execution Evidence').all();\nconst logItems = $('Read Outreach Log').all();\n\nconst str = (value) => (value === undefined || value === null ? '' : String(value));\nconst RUN_LABEL = 'EXECRECON';\nconst SUPPORTED_CHANNELS = ['email', 'call'];\nconst CATEGORY = {\n  EXECUTION_WITHOUT_LOG: 'EXECUTION_WITHOUT_LOG',\n  LOG_WITHOUT_EXECUTION: 'LOG_WITHOUT_EXECUTION',\n  DUPLICATE_EXECUTION: 'DUPLICATE_EXECUTION',\n  DUPLICATE_LOG: 'DUPLICATE_LOG',\n  FAILED_AS_SUCCESS: 'FAILED_AS_SUCCESS',\n  NON_READY_EXECUTION: 'NON_READY_EXECUTION',\n  INVALID_CHANNEL: 'INVALID_CHANNEL',\n  DRY_RUN_PERSISTENCE: 'DRY_RUN_PERSISTENCE',\n  NOT_CONFIGURED_PERSISTENCE: 'NOT_CONFIGURED_PERSISTENCE',\n  MALFORMED_RECORD: 'MALFORMED_RECORD',\n  SOURCE_READ_FAILURE: 'SOURCE_READ_FAILURE',\n};\nconst SEVERITY = { ERROR: 'ERROR', WARNING: 'WARNING' };\nconst CATEGORY_SEVERITY = {};\nCATEGORY_SEVERITY[CATEGORY.EXECUTION_WITHOUT_LOG] = SEVERITY.WARNING;\nCATEGORY_SEVERITY[CATEGORY.LOG_WITHOUT_EXECUTION] = SEVERITY.WARNING;\nCATEGORY_SEVERITY[CATEGORY.DUPLICATE_EXECUTION] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.DUPLICATE_LOG] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.FAILED_AS_SUCCESS] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.NON_READY_EXECUTION] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.INVALID_CHANNEL] = SEVERITY.WARNING;\nCATEGORY_SEVERITY[CATEGORY.DRY_RUN_PERSISTENCE] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.NOT_CONFIGURED_PERSISTENCE] = SEVERITY.ERROR;\nCATEGORY_SEVERITY[CATEGORY.MALFORMED_RECORD] = SEVERITY.WARNING;\nCATEGORY_SEVERITY[CATEGORY.SOURCE_READ_FAILURE] = SEVERITY.ERROR;\nconst VIOLATION_CATEGORIES = [\n  CATEGORY.DUPLICATE_EXECUTION, CATEGORY.DUPLICATE_LOG, CATEGORY.FAILED_AS_SUCCESS,\n  CATEGORY.NON_READY_EXECUTION, CATEGORY.DRY_RUN_PERSISTENCE, CATEGORY.NOT_CONFIGURED_PERSISTENCE,\n];\nconst ATTEMPTED_STATUSES = ['EXECUTION_SUCCEEDED', 'EXECUTION_FAILED'];\nconst CATEGORY_REASON = {};\nCATEGORY_REASON[CATEGORY.EXECUTION_WITHOUT_LOG] = 'Succeeded execution exists with no matching durable Outreach Log row.';\nCATEGORY_REASON[CATEGORY.LOG_WITHOUT_EXECUTION] = 'Outreach Log row has no matching execution evidence; provenance cannot be fully established.';\nCATEGORY_REASON[CATEGORY.DUPLICATE_EXECUTION] = 'More than one confirmed execution recorded for the same (lead_id, channel) identity.';\nCATEGORY_REASON[CATEGORY.DUPLICATE_LOG] = 'More than one Outreach Log row recorded for the same (lead_id, channel) identity.';\nCATEGORY_REASON[CATEGORY.FAILED_AS_SUCCESS] = 'Outreach Log row records activity whose only execution evidence is a provider failure; it must not be treated as a confirmed send.';\nCATEGORY_REASON[CATEGORY.NON_READY_EXECUTION] = 'Execution was attempted for a candidate whose readiness at execution time was not READY.';\nCATEGORY_REASON[CATEGORY.INVALID_CHANNEL] = 'Channel value is not a supported outreach channel.';\nCATEGORY_REASON[CATEGORY.DRY_RUN_PERSISTENCE] = 'Durable outreach activity exists for an identity whose execution evidence is DRY_RUN only; dry-run must not persist activity.';\nCATEGORY_REASON[CATEGORY.NOT_CONFIGURED_PERSISTENCE] = 'Durable outreach activity exists for an identity whose execution evidence is NOT_CONFIGURED only; nothing could have been sent.';\nCATEGORY_REASON[CATEGORY.MALFORMED_RECORD] = 'Record is missing required identity or state fields and could not be reconciled.';\nCATEGORY_REASON[CATEGORY.SOURCE_READ_FAILURE] = 'A required reconciliation source could not be read.';\n\nconst exceptionRow = (category, record) => ({\n  category,\n  severity: CATEGORY_SEVERITY[category],\n  lead_id: str(record.lead_id),\n  execution_id: str(record.execution_id),\n  channel: str(record.channel),\n  outreach_id: str(record.outreach_id),\n  reason: CATEGORY_REASON[category],\n  evidence: {},\n});\n\nconst sortedExceptions = (exceptions) =>\n  exceptions.slice().sort((a, b) => {\n    for (const key of ['category', 'lead_id', 'channel', 'execution_id', 'outreach_id']) {\n      if (a[key] < b[key]) return -1;\n      if (a[key] > b[key]) return 1;\n    }\n    return JSON.stringify(a.evidence).localeCompare(JSON.stringify(b.evidence));\n  });\n\nconst sortedBy = (list, keys) =>\n  list.slice().sort((a, b) => {\n    for (const key of keys) {\n      const av = a[key] || '';\n      const bv = b[key] || '';\n      if (av < bv) return -1;\n      if (av > bv) return 1;\n    }\n    return 0;\n  });\n\nconst identityFor = (leadId, channel) => leadId + '\u0000' + channel;\n\nlet execution_reports = [];\nlet evidence_available = true;\nconst read_errors = {};\nfor (const item of evidenceItems) {\n  const j = (item && item.json) || {};\n  if (Array.isArray(j.execution_reports)) execution_reports = execution_reports.concat(j.execution_reports);\n  else if (str(j.run_id)) execution_reports.push(j);\n  if (typeof j.evidence_available === 'boolean') evidence_available = j.evidence_available;\n  if (j.read_errors && typeof j.read_errors === 'object') {\n    if (typeof j.read_errors.evidence === 'string' && j.read_errors.evidence) read_errors.evidence = j.read_errors.evidence;\n    if (typeof j.read_errors.outreach === 'string' && j.read_errors.outreach) read_errors.outreach = j.read_errors.outreach;\n  }\n}\nconst logRows = logItems.map((item) => (item && item.json) || {});\n\nconst readFailureEvidence = read_errors.evidence || '';\nconst readFailureOutreach = read_errors.outreach || '';\nconst runAt = new Date().toISOString();\nconst runId = RUN_LABEL + '-' + String(runAt).replace(/\\D/g, '').slice(0, 14).padEnd(14, '0');\n\nif (readFailureEvidence || readFailureOutreach) {\n  const failureExceptions = [];\n  if (readFailureEvidence) {\n    const e = exceptionRow(CATEGORY.SOURCE_READ_FAILURE, {});\n    e.evidence = { source: 'execution evidence', error: readFailureEvidence };\n    failureExceptions.push(e);\n  }\n  if (readFailureOutreach) {\n    const e = exceptionRow(CATEGORY.SOURCE_READ_FAILURE, {});\n    e.evidence = { source: 'outreach log', error: readFailureOutreach };\n    failureExceptions.push(e);\n  }\n  const failedReport = {\n    run_id: runId,\n    run_at: runAt,\n    detected_at: runAt,\n    evidence_available,\n    status: 'FAILED',\n    sources: {\n      evidence_ok: !readFailureEvidence,\n      outreach_ok: !readFailureOutreach,\n      evidence_read_error: readFailureEvidence,\n      outreach_read_error: readFailureOutreach,\n      evidence_available,\n    },\n    summary: {\n      execution_records: null, log_records: null, matched: null, unmatched_execution: null,\n      unmatched_log: null, duplicate_execution: null, duplicate_log: null,\n      invalid_execution: null, invalid_log: null, violations: null, coverage_rate: null,\n      exception_count: failureExceptions.length,\n    },\n    matched: [],\n    unmatched_execution: [],\n    unmatched_log: [],\n    exceptions: sortedExceptions(failureExceptions),\n  };\n  return [\n    { json: failedReport },\n    { json: { run_id: failedReport.run_id, exception_count: failureExceptions.length, exceptions: failedReport.exceptions } },\n  ];\n}\n\nconst records = [];\nfor (const report of execution_reports) {\n  if (!report || typeof report !== 'object') continue;\n  const runId = str(report.run_id);\n  const runAt = str(report.run_at);\n  const mode = str(report.mode).toUpperCase();\n  const provider = str(report.provider).toUpperCase();\n  const providerConfigured = Boolean(report.provider_configured);\n  for (const card of Array.isArray(report.results) ? report.results : []) {\n    if (!card || typeof card !== 'object') continue;\n    const providerCall = card.provider_call && typeof card.provider_call === 'object' ? card.provider_call : {};\n    records.push({\n      execution_id: runId, run_at: runAt, mode, provider, provider_configured: providerConfigured,\n      lead_id: str(card.lead_id), outreach_id: str(card.outreach_id), channel: str(card.channel).toLowerCase(),\n      status: str(card.status).toUpperCase(), reason: str(card.reason), readiness_status: str(card.readiness_status),\n      sent_at: str(card.sent_at || runAt), provider_success: providerCall.success === true,\n      provider_message_id: str(providerCall.provider_message_id), row_index: null,\n    });\n  }\n}\nconst logs = logRows.map((row, index) => ({\n  lead_id: str(row.lead_id), outreach_id: str(row.outreach_id), channel: str(row.channel).toLowerCase(),\n  sent_at: str(row.sent_at), email: str(row.email), phone: str(row.phone), source: 'outreach_log', row_index: index,\n}));\n\nconst isRecordValid = (r) => r.lead_id !== '' && r.channel !== '';\nconst isLogRowValid = (r) => r.lead_id !== '' && r.channel !== '' && r.sent_at !== '';\nconst isSupportedChannel = (ch) => ch !== '' && SUPPORTED_CHANNELS.indexOf(ch) !== -1;\n\nconst bucketMap = new Map();\nconst invalidExecution = [];\nconst invalidLogs = [];\nconst invalidChannelExecution = [];\nconst invalidChannelLogs = [];\n\nfor (const record of records) {\n  if (!isRecordValid(record)) { invalidExecution.push(record); continue; }\n  if (!isSupportedChannel(record.channel)) { invalidChannelExecution.push(record); continue; }\n  record.row_index = records.indexOf(record);\n  const key = identityFor(record.lead_id, record.channel);\n  if (!bucketMap.has(key)) bucketMap.set(key, { lead_id: record.lead_id, channel: record.channel, executions: [], logs: [] });\n  bucketMap.get(key).executions.push(record);\n}\nfor (const row of logs) {\n  if (!isLogRowValid(row)) { invalidLogs.push(row); continue; }\n  if (!isSupportedChannel(row.channel)) { invalidChannelLogs.push(row); continue; }\n  const key = identityFor(row.lead_id, row.channel);\n  if (!bucketMap.has(key)) bucketMap.set(key, { lead_id: row.lead_id, channel: row.channel, executions: [], logs: [] });\n  bucketMap.get(key).logs.push(row);\n}\n\nfunction analyzeBucket(bucket, evidenceAvailable) {\n  const result = { matched: [], unmatchedExecution: [], unmatchedLog: [], exceptions: [], duplicatesExecution: 0, duplicatesLog: 0 };\n  const execs = bucket.executions;\n  const logs = bucket.logs;\n  const succeeded = execs.filter((r) => r.status === 'EXECUTION_SUCCEEDED');\n  const failed = execs.filter((r) => r.status === 'EXECUTION_FAILED');\n  const dryRunProducers = execs.filter((r) => r.mode === 'DRY_RUN');\n  const notConfiguredProducers = execs.filter((r) => r.provider === 'NOT_CONFIGURED' || r.provider_configured === false);\n\n  if (execs.length > 0 && evidenceAvailable) {\n    for (const exec of execs) {\n      if (ATTEMPTED_STATUSES.indexOf(exec.status) !== -1 && exec.readiness_status !== '' && exec.readiness_status !== 'READY') {\n        const e = exceptionRow(CATEGORY.NON_READY_EXECUTION, exec);\n        e.evidence = { sent_at: exec.sent_at, readiness_status: exec.readiness_status, mode: exec.mode };\n        result.exceptions.push(e);\n      }\n    }\n  }\n\n  if (logs.length > 1) {\n    const sorted = sortedBy(logs, ['sent_at', 'outreach_id', 'lead_id']);\n    for (const log of sorted.slice(1)) {\n      const e = exceptionRow(CATEGORY.DUPLICATE_LOG, log);\n      e.evidence = { sent_at: log.sent_at, outreach_id: log.outreach_id };\n      result.exceptions.push(e);\n      result.duplicatesLog += 1;\n    }\n  }\n\n  if (!evidenceAvailable) return result;\n\n  if (succeeded.length > 1) {\n    const sortedSucceeded = sortedBy(succeeded, ['sent_at', 'execution_id', 'lead_id']);\n    for (const exec of sortedSucceeded.slice(1)) {\n      const e = exceptionRow(CATEGORY.DUPLICATE_EXECUTION, exec);\n      e.evidence = { sent_at: exec.sent_at, execution_id: exec.execution_id, mode: exec.mode, provider: exec.provider };\n      result.exceptions.push(e);\n      result.duplicatesExecution += 1;\n    }\n  }\n\n  const used = new Set();\n  const matchedLogs = new Set();\n  const sortedSucceeded = sortedBy(succeeded, ['sent_at', 'execution_id']);\n  const sortedLogs = sortedBy(logs, ['sent_at', 'outreach_id', 'lead_id']);\n  const bySentAt = new Map();\n  for (const log of sortedLogs) {\n    if (!bySentAt.has(log.sent_at)) bySentAt.set(log.sent_at, []);\n    bySentAt.get(log.sent_at).push(log);\n  }\n  for (const exec of sortedSucceeded) {\n    const candidates = bySentAt.get(exec.sent_at) || [];\n    const target = candidates.find((log) => !matchedLogs.has(log.row_index));\n    if (target && !used.has(exec.row_index)) {\n      used.add(exec.row_index);\n      matchedLogs.add(target.row_index);\n      result.matched.push({ lead_id: target.lead_id, channel: target.channel, execution_id: exec.execution_id, outreach_id: target.outreach_id, sent_at: target.sent_at });\n    }\n  }\n\n  const extras = sortedBy(succeeded, ['sent_at', 'execution_id', 'lead_id']).slice(1);\n  for (const exec of succeeded) {\n    if (used.has(exec.row_index)) continue;\n    if (extras.some((extra) => extra.row_index === exec.row_index)) continue;\n    const e = exceptionRow(CATEGORY.EXECUTION_WITHOUT_LOG, exec);\n    e.evidence = { sent_at: exec.sent_at, execution_id: exec.execution_id, mode: exec.mode, provider: exec.provider };\n    result.exceptions.push(e);\n    result.unmatchedExecution.push({ lead_id: exec.lead_id, channel: exec.channel, execution_id: exec.execution_id, status: exec.status, sent_at: exec.sent_at, reason: exec.reason });\n  }\n\n  for (const log of sortedLogs) {\n    if (matchedLogs.has(log.row_index)) continue;\n    let category;\n    if (succeeded.length === 0 && dryRunProducers.length > 0) category = CATEGORY.DRY_RUN_PERSISTENCE;\n    else if (succeeded.length === 0 && notConfiguredProducers.length > 0) category = CATEGORY.NOT_CONFIGURED_PERSISTENCE;\n    else if (failed.some((f) => f.sent_at === log.sent_at) || (succeeded.length === 0 && failed.length > 0)) category = CATEGORY.FAILED_AS_SUCCESS;\n    else category = CATEGORY.LOG_WITHOUT_EXECUTION;\n    const e = exceptionRow(category, log);\n    e.evidence = { sent_at: log.sent_at, outreach_id: log.outreach_id, mode: dryRunProducers.length > 0 ? 'DRY_RUN' : (notConfiguredProducers.length > 0 ? 'NOT_CONFIGURED' : undefined) };\n    result.exceptions.push(e);\n    result.unmatchedLog.push({ lead_id: log.lead_id, channel: log.channel, outreach_id: log.outreach_id, sent_at: log.sent_at, category });\n  }\n\n  return result;\n}\n\nconst allExceptions = [];\nconst matched = [];\nconst unmatchedExecution = [];\nconst unmatchedLog = [];\nlet duplicatesExecution = 0;\nlet duplicatesLog = 0;\n\nfor (const record of invalidExecution) {\n  const e = exceptionRow(CATEGORY.MALFORMED_RECORD, record);\n  e.evidence = { source: 'execution evidence', reason: 'missing lead_id or channel' };\n  allExceptions.push(e);\n}\nfor (const record of invalidChannelExecution) {\n  const e = exceptionRow(CATEGORY.INVALID_CHANNEL, record);\n  e.evidence = { source: 'execution evidence', channel: record.channel };\n  allExceptions.push(e);\n}\nfor (const row of invalidLogs) {\n  const e = exceptionRow(CATEGORY.MALFORMED_RECORD, row);\n  e.evidence = { source: 'outreach log', reason: 'missing lead_id, channel or sent_at' };\n  allExceptions.push(e);\n}\nfor (const row of invalidChannelLogs) {\n  const e = exceptionRow(CATEGORY.INVALID_CHANNEL, row);\n  e.evidence = { source: 'outreach log', channel: row.channel };\n  allExceptions.push(e);\n}\n\nfor (const bucket of bucketMap.values()) {\n  const analysis = analyzeBucket(bucket, evidence_available);\n  allExceptions.push.apply(allExceptions, analysis.exceptions);\n  matched.push.apply(matched, analysis.matched);\n  unmatchedExecution.push.apply(unmatchedExecution, analysis.unmatchedExecution);\n  unmatchedLog.push.apply(unmatchedLog, analysis.unmatchedLog);\n  duplicatesExecution += analysis.duplicatesExecution;\n  duplicatesLog += analysis.duplicatesLog;\n}\n\nconst reportedExceptions = sortedExceptions(allExceptions);\n\nconst matchingAllowed = evidence_available;\nconst matchedLogs = matched.length;\nconst logRecords = logs.length;\nconst executionRecordsCount = records.length;\nconst violationCount = reportedExceptions.filter((e) => VIOLATION_CATEGORIES.indexOf(e.category) !== -1).length;\nconst invalidExecutionCount = invalidExecution.length;\nconst invalidLogCount = invalidLogs.length;\n\nconst report = {\n  run_id: runId,\n  run_at: runAt,\n  detected_at: runAt,\n  evidence_available,\n  status: evidence_available ? 'COMPLETED' : 'INCOMPLETE',\n  sources: { evidence_ok: true, outreach_ok: true, evidence_read_error: '', outreach_read_error: '', evidence_available },\n  summary: {\n    execution_records: matchingAllowed ? executionRecordsCount : null,\n    log_records: logRecords,\n    matched: matchingAllowed ? matchedLogs : null,\n    unmatched_execution: matchingAllowed ? unmatchedExecution.length : null,\n    unmatched_log: matchingAllowed ? unmatchedLog.length : null,\n    duplicate_execution: matchingAllowed ? duplicatesExecution : null,\n    duplicate_log: duplicatesLog,\n    invalid_execution: matchingAllowed ? invalidExecutionCount : null,\n    invalid_log: invalidLogCount,\n    violations: violationCount,\n    coverage_rate: matchingAllowed && logRecords > 0 ? Number((matchedLogs / logRecords).toFixed(4)) : null,\n    exception_count: reportedExceptions.length,\n  },\n  matched: sortedBy(matched, ['lead_id', 'channel', 'sent_at', 'execution_id']),\n  unmatched_execution: sortedBy(unmatchedExecution, ['lead_id', 'channel', 'sent_at']),\n  unmatched_log: sortedBy(unmatchedLog, ['lead_id', 'channel', 'sent_at']),\n  exceptions: reportedExceptions,\n};\n\nreturn [\n  { json: report },\n  { json: { run_id: report.run_id, exception_count: report.exception_count === undefined ? report.summary.exception_count : report.exception_count, exceptions: report.exceptions } },\n];\n"
+      },
+      "id": "exec-recon-reconcile-0000001",
+      "name": "Reconcile Execution Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "exec-recon-complete-0000001",
+      "name": "Execution Reconciliation Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        780,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Execution Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Outreach Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Execution Evidence": {
+      "main": [
+        [
+          {
+            "node": "Reconcile Execution Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Outreach Log": {
+      "main": [
+        [
+          {
+            "node": "Reconcile Execution Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconcile Execution Records": {
+      "main": [
+        [
+          {
+            "node": "Execution Reconciliation Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "artifact": "Execution-Reconciliation V1",
+    "spreadsheetId": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+    "readOnly": true,
+    "evidence": "operator-supplied execution reports via Initialize Execution Evidence",
+    "defaultEvidenceAvailable": true,
+    "generatedBy": "scripts/build-execution-reconciliation-workflow.js"
+  }
+}
