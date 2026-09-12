@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "about": "Integrity manifest for Phase 1-5 FROZEN artifacts (H6 hygiene). A SHA-256 mismatch means the frozen artifact was modified and must not be committed without an approved change. Maintained by the hygiene workstream; baseline hashes recorded in reports/PHASE-6-response-interpretation-v1.md section 9.",
+  "artifacts": [
+    {
+      "path": "src/response-interpretation.js",
+      "sha256": "1e3341dbeb02800d21cc69ea1a4648ef196f0982ce2ee98e11fde2c3c6afe401",
+      "note": "Response Interpretation engine"
+    },
+    {
+      "path": "src/response-interpretation-workflow-contract.js",
+      "sha256": "9d75b769145e65c2ff14fc129ec3a2f227daf27143d738e132b79e377ea67230",
+      "note": "Phase 3 workflow contract (pinned SPREADSHEET_ID, timestamps/run ids)"
+    },
+    {
+      "path": "src/embedded-response-interpret.js",
+      "sha256": "8d56121734094e3e9f14d0a8ab1f82db76d7b7b45f81e115753535acf0d7894c",
+      "note": "Phase 4 embedded mirror shipped inside the workflow"
+    },
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "sha256": "40ed611f79bcbd1c2ee46374a8c83653470cdf30e60e9b3b35ef00bfc9af7cb1",
+      "note": "Phase 5 live runner (exit codes 0/1/2/3/4; NOT_CONFIGURED never fabricates PASS)"
+    },
+    {
+      "path": "Response-Interpretation V1.json",
+      "sha256": "6b0c6a006d4d745f3e89702a7af8d2100f87132d5cd9b29b84e932aa7c564c03",
+      "note": "Shipped Response Interpretation V1 workflow"
+    },
+    {
+      "path": "src/response-capture.js",
+      "sha256": "83407df33c2f5b9f88185162480bb7abda600c9d43b79e345007ab1b8ab0f779",
+      "note": "Response Capture engine"
+    },
+    {
+      "path": "src/response-reconcile.js",
+      "sha256": "7554973cbab19f7e68cdf363833bd34f6518843b05ce46d597a6a16dad0a6131",
+      "note": "Response Reconciliation engine"
+    }
+  ]
+}
