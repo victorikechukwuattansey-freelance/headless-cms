@@ -1,0 +1,1814 @@
+{
+  "name": "Lead Recovery Engine — Prospect Finder & Validation V1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "291c1a70-5de6-4c10-8406-640ecfaedb7d",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.LOW_COST_MODE = true;\nstaticData.MAX_RESULTS_PER_SEARCH = 20;\nstaticData.workflowStartedAt = new Date().toISOString();\nstaticData.searchesProcessed = 0;\nstaticData.leadsCaptured = 0;\nstaticData.leadsVerified = 0;\nstaticData.errorsEncountered = 0;\nreturn $input.all();"
+      },
+      "id": "0004d77d-abf9-46fe-a1e1-b136589138cc",
+      "name": "Initialize Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 102,
+          "mode": "list",
+          "cachedResultName": "Verified Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit#gid=102"
+        },
+        "options": {}
+      },
+      "id": "5292a8fa-9bdb-4547-8532-4f3e19c3a232",
+      "name": "Read Verified Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        448,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "rOKhG0ESKifN5zy2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst items = $input.all();\nconst dedupKeys = [];\n\nfor (const item of items) {\n  const lead = item.json;\n  let key = '';\n\n  if (lead.website) {\n    key = 'website:' + String(lead.website).toLowerCase().trim()\n      .replace(/^https?:\\/\\//, '')\n      .replace(/www\\./, '')\n      .replace(/\\/+$/, '');\n  } else if (lead.phone) {\n    key = 'phone:' + String(lead.phone).replace(/[^\\d+]/g, '');\n  } else if (lead.business_name && lead.city && lead.state) {\n    key = 'ncs:' + [\n      String(lead.business_name).toLowerCase().trim(),\n      String(lead.city).toLowerCase().trim(),\n      String(lead.state).toLowerCase().trim()\n    ].join('|');\n  }\n\n  if (key) dedupKeys.push(key);\n}\n\nstaticData.verifiedDedupKeys = [...new Set(dedupKeys)];\nstaticData.verifiedLeadCount = dedupKeys.length;\nreturn $input.all();"
+      },
+      "id": "a064ba34-b487-478e-9e95-8e73a89a2019",
+      "name": "Cache Dedup Keys",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Search Inputs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "c6525996-d246-472f-b9ab-23da9c262665",
+      "name": "Read Search Inputs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "rOKhG0ESKifN5zy2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst pending = [];\n\nfor (const item of items) {\n  const status = String(item.json.status || '').trim();\n  if (status === 'Pending' || status === '') {\n    pending.push(item);\n  }\n}\n\nif (pending.length === 0) {\n  return [{ json: { _noPending: true, _message: 'All searches completed or failed' } }];\n}\n\nreturn pending;"
+      },
+      "id": "131e0852-558e-42e6-8665-cfc819d7aa20",
+      "name": "Filter Pending Searches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-pending-01",
+              "leftValue": "={{ $json._noPending === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "660817d9-2788-4f9a-af9e-dd4d81998380",
+      "name": "Has Pending Searches?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "d0deb27a-9c7d-4dfa-b7aa-83f56a23f12e",
+      "name": "Loop Through Searches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1440,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Search Inputs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "input_id": "={{ $json.input_id }}",
+            "niche": "={{ $json.niche }}",
+            "city": "={{ $json.city }}",
+            "state": "={{ $json.state }}",
+            "country": "={{ $json.country }}",
+            "search_query": "={{ $json.search_query }}",
+            "target_count": "={{ $json.target_count }}",
+            "status": "={{ $json.status }}",
+            "priority": "={{ $json.priority }}",
+            "created_at": "={{ $json.created_at }}",
+            "notes": "={{ $json.notes }}"
+          },
+          "matchingColumns": [
+            "input_id"
+          ],
+          "schema": [
+            {
+              "id": "input_id",
+              "displayName": "input_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "niche",
+              "displayName": "niche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "country",
+              "displayName": "country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "search_query",
+              "displayName": "search_query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "target_count",
+              "displayName": "target_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "5d3308d5-aab8-48a2-bbc2-cb6629190427",
+      "name": "Set Status Running",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1632,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "rOKhG0ESKifN5zy2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-api-01",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fd969fa1-2136-405d-a113-b93fd0fb8074",
+      "name": "API Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 101,
+          "mode": "list",
+          "cachedResultName": "Raw Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit#gid=101"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "business_name": "={{ $json.business_name }}",
+            "niche": "={{ $json.niche }}",
+            "city": "={{ $json.city }}",
+            "state": "={{ $json.state }}",
+            "country": "={{ $json.country }}",
+            "address": "={{ $json.address }}",
+            "phone": "={{ $json.phone }}",
+            "website": "={{ $json.website }}",
+            "rating": "={{ $json.rating }}",
+            "review_count": "={{ $json.review_count }}",
+            "google_maps_url": "={{ $json.google_maps_url }}",
+            "business_type": "={{ $json.business_type }}",
+            "source": "={{ $json.source }}",
+            "search_input_id": "={{ $json.search_input_id }}",
+            "dedupe_key": "={{ $json.dedupe_key }}",
+            "raw_captured_at": "={{ $json.raw_captured_at }}",
+            "notes": "={{ $json.notes }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "niche",
+              "displayName": "niche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "country",
+              "displayName": "country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "address",
+              "displayName": "address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "website",
+              "displayName": "website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rating",
+              "displayName": "rating",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "review_count",
+              "displayName": "review_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "google_maps_url",
+              "displayName": "google_maps_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "business_type",
+              "displayName": "business_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "search_input_id",
+              "displayName": "search_input_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "dedupe_key",
+              "displayName": "dedupe_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "raw_captured_at",
+              "displayName": "raw_captured_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "56ba3719-bdc4-4001-bdae-417e7bcae325",
+      "name": "Write Raw Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2736,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "rOKhG0ESKifN5zy2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Get the dedupe keys loaded from the Google Sheet.\nconst cacheOutput = $('Cache Dedup Keys').all();\n\nconst existingKeys = new Set();\n\nfor (const item of cacheOutput) {\n  const data = item.json;\n\n  // Support either a single key or an array of keys.\n  if (Array.isArray(data.verifiedDedupKeys)) {\n    for (const key of data.verifiedDedupKeys) {\n      if (key) existingKeys.add(String(key).trim());\n    }\n  }\n\n  if (data.dedupe_key) {\n    existingKeys.add(String(data.dedupe_key).trim());\n  }\n}\n\nconst verified = [];\nconst seenThisRun = new Set();\n\nfor (const item of items) {\n  const lead = item.json;\n\n  const key = String(lead.dedupe_key || '').trim();\n\n  if (!key) continue;\n\n  // Already exists in Verified Leads.\n  if (existingKeys.has(key)) continue;\n\n  // Prevent duplicates between providers in this same run.\n  if (seenThisRun.has(key)) continue;\n\n  seenThisRun.add(key);\n\n  verified.push({\n    json: {\n      lead_id: lead.lead_id,\n      business_name: lead.business_name,\n      niche: lead.niche,\n      city: lead.city,\n      state: lead.state,\n      country: lead.country,\n      address: lead.address,\n      phone: lead.phone,\n      website: lead.website,\n      rating: lead.rating,\n      review_count: lead.review_count,\n      google_maps_url: lead.google_maps_url,\n      business_type: lead.business_type,\n      source: lead.source,\n      search_input_id: lead.search_input_id,\n      dedupe_key: key,\n      verified_at: new Date().toISOString(),\n      manual_review_notes: ''\n    }\n  });\n}\n\nif (verified.length === 0) {\n  return [{\n    json: {\n      _noNewVerified: true,\n      _message: 'All leads already exist in Verified Leads'\n    }\n  }];\n}\n\nreturn verified;"
+      },
+      "id": "212ae7c6-fc5a-4c34-ac26-e67bb76fb35b",
+      "name": "Dedup & Prepare Verified",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2992,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-ver-01",
+              "leftValue": "={{ $json._noNewVerified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "334e7334-d05d-4705-8e5a-b0e9618a51ce",
+      "name": "Has New Verified?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 102,
+          "mode": "list",
+          "cachedResultName": "Verified Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit#gid=102"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "lead_id": "={{ $json.lead_id }}",
+            "business_name": "={{ $json.business_name }}",
+            "niche": "={{ $json.niche }}",
+            "city": "={{ $json.city }}",
+            "state": "={{ $json.state }}",
+            "country": "={{ $json.country }}",
+            "address": "={{ $json.address }}",
+            "phone": "={{ $json.phone }}",
+            "website": "={{ $json.website }}",
+            "rating": "={{ $json.rating }}",
+            "review_count": "={{ $json.review_count }}",
+            "google_maps_url": "={{ $json.google_maps_url }}",
+            "business_type": "={{ $json.business_type }}",
+            "source": "={{ $json.source }}",
+            "search_input_id": "={{ $json.search_input_id }}",
+            "verified_at": "={{ $json.verified_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "niche",
+              "displayName": "niche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "country",
+              "displayName": "country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "address",
+              "displayName": "address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "website",
+              "displayName": "website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rating",
+              "displayName": "rating",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "review_count",
+              "displayName": "review_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "google_maps_url",
+              "displayName": "google_maps_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "business_type",
+              "displayName": "business_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "search_input_id",
+              "displayName": "search_input_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "#REF!",
+              "displayName": "#REF!",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "has_website",
+              "displayName": "has_website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "has_phone",
+              "displayName": "has_phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "target_niche",
+              "displayName": "target_niche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "qualification_status",
+              "displayName": "qualification_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "verified_at",
+              "displayName": "verified_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "manual_review_notes",
+              "displayName": "manual_review_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "e3379688-0e78-4ece-9a82-e39659bf2bef",
+      "name": "Write Verified Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        3600,
+        -112
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "rOKhG0ESKifN5zy2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Search Inputs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "input_id": "={{ $('Set Status Running').item.json.input_id }}",
+            "status": "Completed"
+          },
+          "matchingColumns": [
+            "input_id"
+          ],
+          "schema": [
+            {
+              "id": "input_id",
+              "displayName": "input_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "niche",
+              "displayName": "niche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "country",
+              "displayName": "country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "search_query",
+              "displayName": "search_query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "target_count",
+              "displayName": "target_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "87786833-9812-424f-9173-92a4b64d5518",
+      "name": "Update Status Completed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        3792,
+        80
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "rOKhG0ESKifN5zy2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst response = $input.first().json;\nconst searchInput = $('Build OSM API Query').first().json;\n\nconst statusCode = response.statusCode || 0;\nconst body = response.body || response;\nconst error = body.error || {};\nconst errorMsg = error.message\n  || error.status\n  || 'HTTP error ' + statusCode\n  || 'Unknown API error';\n\nstaticData.errorsEncountered = (staticData.errorsEncountered || 0) + 1;\n\nreturn [{\n  json: {\n    input_id: searchInput.input_id || '',\n    _errorMessage: 'Places API error: ' + errorMsg + ' (HTTP ' + statusCode + ')',\n    _rawStatus: error.status || ('HTTP ' + statusCode)\n  }\n}];"
+      },
+      "id": "a7c3f054-d643-4914-a00c-a869f4af7923",
+      "name": "Handle API Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Search Inputs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "input_id": "={{ $json.input_id }}"
+          },
+          "matchingColumns": [
+            "input_id"
+          ],
+          "schema": [
+            {
+              "id": "input_id",
+              "displayName": "input_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "niche",
+              "displayName": "niche",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "country",
+              "displayName": "country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "search_query",
+              "displayName": "search_query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "target_count",
+              "displayName": "target_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "ee0e4bef-f30a-454d-a027-19ae735a6e61",
+      "name": "Update Status Failed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2608,
+        256
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "rOKhG0ESKifN5zy2",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "c11d8285-c0ec-400d-93a5-15e35afa344e",
+      "name": "End",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1536,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://overpass.kumi.systems/api/interpreter",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "data",
+              "value": "={{ $json._apiQuery }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1984,
+        112
+      ],
+      "id": "fd5b10dc-8c4e-4481-8e33-1c331b0f116f",
+      "name": "OpenStreetMap Overpass API",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst HVAC_CATEGORY_ID = '63be6904847c3692a84b9b56';\n\nconst positivePatterns = [\n  /\\bhvac\\b/i,\n  /\\bair\\s*conditioning\\b/i,\n  /\\bair\\s*conditioner\\b/i,\n  /\\bheating\\s*(?:and|&)\\s*air\\b/i,\n  /\\bheating\\s*(?:and|&)\\s*cooling\\b/i,\n  /\\bair\\s*(?:ac|a\\/c)\\s*(?:and|&)\\s*(?:heating|heat|conditioning)\\b/i,\n  /\\bheating\\s*(?:and|&)\\s*(?:air|cooling)\\b/i,\n  /\\bair\\s*(?:and|&)\\s*heat\\b/i,\n  /\\bair\\s*repair\\b/i,\n];\n\nconst rejectPatterns = [\n  /\\bcredit\\b/i,\n  /\\broofing\\b/i,\n  /\\bplumbing\\b/i,\n  /\\bflooring\\b/i,\n  /\\bpainting\\b/i,\n  /\\binsulation\\b/i,\n  /\\bfoundation\\b/i,\n  /\\bconcrete\\b/i,\n  /\\bcarpet\\b/i,\n  /\\bdryer\\s+vents?\\b/i,\n  /\\bducts?\\s*cleaning\\b/i,\n  /\\bpower\\s+cleaning\\b/i,\n  /\\bsupply\\b/i,\n  /\\bwholesale\\b/i,\n  /\\bhardware\\b/i,\n  /\\brental\\b/i,\n  /\\bconstruction\\s+supply\\b/i,\n];\n\nconst reviewPatterns = [\n  /\\bpump\\b/i,\n  /\\bengineering\\b/i,\n  /\\bdesign\\b/i,\n  /\\belectric\\b/i,\n  /\\belectrical\\b/i,\n  /\\bappliance\\b/i,\n  /\\bmechanical\\b/i,\n  /\\bfacility\\b/i,\n  /\\bconstruction\\b/i,\n];\n\nconst suspiciousWebsitePatterns = [\n  /(^|\\.)trane\\.com(\\/|$)/i,\n  /rental-services/i,\n];\n\nfunction clean(value) {\n  return String(value ?? '').trim();\n}\n\nfunction normalize(value) {\n  return clean(value).toLowerCase();\n}\n\nfunction normalizeState(value) {\n  const state = normalize(value);\n\n  const aliases = {\n    tx: 'tx',\n    texas: 'tx',\n  };\n\n  return aliases[state] || state;\n}\n\nfunction getAddress(location) {\n  return clean(\n    location.formatted_address ||\n    [\n      location.address,\n      location.address_extended,\n      location.locality,\n      location.region,\n      location.postcode,\n    ]\n      .filter(Boolean)\n      .join(', ')\n  );\n}\n\nfunction getCategoryNames(categories) {\n  return (categories || [])\n    .map(c => clean(c.name))\n    .filter(Boolean);\n}\n\nfunction getCategoryIds(categories) {\n  return (categories || [])\n    .map(c => clean(c.fsq_category_id))\n    .filter(Boolean);\n}\n\nfunction buildDedupeKey({\n  phone,\n  website,\n  businessName,\n  city,\n  state,\n}) {\n  if (phone) {\n    return `phone:${normalize(phone).replace(/\\D/g, '')}`;\n  }\n\n  if (website) {\n    return `website:${normalize(website)\n      .replace(/^https?:\\/\\//, '')\n      .replace(/^www\\./, '')\n      .replace(/\\/$/, '')}`;\n  }\n\n  return `business:${normalize(businessName)}|${normalize(city)}|${normalizeState(state)}`;\n}\n\n\n/*\n * ============================================================\n * RESTORE SEARCH CONTEXT\n * ============================================================\n */\n\nlet searchContext = {};\n\ntry {\n  const upstream = $('Build FSQ API Query').all();\n\n  if (upstream.length > 0) {\n    searchContext =\n      upstream[upstream.length - 1].json || {};\n  }\n} catch (error) {\n  searchContext = {};\n}\n\nconst searchInputId = clean(\n  searchContext.input_id ||\n  searchContext.search_input_id ||\n  ''\n);\n\nconst niche = clean(\n  searchContext.niche ||\n  'HVAC'\n);\n\nconst targetCity = clean(\n  searchContext.city ||\n  'Dallas'\n);\n\nconst targetState = clean(\n  searchContext.state ||\n  'TX'\n);\n\nconst country = clean(\n  searchContext.country ||\n  'USA'\n);\n\n\n/*\n * ============================================================\n * PROCESS FOURSQUARE RESPONSE\n * ============================================================\n */\n\nconst output = [];\nconst seen = new Set();\n\nfor (const item of items) {\n  const response = item.json || {};\n  const places = response.results || [];\n\n  for (const place of places) {\n    const location = place.location || {};\n    const categories = place.categories || [];\n\n    const businessName = clean(place.name);\n\n    const city = clean(location.locality);\n\n    const state = clean(location.region);\n\n    const phone = clean(place.tel);\n\n    const website = clean(place.website);\n\n    const address = getAddress(location);\n\n    if (!businessName) {\n      continue;\n    }\n\n\n    /*\n     * ========================================================\n     * GEOGRAPHY\n     * ========================================================\n     *\n     * Accept TX and Texas as equivalent.\n     */\n\n    if (\n      city &&\n      normalize(city) !== normalize(targetCity)\n    ) {\n      continue;\n    }\n\n    if (\n      state &&\n      normalizeState(state) !== normalizeState(targetState)\n    ) {\n      continue;\n    }\n\n\n    /*\n     * Must have usable prospect data.\n     */\n\n    if (!phone && !website && !address) {\n      continue;\n    }\n\n\n    /*\n     * ========================================================\n     * HVAC RELEVANCE\n     * ========================================================\n     */\n\n    const categoryNames =\n      getCategoryNames(categories);\n\n    const categoryIds =\n      getCategoryIds(categories);\n\n    const hvacCategoryMatch =\n      categoryIds.includes(HVAC_CATEGORY_ID);\n\n    const hvacNameMatch =\n      positivePatterns.some(pattern =>\n        pattern.test(businessName)\n      );\n\n\n    /*\n     * Must actually look like HVAC.\n     */\n\n    if (\n      !hvacCategoryMatch &&\n      !hvacNameMatch\n    ) {\n      continue;\n    }\n\n\n    /*\n     * ========================================================\n     * NON-HVAC REJECTION\n     * ========================================================\n     */\n\n    const rejected =\n      rejectPatterns.some(pattern =>\n        pattern.test(businessName)\n      ) ||\n      rejectPatterns.some(pattern =>\n        pattern.test(categoryNames.join(' '))\n      );\n\n    if (rejected) {\n      continue;\n    }\n\n\n    /*\n     * ========================================================\n     * QUALIFICATION\n     * ========================================================\n     */\n\n    const suspiciousWebsite =\n      suspiciousWebsitePatterns.some(pattern =>\n        pattern.test(website)\n      );\n\n    let qualification = 'QUALIFIED';\n    let reason = 'hvac_category_and_name_match';\n\n    if (suspiciousWebsite) {\n      qualification = 'REVIEW';\n      reason =\n        'suspicious_or_parent_company_website';\n    } else if (\n      hvacCategoryMatch &&\n      !hvacNameMatch\n    ) {\n      qualification = 'REVIEW';\n      reason =\n        'hvac_category_without_strong_name_match';\n    } else if (\n      reviewPatterns.some(pattern =>\n        pattern.test(businessName)\n      ) ||\n      reviewPatterns.some(pattern =>\n        pattern.test(categoryNames.join(' '))\n      )\n    ) {\n      qualification = 'REVIEW';\n      reason =\n        'ambiguous_business_identity';\n    }\n\n\n    /*\n     * ========================================================\n     * DEDUPE\n     * ========================================================\n     */\n\n    const dedupeKey = buildDedupeKey({\n      phone,\n      website,\n      businessName,\n      city: city || targetCity,\n      state: state || targetState,\n    });\n\n    if (seen.has(dedupeKey)) {\n      continue;\n    }\n\n    seen.add(dedupeKey);\n\n\n    /*\n     * ========================================================\n     * LEAD ID\n     * ========================================================\n     */\n\n    let leadId;\n\n    if (phone) {\n      leadId =\n        `FSQ-PHONE-${phone.replace(/\\D/g, '')}`;\n    } else if (website) {\n      leadId =\n        `FSQ-WEB-${normalize(website)\n          .replace(/^https?:\\/\\//, '')\n          .replace(/^www\\./, '')\n          .replace(/[^a-z0-9]/g, '')}`;\n    } else {\n      leadId =\n        `FSQ-${normalize(businessName)\n          .replace(/[^a-z0-9]+/g, '-')\n          .replace(/^-|-$/g, '')}`;\n    }\n\n\n    /*\n     * ========================================================\n     * RAW LEADS OUTPUT\n     * ========================================================\n     */\n\n    output.push({\n      json: {\n        lead_id: leadId,\n\n        business_name: businessName,\n\n        niche,\n\n        city: city || targetCity,\n\n        state: state || targetState,\n\n        country,\n\n        address,\n\n        phone,\n\n        website,\n\n        rating: 0,\n\n        review_count: 0,\n\n        google_maps_url: '',\n\n        business_type:\n          categoryNames.join(', ') ||\n          'HVAC',\n\n        source: 'FOURSQUARE',\n\n        search_input_id: searchInputId,\n\n        dedupe_key: dedupeKey,\n\n        raw_captured_at:\n          new Date().toISOString(),\n\n        notes:\n          `fsq_qualification=${qualification}; ` +\n          `reason=${reason}; ` +\n          `hvac_category_match=${hvacCategoryMatch}; ` +\n          `hvac_name_match=${hvacNameMatch}; ` +\n          `fsq_place_id=${clean(place.fsq_place_id)}`,\n      },\n    });\n  }\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2208,
+        -80
+      ],
+      "id": "fd2f9975-644f-4911-bec2-bffec08103b3",
+      "name": "Process FSQ",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "url": "https://places-api.foursquare.com/places/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "near",
+              "value": "={{$json.fsq_near}}"
+            },
+            {
+              "name": "limit",
+              "value": "={{$json.fsq_limit}}"
+            },
+            {
+              "name": "fields",
+              "value": "fsq_place_id,name,categories,location,tel,website"
+            },
+            {
+              "name": "fsq_category_ids",
+              "value": "={{$json.fsq_category_id}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$credentials.value}}"
+            },
+            {
+              "name": "X-Places-Api-Version",
+              "value": "2025-06-17"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2048,
+        -80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "912eb72c-6bd0-42b2-b16e-9ce526d45110",
+          "name": "Foursquare API"
+        }
+      },
+      "id": "cfaca348-25c9-41ab-a816-f845b19ed308",
+      "name": "Foursquare Places API"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\n\nconst input = $input.first().json;\n\nconst targetCount = Number(input.target_count) || 1;\n\n// Candidate pool should be larger than the requested final count\n// so Process Results can filter poor-quality OSM objects.\nconst candidateMultiplier = 5;\n\nconst candidatePoolSize = Math.max(\n  targetCount * candidateMultiplier,\n  20\n);\n\n// Respect the global workflow safety ceiling.\nconst maxCandidates =\n  Number(staticData.MAX_RESULTS_PER_SEARCH) || 100;\n\nconst effectiveCandidatePool = Math.min(\n  candidatePoolSize,\n  maxCandidates\n);\n\nconst city = String(input.city || '').trim();\nconst niche = String(input.niche || '').trim().toLowerCase();\n\nlet nicheQuery = '';\n\nif (niche === 'hvac') {\n  nicheQuery = `\n  nwr[\"craft\"=\"hvac\"](area.search);\n  nwr[\"shop\"=\"heating\"](area.search);\n  nwr[\"shop\"=\"air_conditioning\"](area.search);\n  `;\n} else if (niche === 'plumbing') {\n  nicheQuery = `\n  nwr[\"craft\"=\"plumber\"](area.search);\n  nwr[\"shop\"=\"plumbing\"](area.search);\n  `;\n} else if (niche === 'roofing') {\n  nicheQuery = `\n  nwr[\"craft\"=\"roofer\"](area.search);\n  nwr[\"shop\"=\"roofing\"](area.search);\n  `;\n} else if (niche === 'electrical') {\n  nicheQuery = `\n  nwr[\"craft\"=\"electrician\"](area.search);\n  nwr[\"shop\"=\"electrical\"](area.search);\n  `;\n} else if (niche === 'pest') {\n  nicheQuery = `\n  nwr[\"craft\"=\"pest_control\"](area.search);\n  `;\n} else {\n  nicheQuery = `\n  nwr[\"name\"](area.search);\n  `;\n}\n\nconst apiQuery = `\n[out:json][timeout:60];\n\narea[\"name\"=\"${city}\"][\"boundary\"=\"administrative\"]->.search;\n\n(\n${nicheQuery}\n);\n\nout center tags ${effectiveCandidatePool};\n`.trim();\n\nreturn [{\n  json: {\n    ...input,\n\n    _apiQuery: apiQuery,\n\n    // Final number of leads we actually want.\n    _maxResults: targetCount,\n\n    // Number of OSM candidates we attempt to retrieve.\n    _candidatePoolSize: effectiveCandidatePool,\n\n    _provider: 'openstreetmap_overpass'\n  }\n}];"
+      },
+      "id": "f303a332-b773-4ecf-a854-a550997a05e4",
+      "name": "Build OSM API Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json;\n\nreturn [{\n  json: {\n    ...input,\n\n    fsq_query: input.niche || 'HVAC',\n    fsq_near: `${input.city}, ${input.state}`,\n    fsq_limit: Math.min(Number(input.target_count || 10) * 3, 50),\n\n    // Foursquare HVAC contractor category\n    fsq_category_id: '63be6904847c3692a84b9b56',\n\n    discovery_source: 'FOURSQUARE'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        -80
+      ],
+      "id": "19f06e1d-c951-4197-bd77-3d89e6f33383",
+      "name": "Build FSQ API Query"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst response = item.body || item;\nconst elements = response.elements || [];\n\n// Preserve search context from the existing upstream node.\nconst buildQueryOutput = $('Build OSM API Query').all();\n\nconst osmContext =\n  buildQueryOutput.length > 0\n    ? buildQueryOutput[0].json\n    : {};\n\nconst searchInputId = String(\n  osmContext.input_id || ''\n).trim();\n\nconst targetNiche = String(\n  osmContext.niche || 'HVAC'\n).trim();\n\nconst targetCity = String(\n  osmContext.city || 'Dallas'\n).trim();\n\nconst targetState = String(\n  osmContext.state || 'Texas'\n).trim();\n\nconst targetCountry = String(\n  osmContext.country || 'USA'\n).trim();\n\n// Reject obvious non-prospect / facility / equipment records.\nconst rejectPatterns = [\n  /\\bsystem\\b/i,\n  /\\bchiller\\b/i,\n  /\\bboiler\\b/i,\n  /\\bhydronic\\b/i,\n  /\\binfrastructure\\b/i,\n  /\\bequipment\\b/i,\n  /\\binstallation\\b/i,\n  /\\bplant\\b/i,\n  /\\bfacility\\b/i,\n  /\\bpipeline\\b/i,\n  /\\bworkshop\\b/i,\n  /\\bmaintenance\\s+workshop\\b/i\n];\n\nfunction clean(value) {\n  return String(value ?? '').trim();\n}\n\nfunction normalizePhone(value) {\n  return clean(value).replace(/[^\\d+]/g, '');\n}\n\nfunction normalizeWebsite(value) {\n  const raw = clean(value);\n\n  if (!raw) return '';\n\n  if (/^https?:\\/\\//i.test(raw)) {\n    return raw;\n  }\n\n  return `https://${raw}`;\n}\n\nfunction getName(tags) {\n  return clean(\n    tags.name ||\n    tags.official_name ||\n    tags.brand\n  );\n}\n\nfunction getPhone(tags) {\n  return normalizePhone(\n    tags.phone ||\n    tags['contact:phone'] ||\n    tags['contact:mobile'] ||\n    ''\n  );\n}\n\nfunction getWebsite(tags) {\n  return normalizeWebsite(\n    tags.website ||\n    tags['contact:website'] ||\n    ''\n  );\n}\n\nfunction getAddress(tags) {\n  const houseNumber = clean(tags['addr:housenumber']);\n  const street = clean(\n    tags['addr:street'] ||\n    tags['addr:place']\n  );\n\n  if (houseNumber && street) {\n    return `${houseNumber} ${street}`;\n  }\n\n  return street;\n}\n\nfunction getLeadId(element) {\n  const type = clean(element.type).toUpperCase();\n  const id = clean(element.id);\n\n  if (type && id) {\n    return `OSM-${type}-${id}`;\n  }\n\n  const name = getName(element.tags || '');\n\n  return `OSM-${name\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, '-')\n    .replace(/^-|-$/g, '') || 'UNKNOWN'}`;\n}\n\nconst output = [];\nconst seen = new Set();\n\nfor (const element of elements) {\n  const tags = element.tags || {};\n\n  const name = getName(tags);\n\n  if (!name) {\n    continue;\n  }\n\n  // Reject obvious non-prospect objects.\n  if (rejectPatterns.some(pattern => pattern.test(name))) {\n    continue;\n  }\n\n  const phone = getPhone(tags);\n  const website = getWebsite(tags);\n  const address = getAddress(tags);\n\n  // Require at least one usable business identifier.\n  if (!phone && !website && !address) {\n    continue;\n  }\n\n  const city =\n    clean(tags['addr:city']) ||\n    clean(targetCity);\n\n  const state =\n    clean(tags['addr:state']) ||\n    clean(targetState);\n\n  const country =\n    clean(tags['addr:country']) ||\n    clean(targetCountry);\n\n  // Dedupe within this OSM batch:\n  // phone -> website -> business/city/state\n  const dedupeKey =\n    phone\n      ? `phone:${phone}`\n      : website\n        ? `website:${website.toLowerCase()}`\n        : `business:${name.toLowerCase()}|${city.toLowerCase()}|${state.toLowerCase()}`;\n\n  if (seen.has(dedupeKey)) {\n    continue;\n  }\n\n  seen.add(dedupeKey);\n\n  output.push({\n    json: {\n      lead_id: getLeadId(element),\n      business_name: name,\n      niche: targetNiche,\n      city,\n      state,\n      country,\n      address,\n      phone,\n      website,\n      rating: 0,\n      review_count: 0,\n      google_maps_url: '',\n      business_type:\n        clean(tags.craft) ||\n        clean(tags.shop) ||\n        clean(tags.office) ||\n        targetNiche.toLowerCase(),\n      source: 'OSM',\n      search_input_id: searchInputId,\n      dedupe_key: dedupeKey,\n      raw_captured_at: new Date().toISOString(),\n      notes: JSON.stringify({\n        osm_type: element.type,\n        osm_id: element.id,\n        coordinates:\n          element.lat !== undefined && element.lon !== undefined\n            ? {\n                lat: element.lat,\n                lon: element.lon\n              }\n            : element.center || {}\n      })\n    }\n  });\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        80
+      ],
+      "id": "d6a8bd1e-5dca-4d5d-9af2-e05a015885cf",
+      "name": "Process OSM"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2512,
+        0
+      ],
+      "id": "c0ec8e86-d057-415f-ba63-7688d693cd1a",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const lead = item.json;\n\n  return {\n    json: {\n      lead_id: lead.lead_id,\n      business_name: lead.business_name,\n      niche: lead.niche,\n      city: lead.city,\n      state: lead.state,\n      country: lead.country,\n      address: lead.address,\n      phone: lead.phone,\n      website: lead.website,\n      rating: lead.rating,\n      review_count: lead.review_count,\n      google_maps_url: lead.google_maps_url,\n      business_type: lead.business_type,\n      source: lead.source,\n      search_input_id: lead.search_input_id,\n      dedupe_key: lead.dedupe_key,\n\n      verified_at: lead.verified_at,\n      notes: lead.notes || '',\n      manual_review_notes: lead.manual_review_notes || ''\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3440,
+        -112
+      ],
+      "id": "8b407732-b129-410e-9214-cd564ebda967",
+      "name": "Prepare Verified Sheet Row"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Initialize Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Configuration": {
+      "main": [
+        [
+          {
+            "node": "Read Verified Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Verified Leads": {
+      "main": [
+        [
+          {
+            "node": "Cache Dedup Keys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cache Dedup Keys": {
+      "main": [
+        [
+          {
+            "node": "Read Search Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Search Inputs": {
+      "main": [
+        [
+          {
+            "node": "Filter Pending Searches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Pending Searches": {
+      "main": [
+        [
+          {
+            "node": "Has Pending Searches?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Pending Searches?": {
+      "main": [
+        [
+          {
+            "node": "Loop Through Searches",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Through Searches": {
+      "main": [
+        [
+          {
+            "node": "End",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Status Running",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Status Running": {
+      "main": [
+        [
+          {
+            "node": "Build FSQ API Query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build OSM API Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API Success?": {
+      "main": [
+        [
+          {
+            "node": "Process OSM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle API Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Raw Leads": {
+      "main": [
+        [
+          {
+            "node": "Dedup & Prepare Verified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup & Prepare Verified": {
+      "main": [
+        [
+          {
+            "node": "Has New Verified?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Verified?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Verified Sheet Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Status Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Verified Leads": {
+      "main": [
+        [
+          {
+            "node": "Update Status Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status Completed": {
+      "main": [
+        [
+          {
+            "node": "Loop Through Searches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle API Error": {
+      "main": [
+        [
+          {
+            "node": "Update Status Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status Failed": {
+      "main": [
+        [
+          {
+            "node": "Loop Through Searches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenStreetMap Overpass API": {
+      "main": [
+        [
+          {
+            "node": "API Success?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle API Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Foursquare Places API": {
+      "main": [
+        [
+          {
+            "node": "Process FSQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build OSM API Query": {
+      "main": [
+        [
+          {
+            "node": "OpenStreetMap Overpass API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build FSQ API Query": {
+      "main": [
+        [
+          {
+            "node": "Foursquare Places API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process FSQ": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process OSM": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Write Raw Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Verified Sheet Row": {
+      "main": [
+        [
+          {
+            "node": "Write Verified Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d4206a64-3385-4ea8-b8c1-51628540674f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d1a84d17df34e821369daca617638cece9e93450ffc21fa5c85852b78030a55b"
+  },
+  "nodeGroups": [],
+  "id": "WcUgtTPiKXPL0BLH",
+  "tags": []
+}
