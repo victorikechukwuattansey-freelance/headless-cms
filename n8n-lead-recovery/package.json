@@ -1,0 +1,38 @@
+{
+  "name": "lre-approved-outreach-handoff",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lead Recovery Engine — Approved Outreach Handoff V1 (n8n) + Google Sheets Verification & Fixture Harness v0.1 + Run Reconciliation and Reporting V1 + Outreach Queue & Planning V1 + Outreach Response Capture V1 + Outreach Response Reconciliation V1. Zero runtime dependencies.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\"",
+    "harness": "node scripts/run-live-harness.js",
+    "harness:fixture-workflow": "node scripts/build-fixture-workflow.js",
+    "reconcile:live": "node scripts/run-reconciliation-live.js",
+    "queue:test": "node --test tests/queue-engine.test.js tests/queue-workflow.test.js tests/queue-harness.test.js",
+    "queue:live": "node scripts/run-outreach-queue-live.js",
+    "execution:test": "node --test tests/execution-engine.test.js tests/execution-workflow.test.js tests/execution-harness.test.js",
+    "execution:build": "node scripts/build-execution-workflow.js",
+    "execution:live": "node scripts/run-execution-live.js",
+    "execution-recon:test": "node --test tests/execution-reconcile-engine.test.js tests/execution-reconcile-workflow.test.js tests/execution-reconcile-harness.test.js",
+    "execution-recon:build": "node scripts/build-execution-reconciliation-workflow.js",
+    "execution-recon:live": "node scripts/run-execution-reconciliation-live.js",
+    "response-capture:test": "node --test tests/response-capture-engine.test.js tests/response-capture-workflow.test.js tests/response-capture-harness.test.js",
+    "response-capture:build": "node scripts/build-response-capture-workflow.js",
+    "response-capture:live": "node scripts/run-response-capture-live.js",
+    "response-recon:test": "node --test tests/response-reconcile-engine.test.js tests/response-reconcile-workflow.test.js tests/response-reconcile-harness.test.js",
+    "response-recon:build": "node scripts/build-response-reconciliation-workflow.js",
+    "response-recon:live": "node scripts/run-response-reconciliation-live.js",
+    "response-interpret:test": "node --test tests/response-interpretation-engine.test.js tests/response-interpretation-fixtures.test.js tests/response-interpretation-workflow.test.js tests/response-interpretation-workflow-build.test.js tests/response-interpretation-live-runner.test.js",
+    "response-interpret:build": "node scripts/build-response-interpretation-workflow.js",
+    "response-interpret:live": "node scripts/run-response-interpretation-live.js",
+    "verify:frozen": "node scripts/verify-frozen.js",
+    "response-interpret:live:preflight": "node scripts/run-response-interpretation-live.js --preflight",
+    "response-interpret:live:seed": "node scripts/run-response-interpretation-live.js --seed",
+    "response-interpret:live:run": "node scripts/run-response-interpretation-live.js --run",
+    "response-interpret:live:cleanup": "node scripts/run-response-interpretation-live.js --cleanup"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
