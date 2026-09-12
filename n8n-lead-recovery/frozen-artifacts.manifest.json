@@ -1,6 +1,15 @@
 {
-  "version": 1,
-  "about": "Integrity manifest for Phase 1-5 FROZEN artifacts (H6 hygiene). A SHA-256 mismatch means the frozen artifact was modified and must not be committed without an approved change. Maintained by the hygiene workstream; baseline hashes recorded in reports/PHASE-6-response-interpretation-v1.md section 9.",
+  "version": 2,
+  "about": "Integrity manifest for Phase 1-5 FROZEN artifacts (H6 hygiene). A SHA-256 mismatch means the frozen artifact was modified and must not be committed without an approved change. Maintained by the hygiene workstream; baseline hashes recorded in reports/PHASE-6-response-interpretation-v1.md section 9. Version 2: re-baselined the live runner after the approved Phase 5 revision (CLI execution backend); all other artifact hashes are unchanged from the Phase 6 baseline.",
+  "revisions": [
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "previous_sha256": "40ed611f79bcbd1c2ee46374a8c83653470cdf30e60e9b3b35ef00bfc9af7cb1",
+      "sha256": "ecf46417d700d87cefa99efa4fd37f2e9ec35e6b9f8680578303837111989f68",
+      "date": "2026-09-12",
+      "reason": "Phase 5 revision: fix live runner execution mechanism - configurable execution backend (RESP_INT_EXEC_BACKEND=cli|http); cli mode spawns `docker exec -u node -e N8N_RUNNERS_BROKER_PORT=<port> <container> n8n execute --id <workflow>` with 5679 port-conflict resolution; http mode preserves the REST POST path."
+    }
+  ],
   "artifacts": [
     {
       "path": "src/response-interpretation.js",
@@ -19,8 +28,8 @@
     },
     {
       "path": "src/response-interpretation-live-runner.js",
-      "sha256": "40ed611f79bcbd1c2ee46374a8c83653470cdf30e60e9b3b35ef00bfc9af7cb1",
-      "note": "Phase 5 live runner (exit codes 0/1/2/3/4; NOT_CONFIGURED never fabricates PASS)"
+      "sha256": "ecf46417d700d87cefa99efa4fd37f2e9ec35e6b9f8680578303837111989f68",
+      "note": "Phase 5 live runner (Phase 5 revision: cli/http execution backend + 5679 broker-port resolution); exit codes 0/1/2/3/4; NOT_CONFIGURED never fabricates PASS"
     },
     {
       "path": "Response-Interpretation V1.json",

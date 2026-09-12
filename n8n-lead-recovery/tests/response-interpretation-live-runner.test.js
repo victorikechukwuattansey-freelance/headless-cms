@@ -22,6 +22,7 @@ const ENV_READY = {
   GOOGLE_SHEET_ID: SPREADSHEET_ID,
   GOOGLE_ACCESS_TOKEN: 'test-token',
   RESP_INT_LIVE_RUN_TOKEN: TOKEN,
+  RESP_INT_EXEC_BACKEND: 'http',
   N8N_BASE_URL: 'https://n8n.example.local',
   N8N_API_KEY: 'test-n8n-key',
   N8N_WORKFLOW_ID: 'wf-001',

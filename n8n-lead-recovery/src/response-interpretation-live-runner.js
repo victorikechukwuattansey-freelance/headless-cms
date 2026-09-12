@@ -23,10 +23,19 @@
  *    exact rows this runner projects into the namespace, with fixed Phase 3/4
  *    inputs (interpretation FIXED_NOW), which keeps the comparison
  *    deterministic and reproducible across runs and machines.
+ *
+ *  Phase 5 revision (2026-09-12): the n8n execution mechanism is now backend-
+ *  selectable. cli (default) spawns `docker exec -u node -e
+ *  N8N_RUNNERS_BROKER_PORT=<port> <container> n8n execute --id <workflow>` inside
+ *  the running n8n container, because the Community REST API cannot trigger
+ *  manual-trigger workflows; http keeps the previous POST path for instances that
+ *  expose a run endpoint. The CLI's temporary task broker must bind to a port
+ *  other than the running server's 5679 (RESP_INT_EXEC_BROKER_PORT).
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
 
 const { RESPONSE_COLUMNS } = require('./response-capture');
 const { rowToObject, objectToRow } = require('./schema');
@@ -79,6 +88,12 @@ const SECRET_PATTERNS = [
   /xox[baprs]-[A-Za-z0-9-]{10,}/,
 ];
 
+const VALID_EXEC_BACKENDS = ['cli', 'http'];
+const CONTAINER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+const EXEC_WORKFLOW_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const BROKER_PORT_RE = /^[0-9]{1,5}$/;
+const SERVER_BROKER_PORT = 5679;
+
 function pad3(n) {
   return String(n).padStart(3, '0');
 }
@@ -123,6 +138,10 @@ function readConfig(env) {
   const n8nBaseUrl = String(env.N8N_BASE_URL || '').trim().replace(/\/+$/, '');
   const n8nApiKey = String(env.N8N_API_KEY || '').trim();
   const n8nWorkflowId = String(env.N8N_WORKFLOW_ID || '').trim();
+  const execBackendRaw = String(env.RESP_INT_EXEC_BACKEND || '').trim();
+  const execBackend = normalizeExecBackend(execBackendRaw);
+  const container = String(env.RESP_INT_EXEC_CONTAINER || '').trim();
+  const brokerPort = String(env.RESP_INT_EXEC_BROKER_PORT || '').trim();
   return {
     googlesheetId,
     tab: RESPONSE_LOG_SHEET,
@@ -138,8 +157,124 @@ function readConfig(env) {
       workflowId: n8nWorkflowId || '',
       ready: !!(n8nBaseUrl && n8nApiKey && n8nWorkflowId),
     },
+    exec: {
+      backend: execBackend,
+      backendRaw: execBackendRaw,
+      cli: {
+        container,
+        brokerPort,
+        workflowId: n8nWorkflowId,
+        ready: !!(container && brokerPort && n8nWorkflowId),
+      },
+      http: {
+        baseUrl: n8nBaseUrl || '',
+        apiKey: n8nApiKey || '',
+        workflowId: n8nWorkflowId || '',
+        ready: !!(n8nBaseUrl && n8nApiKey && n8nWorkflowId),
+      },
+      ready: execBackend === 'http'
+        ? !!(n8nBaseUrl && n8nApiKey && n8nWorkflowId)
+        : !!(container && brokerPort && n8nWorkflowId),
+    },
     runToken: runTokenFor({}, env),
   };
+}
+
+/* ---------------- execution backend (cli / http) -------------------- */
+
+function normalizeExecBackend(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  return v === 'http' ? 'http' : 'cli';
+}
+
+function validateExecParams(cli) {
+  const errs = [];
+  if (!cli.container) errs.push('RESP_INT_EXEC_CONTAINER is required for cli mode');
+  else if (!CONTAINER_NAME_RE.test(cli.container)) {
+    errs.push('RESP_INT_EXEC_CONTAINER must match the docker container-name charset (letters, digits, _ . -)');
+  }
+  if (!cli.brokerPort) errs.push('RESP_INT_EXEC_BROKER_PORT is required for cli mode');
+  else if (!BROKER_PORT_RE.test(cli.brokerPort)) errs.push('RESP_INT_EXEC_BROKER_PORT must be a numeric port');
+  else {
+    const p = Number(cli.brokerPort);
+    if (!Number.isInteger(p) || p < 1 || p > 65535) errs.push('RESP_INT_EXEC_BROKER_PORT must be an integer in 1..65535');
+    else if (p === SERVER_BROKER_PORT) {
+      errs.push(`RESP_INT_EXEC_BROKER_PORT=${SERVER_BROKER_PORT} collides with the running n8n server's task broker; choose a different port (e.g. 5677)`);
+    }
+  }
+  if (!cli.workflowId) errs.push('N8N_WORKFLOW_ID is required for cli mode');
+  else if (!EXEC_WORKFLOW_ID_RE.test(cli.workflowId)) errs.push('N8N_WORKFLOW_ID must match [A-Za-z0-9_-]{1,64}');
+  return errs;
+}
+
+function buildCliCommand(cli) {
+  const errs = validateExecParams(cli);
+  if (errs.length) throw new Error(`invalid cli execution config: ${errs.join('; ')}`);
+  return [
+    'docker',
+    'exec',
+    '-u',
+    'node',
+    '-e',
+    `N8N_RUNNERS_BROKER_PORT=${cli.brokerPort}`,
+    cli.container,
+    'n8n',
+    'execute',
+    '--id',
+    cli.workflowId,
+  ];
+}
+
+function runCommand(argv) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(argv[0], argv.slice(1), { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => {
+      stdout += d;
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d;
+    });
+    child.on('error', reject);
+    child.on('close', (code, signal) => resolve({ code, signal, stdout, stderr }));
+  });
+}
+
+function parseExecuteStdout(stdout) {
+  const s = String(stdout || '').trim();
+  if (!s) return null;
+  try {
+    const v = JSON.parse(s);
+    if (v && typeof v === 'object') return v;
+  } catch (err) {
+    /* fall through to embedded extraction */
+  }
+  const start = s.indexOf('{');
+  const end = s.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    const v = JSON.parse(s.slice(start, end + 1));
+    if (v && typeof v === 'object') return v;
+  } catch (err) {
+    return null;
+  }
+  return null;
+}
+
+function executionIdFromPayload(payload) {
+  if (!payload || typeof payload !== 'object') return '';
+  for (const key of ['id', 'executionId', 'execution_id']) {
+    const v = payload[key];
+    if (typeof v === 'string' || typeof v === 'number') return String(v);
+  }
+  return '';
+}
+
+function mapCliExitCode(code) {
+  if (code === 0) return { status: 'PASS', detail: 'n8n execute finished (exit 0)' };
+  if (code == null) return { status: 'FAIL', detail: 'n8n execute did not exit cleanly (terminated by signal or never started)' };
+  return { status: 'FAIL', detail: `n8n execute failed (exit code ${code})` };
 }
 
 async function clientFor(env) {
@@ -482,12 +617,23 @@ async function preflight(env, args = {}, deps = {}) {
     fixtures.every((fx, i) => fx.id === `TEST-RESP-INT-${pad3(i + 1)}`);
   checks.push({ label: 'I fixture ids contiguous TEST-RESP-INT-001..027', ok: contiguous, detail: contiguous ? 'contiguous' : 'gap found' });
 
+  if (config.exec.backendRaw && !VALID_EXEC_BACKENDS.includes(config.exec.backendRaw.toLowerCase())) {
+    checks.push({
+      label: 'exec backend value recognized',
+      ok: false,
+      detail: `RESP_INT_EXEC_BACKEND=${config.exec.backendRaw} is not recognized (cli|http); fell back to the cli default`,
+      informational: true,
+    });
+  }
+
   checks.push({
     label: 'n8n execution configured (informational)',
-    ok: config.n8n.ready,
-    detail: config.n8n.ready
-      ? `${config.n8n.baseUrl} · workflow ${config.n8n.workflowId}`
-      : 'absent — execute/collect report NOT_CONFIGURED + MANUAL steps (never a fabricated PASS)',
+    ok: config.exec.ready,
+    detail: config.exec.ready
+      ? (config.exec.backend === 'http'
+        ? `backend=http · ${config.exec.http.baseUrl} · workflow ${config.exec.http.workflowId}`
+        : `backend=cli · container ${config.exec.cli.container} · broker port ${config.exec.cli.brokerPort} · workflow ${config.exec.cli.workflowId}`)
+      : `backend=${config.exec.backend} — absent; execute/collect report NOT_CONFIGURED + MANUAL steps (never a fabricated PASS)`,
     informational: true,
   });
 
@@ -567,11 +713,18 @@ async function verifySeed(env, client, args = {}) {
 
 async function executeShipped(env, args = {}, deps = {}) {
   const config = readConfig(env);
-  if (!config.n8n.ready) {
+  if (!config.exec.ready) {
     return { status: 'NOT_CONFIGURED', detail: manualExecutionSteps(args.scenario || DEFAULT_SCENARIO, namespaceForArgs(args, env)), executionId: null, checks: [] };
   }
   const wf = JSON.parse(fs.readFileSync(shippedWorkflowPath(), 'utf8'));
   assertShippedWorkflow(wf); // precondition — FAIL, never auto-repair
+  if (config.exec.backend === 'http') {
+    return executeHttp(env, args, deps, config, wf);
+  }
+  return executeCli(env, args, deps, config);
+}
+
+async function executeHttp(env, args, deps, config, wf) {
   const ns = namespaceForArgs(args, env);
   const resolved = resolveScenario(args.scenario || DEFAULT_SCENARIO);
   const injected = injectedTriggerInputFor(resolved, ns);
@@ -588,9 +741,9 @@ async function executeShipped(env, args = {}, deps = {}) {
   };
   let res;
   try {
-    res = await transport(`${config.n8n.baseUrl}/api/v1/executions`, {
+    res = await transport(`${config.exec.http.baseUrl}/api/v1/executions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-N8N-API-KEY': config.n8n.apiKey },
+      headers: { 'Content-Type': 'application/json', 'X-N8N-API-KEY': config.exec.http.apiKey },
       body: JSON.stringify(payload),
     });
   } catch (err) {
@@ -607,6 +760,49 @@ async function executeShipped(env, args = {}, deps = {}) {
     status: 'PASS',
     detail: `execution created: ${id} — confirm completion of Interpret Responses + Complete nodes in the n8n UI; then --collect with that id`,
     executionId: id,
+    checks: [],
+  };
+}
+
+async function executeCli(env, args, deps, config) {
+  const cli = config.exec.cli;
+  let argv;
+  try {
+    argv = buildCliCommand(cli);
+  } catch (err) {
+    args._cliCollected = null;
+    return { status: 'NOT_CONFIGURED', detail: `${err.message}; MANUAL execution steps apply`, executionId: null, checks: [] };
+  }
+  const exec = (deps && deps.exec) || runCommand;
+  let res;
+  try {
+    res = await exec(argv);
+  } catch (err) {
+    return { status: 'FAIL', detail: `docker exec spawn failed: ${err.message}`, executionId: null, checks: [] };
+  }
+  const mapped = mapCliExitCode(res && res.code);
+  if (mapped.status !== 'PASS') {
+    const tail = res && res.stderr ? `; stderr: ${String(res.stderr).slice(0, 300)}` : '';
+    return { status: 'FAIL', detail: `${mapped.detail}${tail}`, executionId: null, checks: [] };
+  }
+  const payload = parseExecuteStdout(res && res.stdout);
+  const collected = payload ? extractInterpretReport(payload) : null;
+  const executionId = payload ? executionIdFromPayload(payload) : '';
+  if (!collected) {
+    args._cliCollected = null;
+    return {
+      status: 'NOT_CONFIGURED',
+      detail: 'n8n execute exited 0 but the Interpret Responses output was not located in stdout; no comparison claimed (see PHASE-6-ENVIRONMENT-RUNBOOK.md)',
+      executionId,
+      checks: [],
+    };
+  }
+  args._cliCollected = collected;
+  return {
+    status: 'PASS',
+    detail: `n8n execute completed${executionId ? ` (execution ${executionId})` : ''}; Interpret report captured from CLI stdout — collect reuses it`,
+    executionId,
+    collected,
     checks: [],
   };
 }
@@ -629,6 +825,17 @@ function extractInterpretReport(execPayload) {
 
 async function collectExecution(env, args = {}, deps = {}) {
   const config = readConfig(env);
+  if (config.exec.backend === 'cli') {
+    const cliCollected = (deps && deps.cliCollected) || args._cliCollected;
+    if (cliCollected) {
+      return { status: 'PASS', detail: 'collected report from the execute phase (CLI stdout capture)', collected: cliCollected };
+    }
+    return {
+      status: 'NOT_CONFIGURED',
+      detail: 'cli backend: no Interpret report captured during execute; re-run --execute-stage or use backend=http (REST) to collect a prior execution by id',
+      collected: null,
+    };
+  }
   const executionId = String(args.executionId || (deps && deps.executionId) || '').trim();
   if (!config.n8n.ready || !executionId) {
     return {
@@ -805,6 +1012,12 @@ function buildRunReport({ args = {}, env = {}, outcomes = {}, executionId = '', 
     started_at: startedAt,
     completed_at: completedAt,
     mode: args.execute ? 'EXECUTE' : 'DRY_RUN',
+    execution: {
+      backend: config.exec.backend,
+      workflow_id: config.exec.http.workflowId,
+      container: config.exec.backend === 'cli' ? config.exec.cli.container : '',
+      broker_port: config.exec.backend === 'cli' ? config.exec.cli.brokerPort : '',
+    },
     workflow: {
       name: WORKFLOW_NAME,
       artifact: ARTIFACT,
@@ -893,7 +1106,7 @@ async function fullRun(env, args = {}, deps = {}) {
   }
 
   let collected = null;
-  if (!args.skipCollect && (args.execute || executionId)) {
+  if (!args.skipCollect && (args.execute || executionId || args._cliCollected)) {
     const col = await collectExecution(env, args, deps);
     outcomes.stages.collect = col.status;
     collected = col.collected;
@@ -1050,8 +1263,8 @@ Phases (overridable individually):
   --preflight         validate shipped workflow + env before doing anything
   --seed              seed fixture rows into TEST-RESP-INT-LIVE-* namespace
   --verify-seed       read back and validate the seeded namespace rows
-  --run               --execute-stage + --collect (needs n8n config)
-  --execute-stage     create an n8n execution for the shipped workflow
+  --run               --execute-stage + --collect (needs n8n execution backend)
+  --execute-stage     execute the shipped workflow (backend cli or http)
   --collect           fetch the execution result (needs --execution-id)
   --verify            compare collected output vs canonical expectation
   --cleanup           delete TEST-RESP-INT-LIVE-* rows (namespace-guarded)
@@ -1072,9 +1285,16 @@ Flags:
   --help                       this message
 
 Env (see .env.example): GOOGLE_SHEET_ID, GOOGLE_ACCESS_TOKEN or
-GOOGLE_SERVICE_ACCOUNT_JSON, RESP_INT_LIVE_RUN_TOKEN (optional),
-N8N_BASE_URL / N8N_API_KEY / N8N_WORKFLOW_ID (optional — without them
-execute/collect report NOT_CONFIGURED and print MANUAL steps; no fake PASS).
+GOOGLE_SERVICE_ACCOUNT_JSON, RESP_INT_LIVE_RUN_TOKEN (optional), and the n8n
+execution backend RESP_INT_EXEC_BACKEND=cli|http (default cli):
+  cli  - RESP_INT_EXEC_CONTAINER + RESP_INT_EXEC_BROKER_PORT + N8N_WORKFLOW_ID;
+         spawns \`docker exec -u node -e N8N_RUNNERS_BROKER_PORT=<port> <container>
+         n8n execute --id <workflow>\`; the broker port MUST differ from the running
+         n8n server's 5679 (the shipped default is 5677).
+  http - N8N_BASE_URL + N8N_API_KEY + N8N_WORKFLOW_ID; REST POST path for
+         instances that expose a run endpoint.
+Without the backend, execute/collect report NOT_CONFIGURED and print MANUAL
+steps; no fake PASS.
 Exit codes: 0 PASS, 1 FAIL, 3 NOT_CONFIGURED, 4 CLEANUP_NOT_PERFORMED.
 `;
 }
@@ -1136,7 +1356,16 @@ module.exports = {
   FIXTURE_REPORT_RUN_ID,
   // config / namespace
   readConfig,
+  normalizeExecBackend,
   clientFor,
+  // cli execution backend
+  validateExecParams,
+  buildCliCommand,
+  runCommand,
+  mapCliExitCode,
+  parseExecuteStdout,
+  executionIdFromPayload,
+  executeCli,
   defaultRunToken,
   runTokenFor,
   namespaceFromRunToken,

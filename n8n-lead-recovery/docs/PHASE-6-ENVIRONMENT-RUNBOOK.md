@@ -18,6 +18,9 @@ Phase 6 was blocked because, on the development machine at report time:
 
 | Required | Status (at block) |
 | --- | --- |
+| `RESP_INT_EXEC_BACKEND` | UNSET |
+| `RESP_INT_EXEC_CONTAINER` | UNSET |
+| `RESP_INT_EXEC_BROKER_PORT` | UNSET |
 | `N8N_BASE_URL` | UNSET |
 | `N8N_API_KEY` | UNSET |
 | `N8N_WORKFLOW_ID` | UNSET |
@@ -46,9 +49,12 @@ written into a file that is committed.**
 
 | Variable | Required for | Value |
 | --- | --- | --- |
-| `N8N_BASE_URL` | execute/collect | Base URL of the n8n instance, e.g. `http://localhost:5678` (or the external/HTTPS URL). Do **not** include a trailing `/api/v1`. |
-| `N8N_API_KEY` | execute/collect | n8n **Community** API key (n8n sidebar → Settings → API). Only the public API; keeps execution creation server-side. |
-| `N8N_WORKFLOW_ID` | execute/collect | The numeric workflow id of the imported `Response-Interpretation V1` (see §4). |
+| `RESP_INT_EXEC_BACKEND` | execute/collect | `cli` (default) or `http`. `cli` executes the workflow via `docker exec ... n8n execute --id` inside the n8n container (works for manual-trigger workflows). `http` uses the n8n public REST API POST path for instances that expose a run endpoint. |
+| `RESP_INT_EXEC_CONTAINER` | execute/collect (cli) | Name of the **running** n8n Docker container, e.g. `serene_swartz` (the one holding `/home/node/.n8n/database.sqlite`). Commands run as user `node`. |
+| `RESP_INT_EXEC_BROKER_PORT` | execute/collect (cli) | Port the n8n CLI's **temporary task broker** binds to during `n8n execute`. **Must differ from the running server's broker port `5679`** — the runner rejects `5679` outright. Shipped default: `5677`. |
+| `N8N_BASE_URL` | execute/collect (http) | Base URL of the n8n instance, e.g. `http://localhost:5678` (or the external/HTTPS URL). Do **not** include a trailing `/api/v1`. |
+| `N8N_API_KEY` | execute/collect (http) | n8n **Community** API key (n8n sidebar → Settings → API). Only used by the `http` backend. |
+| `N8N_WORKFLOW_ID` | execute/collect (both) | The workflow id of the imported `Response-Interpretation V1`. For `cli` mode this is the n8n id shown in the editor URL (e.g. `gLzXBltBMeVcUIEN`); for `http` mode it is the same id used against the REST API. |
 | `N8N_WORKFLOW_NAME` | report identity | Defaults to `Lead Recovery Engine — Response Interpretation V1` when unset; set it if you imported under a different name. |
 | `GOOGLE_SHEET_ID` | seed/verify/cleanup | **Must equal the pinned engine spreadsheet constant** (`SPREADSHEET_ID` in `src/response-interpretation-workflow-contract.js`) unless you pass `--allow-non-pinned-sheet` (that mode is **not** live-equivalent to the engine sheet). Tab is always the canonical **Response Log**. |
 | `GOOGLE_ACCESS_TOKEN` | seed/verify/cleanup | Short-lived Google OAuth2 access token reading/writing the Response Log tab. Provide **either** this **or** `GOOGLE_SERVICE_ACCOUNT_JSON`. |
@@ -59,13 +65,17 @@ written into a file that is committed.**
 ### PowerShell export without exposing secrets
 
 ```powershell
-$env:N8N_BASE_URL   = "http://localhost:5678"
-$env:N8N_API_KEY    = Read-Host -Prompt "n8n API key"        # NOT echoed as plaintext
-$env:N8N_WORKFLOW_ID= "1234"
+$env:RESP_INT_EXEC_BACKEND     = "cli"
+$env:RESP_INT_EXEC_CONTAINER   = "serene_swartz"     # running n8n container
+$env:RESP_INT_EXEC_BROKER_PORT = "5677"              # MUST differ from server broker 5679
+$env:N8N_WORKFLOW_ID= "gLzXBltBMeVcUIEN"
 $env:GOOGLE_SHEET_ID= "1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890" # = pinned engine sheet
 $env:GOOGLE_ACCESS_TOKEN = Read-Host -Prompt "Google OAuth access token"
 $env:RUN_LIVE       = "1"
 ```
+
+For the `http` backend replace the cli trio with `N8N_BASE_URL` + `N8N_API_KEY`
+(leaving the `RESP_INT_EXEC_*` cli variables unset).
 
 Alternatively copy `.env.example` to `.env` and fill it in locally; the runner reads env
 variables, so if you use a `.env` you must export it into the process
@@ -76,31 +86,62 @@ variables, so if you use a `.env` you must export it into the process
 
 ## 3. Provision n8n
 
-1. **Install/start n8n** (Community edition is sufficient — the runner needs only its
-   public API to create an execution).
+The confirmed development topology runs n8n in Docker with the workflow DB on
+SQLite inside the container:
+
+1. **Start the n8n container** (Community edition). The container must be the one
+   holding the workflow database at `/home/node/.n8n/database.sqlite` and forwarding
+   the editor port to the host:
    ```powershell
-   npm install -g n8n
-   n8n start
+   docker run -d --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n
    ```
-   Verify it listens on the expected port:
+   Note the generated container name (`docker ps --format "table {{.Names}}"`) —
+   that exact name goes in `RESP_INT_EXEC_CONTAINER`. Verify the editor answers:
    ```powershell
    Get-NetTCPConnection -LocalPort 5678 -State Listen -ErrorAction SilentlyContinue
    ```
-   Confirm the base URL: open the editor and check the address shown for your installation
-   (local `http://localhost:5678`, or your configured external URL).
-2. **Create an API key**: open n8n → your avatar → **Settings → API → Create API Key**.
-   Scope: the key needs the public API (executions). Save the generated key directly into
-   the environment — never into a committed file.
+2. **Create an API key only for the `http` backend**: n8n → your avatar →
+   **Settings → API → Create API Key**. `cli` mode does not need one; the REST API
+   cannot trigger this manual-trigger workflow anyway.
 3. **Import the shipped workflow**: n8n → **Workflows → Import from File** →
    `Response-Interpretation V1.json` (the artifact root of this project). The import must
    preserve all 5 nodes and the existing connections; nothing in the file should need
    editing (the `Interpret Responses` Code node embeds the engine).
-4. **Resolve the workflow id**: open the imported workflow → the URL carries
-   `.../workflow/<id>` (or use the API key to call `GET /api/v1/workflows`). Put the
-   numeric id in `N8N_WORKFLOW_ID`.
+4. **Resolve the workflow id**: open the imported workflow → the editor URL carries
+   `/workflow/<id>` (e.g. `gLzXBltBMeVcUIEN`). Put that id in `N8N_WORKFLOW_ID`.
 5. **Attach the Google Sheets OAuth2 credential** to the workflow's Sheets nodes if the
    import asks you to re-select them; execution of this workflow only reads the Response
    Log on the pinned sheet, so the credential must be authorized for that spreadsheet.
+
+### n8n execution backend: cli (default) vs http
+
+The runner selects its execution mechanism from `RESP_INT_EXEC_BACKEND`.
+
+**cli (default).** Spawns, on the host, the exact argv:
+`docker exec -u node -e N8N_RUNNERS_BROKER_PORT=<port> <container> n8n execute --id <workflowId>`,
+captures stdout/stderr/exit code, parses the execution payload from stdout, extracts the
+`Interpret Responses` node output, and prints `NOT_CONFIGURED` (never a fake PASS) when
+the output cannot be located.
+
+- **Port conflict resolution (critical):** while `n8n execute` runs, the n8n CLI starts a
+  *temporary task-broker server*. It defaults to port `5679` — which the already-running
+  n8n server holds. The fix is `RESP_INT_EXEC_BROKER_PORT=5677` (or any free port other
+  than `5679`); the runner **rejects `5679`** with a clear message. The env var is injected
+  as `-e N8N_RUNNERS_BROKER_PORT=<port>`; the container must be started with the editor
+  port mapped to the host so `n8n execute` can reach the database.
+- **Input caveat:** `n8n execute --id` runs the workflow as shipped from its Manual
+  Trigger, so the trigger-input fields (`reconciliation_report`,
+  `response_log_read_error`, `reconciliation_read_error`) are **not** injected. The
+  runner still seeds the namespace, executes, and compares whatever the workflow produces —
+  if the Interpret output is absent it reports `NOT_CONFIGURED`, never PASS. For an
+  input-injected run of this exact trigger (the canonical Phase 6 comparison), use the
+  `http` backend on an instance that exposes a run endpoint, or execute manually in the
+  UI and collect with `--collect --execution-id=<id>`.
+
+**http (fallback).** Keeps the historical REST path: POST
+`{workflowData, data:{ reconciliation_report, ... }}` to `{N8N_BASE_URL}/api/v1/executions`
+with `X-N8N-API-KEY`, then GET the execution by id to collect. Use it only when the n8n
+build exposes a run endpoint capable of executing a manual-trigger workflow.
 
 ---
 

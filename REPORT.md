@@ -116,7 +116,8 @@ tests, Capture/Reconciliation workflows) was modified this workstream. Verified 
 ## Known limitations / deferred
 
 1. **Phase 6/7 live execution** — still blocked on environment provisioning
-   (`docs/PHASE-6-ENVIRONMENT-RUNBOOK.md` is the unblock path).
+   (`docs/PHASE-6-ENVIRONMENT-RUNBOOK.md` is the unblock path). The Phase 5 revision
+   below removes the API-execution blocker; a live n8n container is still required.
 2. **Prospect Finder Foursquare error handling** — HTTP errors are uncaught (execution
    fails); OSM errors are caught. Documented in README §4; flagged, not fixed (out of
    hygiene scope).
@@ -124,3 +125,64 @@ tests, Capture/Reconciliation workflows) was modified this workstream. Verified 
    credential references; operator attaches per node after import (CREDENTIALS.md). A
    future import-mapping helper is deferred; it must never embed secret values.
 4. **Unrelated workspace dirt** (§3) belongs to other workstreams — not committed here.
+
+---
+
+# Phase 5 Revision Report — Live Runner Execution Mechanism
+
+**Status: PASS — PHASE 5 REVISION COMPLETE**
+
+**Date:** 2026-09-12
+**Scope:** `n8n-lead-recovery/src/response-interpretation-live-runner.js` (the only
+frozen artifact touched), its new test file, `.env.example`, the Phase 6 runbook, and
+this report. The shipped `Response-Interpretation V1.json` workflow was **not** modified
+and no Webhook trigger was added.
+
+## Root cause
+
+The runner's execute phase POSTed `workflowData` to the n8n public REST API
+(`/api/v1/executions`). The Community edition's public API cannot trigger executions for
+workflows whose trigger is a **Manual Trigger node** (`n8n-nodes-base.manualTrigger`), so
+the shipped workflow could never be executed by the runner. Additionally, the alternative
+`n8n execute --id` CLI inside the container failed because its temporary task broker binds
+to port **5679**, already held by the running n8n server.
+
+## Design
+
+Configurable execution backend, selected by env:
+
+- **cli (default):** spawn the validated argv array
+  `docker exec -u node -e N8N_RUNNERS_BROKER_PORT=<port> <container> n8n execute --id <workflowId>`
+  and capture stdout/stderr/exit code. Port conflict resolved via
+  `RESP_INT_EXEC_BROKER_PORT=5677` (any port other than the server's 5679; the runner
+  **rejects 5679**). Exit 0 → parse the execution payload from stdout → extract the
+  `Interpret Responses` report (reused by the collect phase, no re-run). Non-zero exit → FAIL
+  with stderr excerpt; exit 0 but output not located → NOT_CONFIGURED (never a fake PASS).
+- **http (fallback):** the previous REST POST + GET path, preserved verbatim for
+  instances that expose a run endpoint.
+
+## Files changed
+
+| Path | Change |
+| --- | --- |
+| `src/response-interpretation-live-runner.js` | Backend dispatch, `readConfig` exec section, `buildCliCommand`, `runCommand`, `parseExecuteStdout`, `executionIdFromPayload`, `mapCliExitCode`, `validateExecParams`; collect reuses CLI capture; report records `execution.{backend,workflow_id,container,broker_port}` |
+| `tests/response-interpretation-live-runner-exec.test.js` | **new** — backend selection, command construction, exit-code mapping, stdout parsing, injection hardening, cli/http execute+collect, full CLI run (no network) |
+| `tests/response-interpretation-live-runner.test.js` | `ENV_READY` gains `RESP_INT_EXEC_BACKEND: 'http'` (keeps HTTP-path tests as the explicit backend) |
+| `frozen-artifacts.manifest.json` | v2 — runner re-baselined (`revisions[]` records old→new sha256); other 6 artifacts **unchanged** |
+| `.env.example` | `RESP_INT_EXEC_BACKEND`, `RESP_INT_EXEC_CONTAINER`, `RESP_INT_EXEC_BROKER_PORT` + 5679 warning |
+| `docs/PHASE-6-ENVIRONMENT-RUNBOOK.md` | New §3 "execution backend" (cli/http, port conflict, input caveat), env table + PowerShell example + gate table updated |
+
+## Verification
+
+| Gate | Result |
+| --- | --- |
+| `npm test` | **663/663 PASS, 0 fail** (637 baseline + 26 new), exit 0 |
+| `npm run verify:frozen` | **PASS** — 7/7 (6 artifacts byte-identical to Phase 6 baseline; runner re-baselined intentionally) |
+| Workflow modified? | **No** — `Response-Interpretation V1.json` untouched, no Webhook trigger, `active:false` preserved |
+| Preflight A–I / namespace / cleanup / redaction / determinism gates | Preserved — test suite green, no fixture or engine code touched |
+
+## Deferred (unchanged)
+
+Phase 6/7 live execution still needs a running n8n container; `n8n execute` drives the
+workflow as shipped (Manual Trigger input is not injectable via CLI) — the runbook
+documents the http/manual-UI collect path for input-injected canonical comparison.
