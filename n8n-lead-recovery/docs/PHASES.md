@@ -43,3 +43,14 @@ environment gates, superseded by later phases.
 - Supersessions are handled in-place (files retained): `PHASE-6-FINAL-REPORT.md`
   (PARTIAL) ← `PHASE-6-COMPLETION-AMENDMENT.md` (PASS); the Phase 6.5 revision report's
   §3 URL claim ← Phase 6 completion amendment §3.
+
+## Hygiene workstream (H-A / H-B / H-C)
+
+Appended by Prompt H-C; the 14-phase index above is the Response Interpretation V1
+workstream and is **not** renumbered. Rows H-A/H-B/H-C are the repo-hygiene pass.
+
+| phase | purpose | verdict | primary artifact(s) | report (relative) | commit |
+| --- | --- | --- | --- | --- | --- |
+| H-A | Security + git baseline: forensic secret scan, `.gitignore` fix, commit uncommitted artifacts | PASS | `.gitignore`, baseline commits | `reports/HYGIENE-H-A-SECURITY-GIT-BASELINE-REPORT.md` | `a12d86a` |
+| H-B | Documentation rebase: README → 9-workflow pipeline; CONTAINER-RUNBOOK, ARTIFACT-IMPORT, CREDENTIALS | PASS | `README.md`, `docs/CONTAINER-RUNBOOK.md`, `docs/ARTIFACT-IMPORT.md`, `docs/CREDENTIALS.md` | `reports/HYGIENE-H-B-DOCUMENTATION-REBASE-REPORT.md` | `744d0ea` |
+| H-C | CI (offline GitHub Actions) + REPORT §9 consolidation + hygiene close | PASS | `.github/workflows/test.yml`, `REPORT.md` | `reports/HYGIENE-H-C-CI-AND-CLOSE-REPORT.md` | `<H-C hash>` |

@@ -147,20 +147,40 @@ The environment runbook **exists**: `docs/PHASE-6-ENVIRONMENT-RUNBOOK.md`.
 ## 9. Open items / deferred work
 
 Each item is scoped; only the final freeze/reporting of THIS workstream is closed here.
+Category tags: `security` · `hygiene` · `coverage` · `CI` · `docs` · `ops`.
+Consolidated during the hygiene workstream (H-A `/` H-B `/` H-C).
+
+### CLOSED (via the hygiene workstream)
 
 | # | item | category |
 | --- | --- | --- |
-| 1 | Foursquare Bearer token-shaped value flagged in repo files by the security scan (informational; not the workflow-path token, which lives in the n8n credential store) | security |
-| 2 | ~40 project artifacts uncommitted on the workspace git branch (`pre-cleanup-2026-09-08`); Phases 5.1+ exist only in the working tree | hygiene |
-| 3 | README debt: README still describes the former Google Places pipeline, not the current Foursquare + OSM pipeline | docs |
-| 4 | Missing credentials on the 8 workflow exports (reference-only credential blocks) | security |
-| 5 | Prospect Finder stage has no engine/offline coverage | coverage |
+| 1 | Foursquare Bearer token-shaped value flagged by the security scan — verified NOT a hardcoded secret (workflow path uses `=Bearer {{$credentials.value}}`); no credential values committed (H-A forensic scan + git baseline `a12d86a`) | security |
+| 2 | ~40 project artifacts uncommitted on the workspace branch — committed in H-A (`a12d86a`); see `reports/HYGIENE-H-A-SECURITY-GIT-BASELINE-REPORT.md` | hygiene |
+| 3 | README still described the former Google Places pipeline — rebased to the current Foursquare + OSM 9-workflow pipeline (H-B `744d0ea`) | docs |
+| 4 | Missing credentials documentation on the 8 workflow exports — reference-only credential blocks documented in `docs/CREDENTIALS.md` (H-B) | security |
+
+### REPOSITIONED (unchanged; deferred to other workstreams)
+
+| # | item | category |
+| --- | --- | --- |
+| 5 | Prospect Finder stage has no engine/offline coverage; D7 Merge defect (`Merge waits for all numberOfInputs`) — coverage/hardening parked to the Prospect Finder GPL workstream (see `reports/PROSPECT-FINDER-GPL-WORKSTREAM-CLOSURE.md` §D7 + `reports/PROSPECT-FINDER-ISOLATION-MATRIX.md`) | coverage |
 | 6 | Approved Outreach Handoff stage lacks an engine test | coverage |
 | 7 | Prospect Finder Overpass loop wiring needs verification against n8n split semantics | coverage |
-| 8 | Live execution is not wired into CI | CI |
+| 8 | Live execution is not wired into CI — H-C adds offline CI only; live n8n runs deliberately stay out of CI | CI |
 | 9 | Runner `verify_input` `failure_info` path remains under-detailed (Phase 5.4 fixed execute; verify still minimal) | coverage |
 | 10 | Archive/dedupe decision for the ~85 historical run reports deferred (kept as evidence; see `reports/README.md`) | hygiene |
-| 11 | Seed the live Response Log spreadsheet and re-run the verify leg with real data rows (Post-freeze; blocked on Google credentials on the host) | coverage |
+| 11 | Seed the live Response Log spreadsheet and re-run the verify leg with real data rows (post-freeze; blocked on Google credentials on the host) | coverage |
+
+### NEW (surfaced by the hygiene workstream)
+
+| # | item | category |
+| --- | --- | --- |
+| 12 | Workflow artifacts are n8n exports, not raw API payloads — import implications documented in `docs/ARTIFACT-IMPORT.md` | docs |
+| 13 | Response Interpretation artifact lacks a top-level `id` → CLI import fails on a fresh DB; use the n8n UI import (documented in `docs/ARTIFACT-IMPORT.md`) | ops |
+| 14 | Container durability depends on a named volume — resolved via `serene_swartz_data`, see `docs/CONTAINER-RUNBOOK.md` | ops |
+| 15 | Credential-ID migration on container rebuild — documented in `docs/CONTAINER-RUNBOOK.md` §2.4 | ops |
+| 16 | Out-of-scope workspace projects (`reconcilekit/`, `_open-canva/`, `kaya-renovations/`, `landing-pages/`, `saas-boilerplate/`, `AGENTS-BACKUP.md`) — separate workspace-level baseline, not this repo | hygiene |
+| 17 | `npm run security-check` npm script does not exist — CI invokes `node scripts/security-check.js`; adding a `security-check` npm alias is a candidate follow-up | CI |
 
 ## 10. Workstream completion statement
 
@@ -170,3 +190,9 @@ passing test suite (819/819), the green security gate, and the live-validated si
 scenarios (A–F, all stages PASS) form the evidence base. The remaining open items are
 explicitly scoped to other workstreams, post-freeze verification, or repo hygiene — none
 blocks this stage's closure. **PHASE 7 COMPLETE — WORKSTREAM CLOSED.**
+
+The **hygiene workstream (H-A `/` H-B `/` H-C) is also complete**: git baseline committed
+(`a12d86a`), documentation rebase committed (`744d0ea`), and CI + final open-item
+consolidation committed (`<H-C hash>`); all H-C gates passed (857/857 tests, 10/10 frozen
+integrity, security gate exit 0, clean repo-scoped status). See
+`reports/HYGIENE-H-C-CI-AND-CLOSE-REPORT.md`. **HYGIENE WORKSTREAM COMPLETE.**

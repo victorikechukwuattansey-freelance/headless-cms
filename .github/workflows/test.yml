@@ -1,18 +1,13 @@
-name: lre-hygiene
+name: test
 
 on:
   push:
-    paths:
-      - 'n8n-lead-recovery/**'
-      - '.github/workflows/test.yml'
+    branches: [ main ]
   pull_request:
-    paths:
-      - 'n8n-lead-recovery/**'
-      - '.github/workflows/test.yml'
 
 jobs:
   test:
-    name: n8n-lead-recovery full suite + frozen-integrity
+    name: n8n-lead-recovery full suite + frozen integrity + security gate
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -21,12 +16,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: n8n-lead-recovery/package.json
+          node-version: 18
       - name: Install (zero runtime dependencies)
         run: npm install --no-audit --no-fund
       - name: Full test suite
         run: npm test
       - name: Frozen artifact integrity
         run: npm run verify:frozen
+      - name: Security gate
+        run: node scripts/security-check.js
