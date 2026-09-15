@@ -53,4 +53,4 @@ workstream and is **not** renumbered. Rows H-A/H-B/H-C are the repo-hygiene pass
 | --- | --- | --- | --- | --- | --- |
 | H-A | Security + git baseline: forensic secret scan, `.gitignore` fix, commit uncommitted artifacts | PASS | `.gitignore`, baseline commits | `reports/HYGIENE-H-A-SECURITY-GIT-BASELINE-REPORT.md` | `a12d86a` |
 | H-B | Documentation rebase: README → 9-workflow pipeline; CONTAINER-RUNBOOK, ARTIFACT-IMPORT, CREDENTIALS | PASS | `README.md`, `docs/CONTAINER-RUNBOOK.md`, `docs/ARTIFACT-IMPORT.md`, `docs/CREDENTIALS.md` | `reports/HYGIENE-H-B-DOCUMENTATION-REBASE-REPORT.md` | `744d0ea` |
-| H-C | CI (offline GitHub Actions) + REPORT §9 consolidation + hygiene close | PASS | `.github/workflows/test.yml`, `REPORT.md` | `reports/HYGIENE-H-C-CI-AND-CLOSE-REPORT.md` | `<H-C hash>` |
+| H-C | CI (offline GitHub Actions) + REPORT §9 consolidation + hygiene close | PASS | `.github/workflows/test.yml`, `REPORT.md` | `reports/HYGIENE-H-C-CI-AND-CLOSE-REPORT.md` | `cb16285` |

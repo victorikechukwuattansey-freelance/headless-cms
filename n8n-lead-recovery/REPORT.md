@@ -193,6 +193,6 @@ blocks this stage's closure. **PHASE 7 COMPLETE — WORKSTREAM CLOSED.**
 
 The **hygiene workstream (H-A `/` H-B `/` H-C) is also complete**: git baseline committed
 (`a12d86a`), documentation rebase committed (`744d0ea`), and CI + final open-item
-consolidation committed (`<H-C hash>`); all H-C gates passed (857/857 tests, 10/10 frozen
+consolidation committed (`cb16285`); all H-C gates passed (857/857 tests, 10/10 frozen
 integrity, security gate exit 0, clean repo-scoped status). See
 `reports/HYGIENE-H-C-CI-AND-CLOSE-REPORT.md`. **HYGIENE WORKSTREAM COMPLETE.**

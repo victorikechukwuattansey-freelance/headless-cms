@@ -78,7 +78,7 @@ Three rows appended **only** (14-phase index untouched, not renumbered):
 | --- | --- | --- |
 | H-A | PASS | `a12d86a` |
 | H-B | PASS | `744d0ea` |
-| H-C | PASS | `<H-C hash>` |
+| H-C | PASS | `cb16285` |
 
 ---
 
@@ -95,7 +95,7 @@ Three rows appended **only** (14-phase index untouched, not renumbered):
 
 ## 5. Commit
 
-- **Hash:** `<H-C hash>`
+- **Hash:** `cb16285`
 - **Message:** `ci(n8n-lead-recovery): add offline CI workflow + consolidate open items, close hygiene workstream (H-C)`
 - Scoped files: `.github/workflows/test.yml`, `n8n-lead-recovery/REPORT.md`,
   `n8n-lead-recovery/docs/PHASES.md`, this report.
