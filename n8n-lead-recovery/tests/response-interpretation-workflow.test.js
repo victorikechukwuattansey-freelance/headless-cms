@@ -78,7 +78,13 @@ test('contract declares the canonical 5-node read-only topology', () => {
   assert.deepEqual(contract.triggerErrorKeys, TRIGGER_ERROR_KEYS);
   assert.deepEqual(contract.bannedNodeTypes, BANNED_NODE_TYPES);
   assert.deepEqual(contract.sensitiveKeys, SENSITIVE_KEYS);
-  assert.deepEqual(contract.topology.manualFanout, [EXPECTED_NODES[1], EXPECTED_NODES[2]]);
+  assert.deepEqual(contract.topology.chain, [
+    'Manual Trigger',
+    'Read Reconciliation Report',
+    'Read Response Log',
+    'Interpret Responses',
+    'Response Interpretation Complete',
+  ]);
   assert.equal(contract.topology.exit, EXPECTED_NODES[4]);
 });
 
@@ -122,25 +128,28 @@ test('reference node names, ids, and type versions are locked', () => {
 /* Topology and read surfaces                                          */
 /* ------------------------------------------------------------------ */
 
-test('the Manual Trigger fans out to exactly both read nodes and nothing else', () => {
-  const fanout = referenceWorkflow().connections['Manual Trigger'].main.map((branch) => branch.map((e) => e.node));
-  assert.deepEqual(fanout, [['Read Response Log'], ['Read Reconciliation Report']]);
+test('the topology is a strict chain in connection order with exactly one target per source', () => {
+  const conns = referenceWorkflow().connections;
+  const chain = [];
+  let cursor = 'Manual Trigger';
+  for (let depth = 0; depth < 4; depth++) {
+    const targets = conns[cursor].main.map((branch) => branch.map((e) => e.node));
+    assert.equal(targets.length, 1, cursor + ' must have exactly one output branch');
+    assert.equal(targets[0].length, 1, cursor + ' must fan out to exactly one node');
+    chain.push([cursor, targets[0][0]]);
+    cursor = targets[0][0];
+  }
+  assert.deepEqual(chain, [
+    ['Manual Trigger', 'Read Reconciliation Report'],
+    ['Read Reconciliation Report', 'Read Response Log'],
+    ['Read Response Log', 'Interpret Responses'],
+    ['Interpret Responses', 'Response Interpretation Complete'],
+  ]);
 });
 
-test('both read nodes feed Interpret Responses which feeds only the completion node', () => {
+test('the terminal node has no outgoing connection', () => {
   const conns = referenceWorkflow().connections;
-  assert.deepEqual(
-    conns['Read Response Log'].main.map((branch) => branch.map((e) => e.node)),
-    [['Interpret Responses']],
-  );
-  assert.deepEqual(
-    conns['Read Reconciliation Report'].main.map((branch) => branch.map((e) => e.node)),
-    [['Interpret Responses']],
-  );
-  assert.deepEqual(
-    conns['Interpret Responses'].main.map((branch) => branch.map((e) => e.node)),
-    [['Response Interpretation Complete']],
-  );
+  assert.equal(conns['Response Interpretation Complete'], undefined);
 });
 
 test('exactly one googleSheets read: the Response Log, unfiltered, all matches, pinned spreadsheet', () => {

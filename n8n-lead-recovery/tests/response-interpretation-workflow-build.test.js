@@ -141,17 +141,17 @@ test('all connections reference existing nodes', () => {
   }
 });
 
-test('the Manual Trigger fans out to exactly both read nodes and nothing else', () => {
+test('the topology is a strict chain starting at Manual Trigger', () => {
   const fanout = WF.connections['Manual Trigger'].main.map((branch) => branch.map((e) => e.node));
-  assert.deepEqual(fanout, [['Read Response Log'], ['Read Reconciliation Report']]);
+  assert.deepEqual(fanout, [['Read Reconciliation Report']]);
 });
 
-test('read nodes feed Interpret Responses which feeds only the completion node', () => {
-  const responseRead = WF.connections['Read Response Log'].main.map((branch) => branch.map((e) => e.node));
+test('read nodes flow through the chain into Interpret Responses and the completion node', () => {
   const reconRead = WF.connections['Read Reconciliation Report'].main.map((branch) => branch.map((e) => e.node));
+  const responseRead = WF.connections['Read Response Log'].main.map((branch) => branch.map((e) => e.node));
   const interpretConns = WF.connections['Interpret Responses'].main.map((branch) => branch.map((e) => e.node));
+  assert.deepEqual(reconRead, [['Read Response Log']]);
   assert.deepEqual(responseRead, [['Interpret Responses']]);
-  assert.deepEqual(reconRead, [['Interpret Responses']]);
   assert.deepEqual(interpretConns, [['Response Interpretation Complete']]);
 });
 
