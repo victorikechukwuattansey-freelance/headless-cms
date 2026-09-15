@@ -163,7 +163,7 @@ Consolidated during the hygiene workstream (H-A `/` H-B `/` H-C).
 
 | # | item | category |
 | --- | --- | --- |
-| 5 | Prospect Finder stage has no engine/offline coverage — coverage/hardening parked to the Prospect Finder GPL workstream. The D7 Merge defect (`Merge waits for all numberOfInputs`) was **FIXED 2026-09-15 (Prompt A.10/R6)** — see `reports/PROSPECT-FINDER-A10-MERGE-CONSOLIDATION-REPORT.md`, `reports/PROSPECT-FINDER-GPL-WORKSTREAM-CLOSURE.md` §D7, `reports/PROSPECT-FINDER-ISOLATION-MATRIX.md` (live-run evidence) | coverage |
+| 5 | Prospect Finder stage has no engine/offline coverage — coverage/hardening parked to the Prospect Finder GPL workstream. The D7 Merge defect (`Merge waits for all numberOfInputs`) was **FIXED 2026-09-15 (Prompt A.10/R6)** — see `reports/PROSPECT-FINDER-A10-MERGE-CONSOLIDATION-REPORT.md`, `reports/PROSPECT-FINDER-GPL-WORKSTREAM-CLOSURE.md` §D7, `reports/PROSPECT-FINDER-ISOLATION-MATRIX.md` (live-run evidence). The empty-success residual (FSQ/OSM vs GPL `_noResults` parity) was **FIXED 2026-09-15 (Prompt A.11/R7)** — see `reports/PROSPECT-FINDER-A11-EMPTY-SUCCESS-SENTINEL-REPORT.md` | coverage |
 | 6 | Approved Outreach Handoff stage lacks an engine test | coverage |
 | 7 | Prospect Finder Overpass loop wiring needs verification against n8n split semantics | coverage |
 | 8 | Live execution is not wired into CI — H-C adds offline CI only; live n8n runs deliberately stay out of CI | CI |

@@ -12,7 +12,10 @@
  * A.6 (R3): +3 node bodies (FSQ Error Envelope, GPL Error Envelope, Filter
  * Empty Envelopes). Revised for Prompt A.10 (R6): +1 node body (OSM Error
  * Envelope), mirroring the FSQ/GPL envelope byte-pattern for OpenStreetMap.
- * Current artifact SHA-256 is computed by the builder.
+ * Revised for Prompt A.11 (R7): Process FSQ and Process OSM emit a `_noResults`
+ * sentinel on empty success, mirroring Process GPL (so a success-with-zero-
+ * results run never leaves a Merge input empty). Current artifact SHA-256 is
+ * computed by the builder.
  */
 
 const CODE_BY_NODE = {
@@ -601,6 +604,10 @@ const CODE_BY_NODE = {
     "  }",
     "}",
     "",
+    "if (output.length === 0) {",
+    "  return [{ json: { _noResults: true, _message: 'Foursquare returned zero results', _provider: 'foursquare' } }];",
+    "}",
+    "",
     "return output;",
   ].join('\n'),
   "FSQ Error Envelope": [
@@ -959,6 +966,10 @@ const CODE_BY_NODE = {
     "      })",
     "    }",
     "  });",
+    "}",
+    "",
+    "if (output.length === 0) {",
+    "  return [{ json: { _noResults: true, _message: 'OpenStreetMap returned zero results', _provider: 'openstreetmap' } }];",
     "}",
     "",
     "return output;",

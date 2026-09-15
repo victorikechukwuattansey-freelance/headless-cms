@@ -17,6 +17,9 @@
  * D2' Dedup & Prepare Verified gains alwaysOutputData (all-empty loop stall).
  * Revised for Prompt A.10 (R6): D7 Merge numberOfInputs 5 → 3 (one input per
  * provider; success + error paths feed the same input), +OSM Error Envelope.
+ * Revised for Prompt A.11 (R7): Process FSQ and Process OSM mirror Process
+ * GPL's `_noResults` sentinel on empty success (no structural change — the
+ * sentinels live in src/prospect-finder-embedded-code.js).
  * Current artifact SHA-256 is computed by the builder.
  * Node and workflow property ORDER is significant: the builder
  * serializes with JSON.stringify(..., null, 2) with NO trailing newline, and

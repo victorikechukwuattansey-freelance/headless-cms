@@ -335,4 +335,80 @@ describe('Prospect Finder error paths & sink filtering (R3)', () => {
       assert.equal(mergeEdge('OSM Error Envelope').index, 1);
     });
   });
+
+  describe('§A.11 Process empty-success sentinel parity', () => {
+    it('Process FSQ emits exactly one _noResults sentinel on an empty success input', () => {
+      const { items } = runNode(nodeJsCode('Process FSQ'), {
+        inputItems: [],
+        nodeData: { 'Build FSQ API Query': [{ json: { input_id: 'ISO-002', niche: 'nonsense', city: 'Austin', state: 'TX' } }] },
+      });
+      assert.equal(items.length, 1);
+      assert.equal(items[0].json._noResults, true);
+      assert.equal(items[0].json._message, 'Foursquare returned zero results');
+      assert.equal(items[0].json._provider, 'foursquare');
+      assert.equal(items[0].json.lead_id, undefined, 'sentinel must not fabricate lead fields');
+    });
+
+    it('Process OSM emits exactly one _noResults sentinel on an empty success response', () => {
+      const { items } = runNode(nodeJsCode('Process OSM'), {
+        inputItems: [{ json: { body: { elements: [] } } }],
+        nodeData: {
+          'Build OSM API Query': [{ json: { input_id: 'ISO-002', niche: 'nonsense', city: 'Austin', state: 'TX' } }],
+        },
+      });
+      assert.equal(items.length, 1);
+      assert.equal(items[0].json._noResults, true);
+      assert.equal(items[0].json._message, 'OpenStreetMap returned zero results');
+      assert.equal(items[0].json._provider, 'openstreetmap');
+      assert.equal(items[0].json.lead_id, undefined, 'sentinel must not fabricate lead fields');
+    });
+
+    it('Process GPL still emits its _noResults sentinel on empty success (A.11 regression)', () => {
+      const { items } = runNode(nodeJsCode('Process GPL'), {
+        inputItems: [{ json: { statusCode: 200, body: { places: [] } } }],
+        nodeData: { 'Build GPL API Query': [{ json: { input_id: 'ISO-002', niche: 'nonsense', city: 'Austin', state: 'TX' } }] },
+      });
+      assert.equal(items.length, 1);
+      assert.equal(items[0].json._noResults, true);
+      assert.equal(items[0].json._message, 'Google Places returned zero results');
+      assert.equal(items[0].json._provider, 'google_places');
+    });
+
+    it('a populated success still emits real leads — no sentinel (FSQ)', () => {
+      const { items } = runNode(nodeJsCode('Process FSQ'), {
+        inputItems: [
+          {
+            json: {
+              results: [
+                { name: 'Austin Cooling Co', location: { locality: 'Austin', region: 'TX' }, tel: '+15125550101', categories: [{ name: 'HVAC Contractor', fsq_category_id: '63be6904847c3692a84b9b56' }] },
+              ],
+            },
+          },
+        ],
+        nodeData: { 'Build FSQ API Query': [{ json: { input_id: 'ISO-001', niche: 'HVAC', city: 'Austin', state: 'TX' } }] },
+      });
+      assert.equal(items.length, 1);
+      assert.equal(items[0].json._noResults, undefined);
+      assert.equal(items[0].json.lead_id, 'FSQ-PHONE-15125550101');
+    });
+
+    it('Filter Empty Envelopes silently drops the FSQ/OSM/GPL _noResults sentinels', () => {
+      const { items } = runNode(nodeJsCode('Filter Empty Envelopes'), {
+        inputItems: [
+          { json: { _noResults: true, _message: 'Foursquare returned zero results', _provider: 'foursquare' } },
+          { json: { _noResults: true, _message: 'OpenStreetMap returned zero results', _provider: 'openstreetmap' } },
+          { json: { _noResults: true, _message: 'Google Places returned zero results', _provider: 'google_places' } },
+          { json: { lead_id: 'GP-abc', business_name: 'Real Co' } },
+          { json: { _status: 'error', _errorMessage: 'X', input_id: 'ISO-003', search_input_id: 'ISO-003' } },
+        ],
+      });
+      assert.deepEqual(
+        items.map((i) => i.json.lead_id || i.json._provider),
+        ['GP-abc', undefined],
+        'sentinel and error envelopes must be dropped / kept respectively',
+      );
+      assert.equal(items[0].json.lead_id, 'GP-abc');
+      assert.equal(items[1].json._status, 'error', 'provider failure envelope must still propagate');
+    });
+  });
 });

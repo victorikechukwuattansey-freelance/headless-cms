@@ -1,8 +1,8 @@
 # Prospect Finder GPL Isolation — Workstream Closure
 **Date:** 2026-09-15
 **Status:** PARKED — PARTIAL
-**Artifact SHA-256:** 630aae88…e1e580 (re-baselined by A.10 — D7 fixed)
-**Test suite:** 867/867 PASS (857 + A.10 additions)
+**Artifact SHA-256:** b065a3f6…b2582fb (re-baselined by A.11 — R7)
+**Test suite:** 873/873 PASS (867 + A.10 additions + A.11 additions)
 **Frozen manifest:** 10/10 PASS
 
 ---
@@ -121,9 +121,29 @@ success — that input would remain empty on such a run. Not
 addressed here (would change provider code bodies, out of scope);
 noted so a future re-run watches for it.
 
+**→ FIXED by A.11 (R7, 2026-09-15).** `Process FSQ` and `Process OSM`
+now mirror the GPL `_noResults` sentinel on an empty success, so all
+three provider inputs feed Merge on every live run. Applied through
+the canonical spec (`src/prospect-finder-embedded-code.js`) and
+re-built via `scripts/build-prospect-finder-workflow.js`; no artifact
+hand-edits. Sentinel shapes:
+
+    Process FSQ  → { _noResults, _message: 'Foursquare returned zero results', _provider: 'foursquare' }
+    Process OSM  → { _noResults, _message: 'OpenStreetMap returned zero results', _provider: 'openstreetmap' }
+    Process GPL  → { _noResults, _message: 'Google Places returned zero results', _provider: 'google_places' } (unchanged)
+
+`Filter Empty Envelopes` already drops `_noResults` items (it
+recognizes `json._noResults === true`), so no phantom Raw Leads rows
+are written. New artifact SHA-256 `b065a3f6…b2582fb` (83,708 bytes,
+33 nodes / 16 code nodes — node counts unchanged). Re-baselined in
+`tests/prospect-finder-builder.test.js` (R7 hash anchor + shape pin),
+`tests/prospect-finder-error-paths.test.js` (§A.11 parity suite),
+`reports/PROSPECT-FINDER-GPL-PREFLIGHT.md` §6.14 + §12.3 (R7), and
+this doc. See `reports/PROSPECT-FINDER-A11-EMPTY-SUCCESS-SENTINEL-REPORT.md`.
+
 **Impact if unfixed:** every run in which any provider's success
 path is empty will stall at Merge. In practice, this is the normal
-case for a partially-credentialed environment.
+case for a partially-credentialed environment. **Resolved by A.11.**
 
 ---
 
@@ -146,10 +166,14 @@ workflow behaved correctly given each response.
    artifact re-baselined (`630aae88…e1e580`). Re-importing into the
    container and re-attaching credentials are still required before
    any live run — out of A.10 scope (STOP after re-baseline).
-2. **Restore GCP billing** — enables the all-success and
+2. **A.11 — DONE (2026-09-15).** Empty-success `_noResults` parity
+   applied through the builder (`Process FSQ` / `Process OSM` now
+   mirror GPL); artifact re-baselined (`b065a3f6…b2582fb`). Still out
+   of scope for live run — STOP after re-baseline.
+3. **Restore GCP billing** — enables the all-success and
    GPL-returns-empty cells.
-3. **Provision a valid FSQ token** — enables the all-success cell.
-4. **Re-run Prompt B** — with a fresh seed of ISO-001 through
+4. **Provision a valid FSQ token** — enables the all-success cell.
+5. **Re-run Prompt B** — with a fresh seed of ISO-001 through
    ISO-003 in Austin, TX.
 
 On successful re-run:
@@ -170,12 +194,12 @@ PARTIAL to PASS.
 | Item | Value |
 |---|---|
 | Production workflow JSON | `Lead Recovery Engine — Prospect Finder & Validation V1.json` |
-| SHA-256 | `630aae88…e1e580` (R6 — A.10 re-baseline) |
-| Bytes | 83,406 |
+| SHA-256 | `b065a3f6…b2582fb` (R7 — A.11 re-baseline) |
+| Bytes | 83,708 |
 | Node count | 33 (16 code nodes) |
 | Builder | `scripts/build-prospect-finder-workflow.js` (byte-identical on double build) |
 | Mutation script retired | `scripts/add-gpl-to-workflow.js` (header-commented, not deleted) |
-| Tests | 867/867 PASS, 0 failures |
+| Tests | 873/873 PASS, 0 failures |
 | Frozen manifest | 10/10 PASS |
 | Secret scan | GREEN |
 | Container | `serene_swartz` (Docker, named volume `serene_swartz_data`) |
@@ -193,13 +217,15 @@ PARTIAL to PASS.
 | R4 | A.8 | Merge param rename; GPL HTTP v4 migration |
 | R5 | A.9 | Merge append mode; `alwaysOutputData` on Dedup |
 | R6 | A.10 | D7 FIXED: Merge consolidated 5→3 (one input per provider); `OSM Error Envelope` added (success+error feed same input) |
+| R7 | A.11 | Empty-success parity: `Process FSQ` / `Process OSM` emit `_noResults` sentinel on zero results (mirrors GPL); `Filter Empty Envelopes` drops it |
 
 ---
 
 ## 11. Recommendation
 
-A.10 (D7 fix) is now applied and re-baselined (R6, 2026-09-15) — the
-allocated engineering work for merging is complete. The next live
+A.10 (D7 fix) and A.11 (empty-success parity) are now applied and
+re-baselined (R6/R7, 2026-09-15) — the allocated engineering work for
+merging is complete. The next live
 step is an operator task: re-import the artifact into the container and
 re-attach credentials, then re-run when:
 

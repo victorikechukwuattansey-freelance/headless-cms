@@ -14,13 +14,13 @@ const { referenceWorkflow, CODE_NODE_NAMES } = require('../src/prospect-finder-w
 
 /*
  * Frozen-by-convention hash anchor — the current artifact fingerprint
- * (revision R6, Prompt A.10). This guard FAILS if any hand-edit changes the
+ * (revision R7, Prompt A.11). This guard FAILS if any hand-edit changes the
  * artifact without rebuilding and updating this anchor. When you intentionally
  * change the workflow through the builder (spec or embedded code edit + build),
  * update this constant to the new artifact hash (see
  * reports/PROSPECT-FINDER-GPL-PREFLIGHT.md §12.3 revision log).
  */
-const ARTIFACT_HASH = '630aae88d8a6bfc157a431988abe50c84ba4124113d5e18db711bb8da9e1e580';
+const ARTIFACT_HASH = 'b065a3f6b1e1c3f33e1ce2b969fc7158d0dd2413e3f579b32904c95b2b2582fb';
 
 const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 
@@ -50,7 +50,7 @@ describe('Prospect Finder deterministic builder', () => {
   it('emits the artifact byte-for-byte (no regeneration drift)', () => {
     const built = serialize(prospectFinderWorkflow());
     assert.equal(built, artifactBytes(), 'builder output must equal the shipped artifact bytes');
-    assert.equal(Buffer.byteLength(built, 'utf8'), 83406);
+    assert.equal(Buffer.byteLength(built, 'utf8'), 83708);
     assert.equal(sha256(built), sha256(artifactBytes()));
   });
 
@@ -140,6 +140,21 @@ describe('Prospect Finder deterministic builder', () => {
     assert.equal(env.parameters.jsCode, CODE_BY_NODE['OSM Error Envelope']);
     const edge = built.connections['OSM Error Envelope'].main[0].find((c) => c.node === 'Merge');
     assert.equal(edge.index, 1, 'OSM Error Envelope must feed Merge input 1');
+  });
+
+  it('Process FSQ/OSM mirror the GPL _noResults sentinel on empty success (A.11 shape pin)', () => {
+    const expectedProvider = { 'Process FSQ': 'foursquare', 'Process OSM': 'openstreetmap', 'Process GPL': 'google_places' };
+    const expectedMessage = { 'Process FSQ': 'Foursquare returned zero results', 'Process OSM': 'OpenStreetMap returned zero results', 'Process GPL': 'Google Places returned zero results' };
+    const gate = { 'Process FSQ': 'output.length === 0', 'Process OSM': 'output.length === 0', 'Process GPL': 'leads.length === 0' };
+    for (const name of Object.keys(expectedProvider)) {
+      const body = CODE_BY_NODE[name];
+      assert.ok(body.includes("_noResults: true"), `${name} must emit a _noResults sentinel`);
+      assert.ok(
+        body.includes(`return [{ json: { _noResults: true, _message: '${expectedMessage[name]}', _provider: '${expectedProvider[name]}' } }];`),
+        `${name} must mirror the GPL sentinel shape for ${expectedProvider[name]}`,
+      );
+      assert.match(body, new RegExp(`if \\(${gate[name]}\\) \\\{`), `${name} must gate the sentinel on an empty result set`);
+    }
   });
 
   it('Merge has no combine-mode parameters — A.9 D1 drift guard', () => {
