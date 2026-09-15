@@ -55,6 +55,17 @@ const {
   assertCleanSource,
 } = require('./response-interpretation-workflow-contract');
 const { GoogleSheetsClient } = require('./google-sheets-client');
+const { buildScenarioPayload } = require('./response-interpretation-scenario-payloads');
+const {
+  HARNESS_ARTIFACT,
+  HARNESS_WEBHOOK_PATH,
+  HARNESS_WEBHOOK_MODE_PRODUCTION,
+  HARNESS_WEBHOOK_MODE_TEST,
+  HARNESS_WORKFLOW_ID,
+  harnessWebhookUrl,
+  harnessWorkflowPath,
+  checkHarnessContract,
+} = require('./response-interpretation-test-harness-contract');
 
 const RESPONSE_TAB = 'Response Log';
 const RESPONSE_LEAD_INDEX = 2;
@@ -86,9 +97,11 @@ const SECRET_PATTERNS = [
   /ya29\.[A-Za-z0-9_-]+/,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   /xox[baprs]-[A-Za-z0-9-]{10,}/,
+  /Bearer\s+[A-Za-z0-9._~+/=-]{6,}/i,
+  /eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}/,
 ];
 
-const VALID_EXEC_BACKENDS = ['cli', 'http'];
+const VALID_EXEC_BACKENDS = ['cli', 'http', 'harness'];
 const CONTAINER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 const EXEC_WORKFLOW_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const BROKER_PORT_RE = /^[0-9]{1,5}$/;
@@ -138,6 +151,15 @@ function readConfig(env) {
   const n8nBaseUrl = String(env.N8N_BASE_URL || '').trim().replace(/\/+$/, '');
   const n8nApiKey = String(env.N8N_API_KEY || '').trim();
   const n8nWorkflowId = String(env.N8N_WORKFLOW_ID || '').trim();
+  /* Phase 6.5 harness backend — dedicated env vars. RESP_INT_HARNESS_WORKFLOW_ID
+   * is REQUIRED and never falls back to N8N_WORKFLOW_ID (the production id must
+   * not leak into the test surface). Base URL falls back to N8N_BASE_URL. */
+  const harnessBaseUrl = String(env.RESP_INT_HARNESS_BASE_URL || env.N8N_BASE_URL || '').trim().replace(/\/+$/, '');
+  const harnessWorkflowId = String(env.RESP_INT_HARNESS_WORKFLOW_ID || '').trim();
+  const harnessWebhookPathRaw = String(env.RESP_INT_HARNESS_WEBHOOK_PATH || '').trim();
+  const harnessWebhookPath = harnessWebhookPathRaw || HARNESS_WEBHOOK_PATH;
+  const harnessWebhookModeRaw = String(env.RESP_INT_HARNESS_WEBHOOK_MODE || '').trim().toLowerCase();
+  const harnessWebhookMode = harnessWebhookModeRaw === HARNESS_WEBHOOK_MODE_TEST ? HARNESS_WEBHOOK_MODE_TEST : HARNESS_WEBHOOK_MODE_PRODUCTION;
   const execBackendRaw = String(env.RESP_INT_EXEC_BACKEND || '').trim();
   const execBackend = normalizeExecBackend(execBackendRaw);
   const container = String(env.RESP_INT_EXEC_CONTAINER || '').trim();
@@ -172,9 +194,18 @@ function readConfig(env) {
         workflowId: n8nWorkflowId || '',
         ready: !!(n8nBaseUrl && n8nApiKey && n8nWorkflowId),
       },
+      harness: {
+        baseUrl: harnessBaseUrl || '',
+        workflowId: harnessWorkflowId || '',
+        webhookPath: harnessWebhookPath,
+        webhookMode: harnessWebhookMode,
+        ready: !!(harnessBaseUrl && harnessWorkflowId),
+      },
       ready: execBackend === 'http'
         ? !!(n8nBaseUrl && n8nApiKey && n8nWorkflowId)
-        : !!(container && brokerPort && n8nWorkflowId),
+        : execBackend === 'harness'
+          ? !!(harnessBaseUrl && harnessWorkflowId)
+          : !!(container && brokerPort && n8nWorkflowId),
     },
     runToken: runTokenFor({}, env),
   };
@@ -184,7 +215,17 @@ function readConfig(env) {
 
 function normalizeExecBackend(raw) {
   const v = String(raw || '').trim().toLowerCase();
-  return v === 'http' ? 'http' : 'cli';
+  return v === 'http' ? 'http' : v === 'harness' ? 'harness' : 'cli';
+}
+
+/**
+ * Effective execution backend for an invocation: `--inject-scenario` (or env
+ * RESP_INT_EXEC_BACKEND=harness) selects the webhook payload-injection harness;
+ * everything else keeps the cli/http behavior verbatim.
+ */
+function effectiveExecBackend(args, config) {
+  if (args && args.injectScenario) return 'harness';
+  return config.exec.backend;
 }
 
 function validateExecParams(cli) {
@@ -621,7 +662,7 @@ async function preflight(env, args = {}, deps = {}) {
     checks.push({
       label: 'exec backend value recognized',
       ok: false,
-      detail: `RESP_INT_EXEC_BACKEND=${config.exec.backendRaw} is not recognized (cli|http); fell back to the cli default`,
+      detail: `RESP_INT_EXEC_BACKEND=${config.exec.backendRaw} is not recognized (cli|http|harness); fell back to the cli default`,
       informational: true,
     });
   }
@@ -632,10 +673,30 @@ async function preflight(env, args = {}, deps = {}) {
     detail: config.exec.ready
       ? (config.exec.backend === 'http'
         ? `backend=http · ${config.exec.http.baseUrl} · workflow ${config.exec.http.workflowId}`
-        : `backend=cli · container ${config.exec.cli.container} · broker port ${config.exec.cli.brokerPort} · workflow ${config.exec.cli.workflowId}`)
+        : config.exec.backend === 'harness'
+          ? `backend=harness · ${config.exec.harness.baseUrl} · webhook workflow ${config.exec.harness.workflowId}`
+          : `backend=cli · container ${config.exec.cli.container} · broker port ${config.exec.cli.brokerPort} · workflow ${config.exec.cli.workflowId}`)
       : `backend=${config.exec.backend} — absent; execute/collect report NOT_CONFIGURED + MANUAL steps (never a fabricated PASS)`,
     informational: true,
   });
+  if (effectiveExecBackend(args, config) === 'harness') {
+    let hwf = null;
+    try {
+      hwf = JSON.parse(fs.readFileSync(harnessWorkflowPath(), 'utf8'));
+      checks.push({ label: 'J harness webhook artifact parses', ok: true, detail: HARNESS_ARTIFACT, informational: true });
+    } catch (err) {
+      checks.push({ label: 'J harness webhook artifact parses', ok: false, detail: err.message, informational: true });
+    }
+    if (hwf) {
+      const hc = checkHarnessContract(hwf);
+      checks.push({
+        label: 'K harness contract',
+        ok: hc.every((c) => c.ok),
+        detail: hc.filter((c) => !c.ok).map((c) => `${c.label}: ${c.detail}`).join('; ') || 'assertHarnessContract passed',
+        informational: true,
+      });
+    }
+  }
 
   const hard = checks.filter((c) => !c.informational && !c.ok);
   const status = hard.length ? 'FAIL' : 'PASS';
@@ -713,12 +774,32 @@ async function verifySeed(env, client, args = {}) {
 
 async function executeShipped(env, args = {}, deps = {}) {
   const config = readConfig(env);
+  const backend = effectiveExecBackend(args, config);
+  if (backend === 'harness') {
+    if (!config.exec.harness.workflowId) {
+      return {
+        status: 'NOT_CONFIGURED',
+        detail: 'harness backend: RESP_INT_HARNESS_WORKFLOW_ID is unset and is NEVER derived from N8N_WORKFLOW_ID (the production id must not leak into the test surface); export RESP_INT_HARNESS_WORKFLOW_ID=<harness workflow id> and re-run',
+        executionId: null,
+        checks: [],
+      };
+    }
+    if (!config.exec.harness.baseUrl) {
+      return {
+        status: 'NOT_CONFIGURED',
+        detail: 'harness backend: RESP_INT_HARNESS_BASE_URL (or N8N_BASE_URL) is unset; export the n8n base URL (e.g. http://localhost:5678) and re-run',
+        executionId: null,
+        checks: [],
+      };
+    }
+    return executeHarness(env, args, deps, config);
+  }
   if (!config.exec.ready) {
     return { status: 'NOT_CONFIGURED', detail: manualExecutionSteps(args.scenario || DEFAULT_SCENARIO, namespaceForArgs(args, env)), executionId: null, checks: [] };
   }
   const wf = JSON.parse(fs.readFileSync(shippedWorkflowPath(), 'utf8'));
   assertShippedWorkflow(wf); // precondition — FAIL, never auto-repair
-  if (config.exec.backend === 'http') {
+  if (backend === 'http') {
     return executeHttp(env, args, deps, config, wf);
   }
   return executeCli(env, args, deps, config);
@@ -764,6 +845,121 @@ async function executeHttp(env, args, deps, config, wf) {
   };
 }
 
+/**
+ * Phase 6.5: normalize the versioned-webhook lastNode response. `responseMode:
+ * lastNode` returns the last node's output items in n8n 2.x as a bare object
+ * (proven in §0: `{"saw":{...}}`); a single-item array is accepted and unwrapped
+ * so the comparison treats both shapes identically. Anything else is NULL (no
+ * live claim).
+ */
+function normalizeHarnessResponse(body) {
+  if (Array.isArray(body)) {
+    if (body.length === 1 && body[0] && typeof body[0] === 'object') return body[0];
+    return null;
+  }
+  if (body && typeof body === 'object') return body;
+  return null;
+}
+
+/**
+ * Phase 6.5 harness backend: POST the scenario's trigger input to the test
+ * harness workflow's versioned webhook. The request is unauthenticated by
+ * design (webhooks have no API key); the workflow itself is inactive-between-
+ * runs and only the running container registers the webhook on activation. The
+ * webhook response IS the Interpret report, reused by collect.
+ */
+async function executeHarness(env, args, deps, config) {
+  const wf = JSON.parse(fs.readFileSync(harnessWorkflowPath(), 'utf8'));
+  const contractFailures = checkHarnessContract(wf).filter((c) => !c.ok);
+  if (contractFailures.length) {
+    return {
+      status: 'FAIL',
+      detail: `harness workflow precondition failed: ${contractFailures.map((f) => f.label).join('; ')}`,
+      executionId: null,
+      checks: [],
+    };
+  }
+  const ns = namespaceForArgs(args, env);
+  const resolved = resolveScenario(args.scenario || DEFAULT_SCENARIO);
+  const payload = buildScenarioPayload(resolved.key, ns);
+  const url = harnessWebhookUrl(config.exec.harness.baseUrl, config.exec.harness.webhookPath, config.exec.harness.webhookMode);
+  const transport = (deps && deps.transport) || ((...a) => fetch(...a));
+  let res;
+  try {
+    res = await transport(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    return { status: 'FAIL', detail: `harness webhook request failed: ${err.message}`, executionId: null, checks: [] };
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    return { status: 'FAIL', detail: `harness webhook failed (${res.status}): ${String(text).slice(0, 300)}`, executionId: null, checks: [] };
+  }
+  let body;
+  try {
+    body = await res.json();
+  } catch (err) {
+    body = null;
+  }
+  const collected = normalizeHarnessResponse(body);
+  if (!collected) {
+    args._harnessCollected = null;
+    return {
+      status: 'NOT_CONFIGURED',
+      detail: 'harness webhook returned no Interpret report; no comparison claimed',
+      executionId: null,
+      checks: [],
+    };
+  }
+  args._harnessCollected = collected;
+  return {
+    status: 'PASS',
+    detail: `harness webhook executed (scenario ${resolved.key}, namespace ${ns}); Interpret report captured — collect reuses it`,
+    executionId: '',
+    collected,
+    checks: [],
+  };
+}
+
+/**
+ * Phase 5.4: extract the raw n8n execution error surfaced by `n8n execute` so
+ * the runner's failure_info carries the real runtime failure instead of only
+ * an opaque exit-code message. Returns:
+ *   - null when stdout is empty (nothing to diagnose);
+ *   - a structured entry from payload.data.resultData.error (generated by the
+ *     n8n CLI's execute reporter) that is SUBSET-ONLY — name, message,
+ *     nodeCause / lastNodeExecuted from error.context — and NEVER persists the
+ *     stack trace or runData;
+ *   - { stage: 'execute', name: 'UnparseableOutput', message: ... } when stdout
+ *     is not JSON (truncated to 300 chars, itself secret-redacted downstream).
+ */
+function executeFailureInfo(stdout) {
+  const text = String(stdout || '');
+  if (text.trim() === '') return null;
+  const payload = parseExecuteStdout(text);
+  if (!payload) {
+    return {
+      stage: 'execute',
+      name: 'UnparseableOutput',
+      message: `n8n execute stdout is not JSON (first 300 chars): ${text.slice(0, 300)}`,
+    };
+  }
+  const error =
+    payload && payload.data && payload.data.resultData && payload.data.resultData.error;
+  if (!error) return null;
+  const context = (error && error.context) || {};
+  return {
+    stage: 'execute',
+    name: String(error.name || 'ExecutionError'),
+    message: String(error.message || error.description || '').slice(0, 300),
+    nodeCause: String(context.nodeCause || ''),
+    lastNodeExecuted: String(context.lastNodeExecuted || ''),
+  };
+}
+
 async function executeCli(env, args, deps, config) {
   const cli = config.exec.cli;
   let argv;
@@ -782,8 +978,9 @@ async function executeCli(env, args, deps, config) {
   }
   const mapped = mapCliExitCode(res && res.code);
   if (mapped.status !== 'PASS') {
+    const failure = executeFailureInfo(res && res.stdout);
     const tail = res && res.stderr ? `; stderr: ${String(res.stderr).slice(0, 300)}` : '';
-    return { status: 'FAIL', detail: `${mapped.detail}${tail}`, executionId: null, checks: [] };
+    return { status: 'FAIL', detail: `${mapped.detail}${tail}`, executionId: null, checks: [], failure };
   }
   const payload = parseExecuteStdout(res && res.stdout);
   const collected = payload ? extractInterpretReport(payload) : null;
@@ -825,6 +1022,17 @@ function extractInterpretReport(execPayload) {
 
 async function collectExecution(env, args = {}, deps = {}) {
   const config = readConfig(env);
+  if (effectiveExecBackend(args, config) === 'harness') {
+    const harnessCollected = (deps && deps.harnessCollected && deps.harnessCollected.collected) || args._harnessCollected;
+    if (harnessCollected) {
+      return { status: 'PASS', detail: 'collected Interpret report from the harness webhook (execute phase capture)', collected: harnessCollected };
+    }
+    return {
+      status: 'NOT_CONFIGURED',
+      detail: 'harness backend: webhook executed but captured no Interpret report; no comparison claimed',
+      collected: null,
+    };
+  }
   if (config.exec.backend === 'cli') {
     const cliCollected = (deps && deps.cliCollected) || args._cliCollected;
     if (cliCollected) {
@@ -1014,7 +1222,12 @@ function buildRunReport({ args = {}, env = {}, outcomes = {}, executionId = '', 
     mode: args.execute ? 'EXECUTE' : 'DRY_RUN',
     execution: {
       backend: config.exec.backend,
-      workflow_id: config.exec.http.workflowId,
+      workflow_id: config.exec.backend === 'harness' ? (config.exec.harness.workflowId || '') : (config.exec.http.workflowId || ''),
+      base_url: config.exec.backend === 'http' || config.exec.backend === 'harness'
+        ? (config.exec.backend === 'harness' ? (config.exec.harness.baseUrl || '') : (config.exec.http.baseUrl || ''))
+        : '',
+      webhook_path: config.exec.backend === 'harness' ? (config.exec.harness.webhookPath || HARNESS_WEBHOOK_PATH) : '',
+      webhook_mode: config.exec.backend === 'harness' ? (config.exec.harness.webhookMode || HARNESS_WEBHOOK_MODE_PRODUCTION) : '',
       container: config.exec.backend === 'cli' ? config.exec.cli.container : '',
       broker_port: config.exec.backend === 'cli' ? config.exec.cli.brokerPort : '',
     },
@@ -1102,7 +1315,9 @@ async function fullRun(env, args = {}, deps = {}) {
     outcomes.stages.execute = ex.status;
     executionId = ex.executionId || '';
     args.executionId = executionId;
-    if (ex.status === 'FAIL') outcomes.failures.push(`execute failed: ${ex.detail}`);
+    if (ex.status === 'FAIL') {
+      outcomes.failures.push(ex.failure || `execute failed: ${ex.detail}`);
+    }
   }
 
   let collected = null;
@@ -1172,6 +1387,7 @@ async function runSelectedPhases(env, args = {}, deps = {}) {
       outcomes.stages.execute = ex.status;
       args.executionId = ex.executionId || '';
       for (const line of Array.isArray(ex.detail) ? ex.detail : [ex.detail]) console.log(`  [${ex.status}] ${line}`);
+      if (ex.status === 'FAIL') outcomes.failures.push(ex.failure || `execute failed: ${ex.detail}`);
     } else if (phase === 'collect') {
       const col = await collectExecution(env, args, deps);
       outcomes.stages.collect = col.status;
@@ -1218,6 +1434,7 @@ function parseArgs(argv) {
     skipCollect: false,
     skipVerify: false,
     skipCleanup: false,
+    injectScenario: false,
   };
   const add = (p) => {
     if (!args.phases.includes(p)) args.phases.push(p);
@@ -1247,6 +1464,7 @@ function parseArgs(argv) {
     else if (arg === '--skip-collect') args.skipCollect = true;
     else if (arg === '--skip-verify') args.skipVerify = true;
     else if (arg === '--skip-cleanup') args.skipCleanup = true;
+    else if (arg === '--inject-scenario') args.injectScenario = true;
   }
   return args;
 }
@@ -1282,17 +1500,30 @@ Flags:
   --reports-dir=<dir>          report output directory (default <repo>/reports)
   --allow-non-pinned-sheet     target a dedicated sheet (NOT live-equivalent)
   --no-report                  skip writing the local run report
+  --inject-scenario            use the Phase 6.5 harness backend: POST this
+                               scenario's trigger input to the test harness
+                               webhook workflow (implies RESP_INT_EXEC_BACKEND
+                               =harness for the run)
   --help                       this message
 
 Env (see .env.example): GOOGLE_SHEET_ID, GOOGLE_ACCESS_TOKEN or
 GOOGLE_SERVICE_ACCOUNT_JSON, RESP_INT_LIVE_RUN_TOKEN (optional), and the n8n
-execution backend RESP_INT_EXEC_BACKEND=cli|http (default cli):
+execution backend RESP_INT_EXEC_BACKEND=cli|http|harness (default cli):
   cli  - RESP_INT_EXEC_CONTAINER + RESP_INT_EXEC_BROKER_PORT + N8N_WORKFLOW_ID;
          spawns \`docker exec -u node -e N8N_RUNNERS_BROKER_PORT=<port> <container>
          n8n execute --id <workflow>\`; the broker port MUST differ from the running
          n8n server's 5679 (the shipped default is 5677).
   http - N8N_BASE_URL + N8N_API_KEY + N8N_WORKFLOW_ID; REST POST path for
          instances that expose a run endpoint.
+  harness - RESP_INT_HARNESS_BASE_URL (or N8N_BASE_URL) + RESP_INT_HARNESS_WORKFLOW_ID
+         (required) + optional RESP_INT_HARNESS_WEBHOOK_PATH (default:
+         test/resp-int-harness) + optional RESP_INT_HARNESS_WEBHOOK_MODE
+         (default: production; use "test" for one-shot webhook-test endpoints).
+         RESP_INT_HARNESS_WORKFLOW_ID is never derived from N8N_WORKFLOW_ID; if it
+         is unset the backend reports NOT_CONFIGURED. The harness artifact is
+         generated by scripts/build-response-interpretation-test-harness.js and
+         activates the Webhook->Manual Trigger bridge, so the frozen 4-node chain
+         executes against an injected scenario payload — no API key required.
 Without the backend, execute/collect report NOT_CONFIGURED and print MANUAL
 steps; no fake PASS.
 Exit codes: 0 PASS, 1 FAIL, 3 NOT_CONFIGURED, 4 CLEANUP_NOT_PERFORMED.
@@ -1337,7 +1568,7 @@ function printSummary(out) {
   console.log(`RESULT: ${out.status}`);
   console.log(`stages: ${Object.entries(stages).map(([k, v]) => `${k}=${v}`).join(' ')}`);
   const failures = (out.report && out.report.failure_info && out.report.failure_info.length) ? out.report.failure_info.slice() : [];
-  for (const f of failures) console.log(`  failure: ${f}`);
+  for (const f of failures) console.log(`  failure: ${typeof f === 'string' ? f : JSON.stringify(f)}`);
 }
 
 module.exports = {
@@ -1365,6 +1596,7 @@ module.exports = {
   mapCliExitCode,
   parseExecuteStdout,
   executionIdFromPayload,
+  executeFailureInfo,
   executeCli,
   defaultRunToken,
   runTokenFor,
@@ -1411,5 +1643,15 @@ module.exports = {
   parseArgs,
   usage,
   exitCodeForStatus,
+  // Phase 6.5 harness backend
+  effectiveExecBackend,
+  executeHarness,
+  normalizeHarnessResponse,
+  HARNESS_WEBHOOK_PATH,
+  HARNESS_WORKFLOW_ID,
+  harnessWebhookUrl,
+  harnessWorkflowPath,
+  checkHarnessContract,
+  buildScenarioPayload,
   main,
 };

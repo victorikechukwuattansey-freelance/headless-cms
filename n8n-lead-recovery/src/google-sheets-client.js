@@ -6,6 +6,8 @@ const { createSign } = require('node:crypto');
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+const BARE_SPREADSHEET_ID_RE = /^[A-Za-z0-9_-]+$/;
+const SPREADSHEET_URL_RE = /^https?:\/\/docs\.google\.com\/spreadsheets\/d\/([A-Za-z0-9_-]+)(?:[\/?#]|$)/;
 
 function base64Url(input) {
   return Buffer.from(input)
@@ -41,13 +43,28 @@ class GoogleSheetsError extends Error {
 }
 
 function quotedRange(tabName, rangeSuffix = 'A1:AZ') {
-  return `'${tabName}'.${rangeSuffix}`;
+  const escapedTab = String(tabName).replace(/'/g, "''");
+  return `'${escapedTab}'!${rangeSuffix}`;
+}
+
+function normalizeSpreadsheetId(spreadsheetId) {
+  const value = String(spreadsheetId == null ? '' : spreadsheetId).trim();
+  if (!value) {
+    throw new GoogleSheetsError('spreadsheetId must be a bare Google Sheets id or a https://docs.google.com/spreadsheets/d/<id> URL', 400);
+  }
+  if (BARE_SPREADSHEET_ID_RE.test(value)) return value;
+  const urlMatch = SPREADSHEET_URL_RE.exec(value);
+  if (urlMatch) return urlMatch[1];
+  throw new GoogleSheetsError(
+    `invalid spreadsheetId "${value}": expected a bare Google Sheets id or a https://docs.google.com/spreadsheets/d/<id> URL`,
+    400,
+  );
 }
 
 class GoogleSheetsClient {
   constructor({ spreadsheetId, accessToken = '', serviceAccount = null }) {
     if (!spreadsheetId) throw new GoogleSheetsError('spreadsheetId is required to create a GoogleSheetsClient', 400);
-    this.spreadsheetId = spreadsheetId;
+    this.spreadsheetId = normalizeSpreadsheetId(spreadsheetId);
     this.accessToken = accessToken;
     this.serviceAccount = serviceAccount;
     this._cachedJwt = '';
@@ -163,4 +180,4 @@ class GoogleSheetsClient {
   }
 }
 
-module.exports = { GoogleSheetsClient, GoogleSheetsError, mintJwt, base64Url };
+module.exports = { GoogleSheetsClient, GoogleSheetsError, mintJwt, base64Url, quotedRange, normalizeSpreadsheetId };
