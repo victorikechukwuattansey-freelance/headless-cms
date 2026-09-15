@@ -10,21 +10,27 @@ const OUTPUT = path.join(__dirname, '..', 'Response-Interpretation V1.json');
 
 /**
  * Read-only response interpretation workflow. Exactly FIVE nodes — no
- * initialization node:
- *   Manual Trigger                    → Read Response Log
- *   Manual Trigger                    → Read Reconciliation Report
- *   Read Response Log                 → Interpret Responses
- *   Read Reconciliation Report        → Interpret Responses
- *   Interpret Responses               → Response Interpretation Complete
+ * initialization node, wired as a strict linear chain (Phase 5.4):
+ *   Manual Trigger → Read Reconciliation Report → Read Response Log
+ *     → Interpret Responses → Response Interpretation Complete
  *
- * The topology, ids, positions, and meta are the Phase 3 contract reference
- * (`referenceWorkflow` from src/response-interpretation-workflow-contract.js);
- * this builder only injects the embedded jsCode into the two code nodes:
+ * The topology, ids, positions, meta, AND connections are the Phase 3/5.4
+ * contract reference (`referenceWorkflow` from
+ * src/response-interpretation-workflow-contract.js) — that reference is the
+ * single source of truth for the chain wiring; this builder only injects the
+ * embedded jsCode into the two code nodes:
  *   - Read Reconciliation Report → relayCode (read-only pure relay that
  *     surfaces the per-run reconciliation report artifact — injected as
  *     workflow input — plus its read-error metadata),
  *   - Interpret Responses        → interpretCode (the self-contained mirror of
  *     src/response-interpretation.js).
+ *
+ * The chain (Phase 5.4) is not cosmetic: n8n pairs every item to a single
+ * parent (pairedItem), so Interpret Responses can only resolve
+ * `$('Read Reconciliation Report')` when that node is a transitive ancestor.
+ * The pre-5.4 diamond placed the two reads on sibling branches and failed at
+ * runtime with pairedItemNoConnectionCodeNode ("Node 'Read Reconciliation
+ * Report' hasn't been executed").
  *
  * The Manual Trigger carries optional operator metadata
  * (response_log_read_error / reconciliation_read_error) so a failed read is
