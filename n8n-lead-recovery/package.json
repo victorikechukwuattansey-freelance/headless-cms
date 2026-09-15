@@ -25,12 +25,14 @@
     "response-recon:live": "node scripts/run-response-reconciliation-live.js",
     "response-interpret:test": "node --test tests/response-interpretation-engine.test.js tests/response-interpretation-fixtures.test.js tests/response-interpretation-workflow.test.js tests/response-interpretation-workflow-build.test.js tests/response-interpretation-live-runner.test.js",
     "response-interpret:build": "node scripts/build-response-interpretation-workflow.js",
+    "response-interpret:harness:build": "node scripts/build-response-interpretation-test-harness.js",
     "response-interpret:live": "node scripts/run-response-interpretation-live.js",
     "verify:frozen": "node scripts/verify-frozen.js",
     "response-interpret:live:preflight": "node scripts/run-response-interpretation-live.js --preflight",
     "response-interpret:live:seed": "node scripts/run-response-interpretation-live.js --seed",
     "response-interpret:live:run": "node scripts/run-response-interpretation-live.js --run",
-    "response-interpret:live:cleanup": "node scripts/run-response-interpretation-live.js --cleanup"
+    "response-interpret:live:cleanup": "node scripts/run-response-interpretation-live.js --cleanup",
+    "response-interpret:phase-6-5:test": "node --test tests/response-interpretation-phase-6-5.test.js"
   },
   "engines": {
     "node": ">=18"

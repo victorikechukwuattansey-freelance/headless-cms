@@ -3,10 +3,16 @@
 .env.*
 !.env.example
 
-# Live-run reports & local gate evidence (specs/REPORT.md stay tracked)
-reports/
+# Live-run evidence JSON + local gate tmp only — .md reports stay tracked
+reports/RESPINT-LIVE-*.json
+reports/response-interpretation-live-output.json
+reports/*.tmp
 
 # Local tool output
 *.log
-*.tmp
 npm-debug.log*
+
+# Dependencies & OS (defined here for repo portability; root .gitignore also covers)
+node_modules/
+.DS_Store
+Thumbs.db

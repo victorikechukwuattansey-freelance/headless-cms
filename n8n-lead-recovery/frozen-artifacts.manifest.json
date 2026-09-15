@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "about": "Integrity manifest for Phase 1-5 FROZEN artifacts (H6 hygiene). A SHA-256 mismatch means the frozen artifact was modified and must not be committed without an approved change. Maintained by the hygiene workstream; baseline hashes recorded in reports/PHASE-6-response-interpretation-v1.md section 9. Version 2: re-baselined the live runner after the approved Phase 5 revision (CLI execution backend); all other artifact hashes are unchanged from the Phase 6 baseline.",
+  "version": 3,
+  "about": "Integrity manifest for Phase 1-5 FROZEN artifacts (H6 hygiene). A SHA-256 mismatch means the frozen artifact was modified and must not be committed without an approved change. Maintained by the hygiene workstream; baseline hashes recorded in reports/PHASE-6-response-interpretation-v1.md section 9. Version 2: re-baselined the live runner after the approved Phase 5 revision (CLI execution backend); all other artifact hashes were unchanged from the Phase 6 baseline. Phase 5.2: re-baselined the shipped workflow JSON and the workflow contract after correcting the Manual Trigger connection output-slot defect (single main[0] fan-out holding both read targets). Phase 5.4: re-baselined the SAME three artifacts after (a) rewiring the workflow from the diamond (Manual Trigger -> [Read Reconciliation Report, Read Response Log] -> Interpret Responses) to a strict linear chain (Manual Trigger -> Read Reconciliation Report -> Read Response Log -> Interpret Responses -> Response Interpretation Complete), and (b) extending the live runner to surface raw n8n execution errors in failure_info. The diamond is fatally unreachable under n8n pairedItem semantics — an empirical `n8n execute` run produced ExpressionError descriptionKey pairedItemNoConnectionCodeNode (\"Node 'Read Reconciliation Report' hasn't been executed\"). In the JSON only the connections block changed; node names, ids, types, parameters, and positions are byte-identical. The four frozen-by-task engine sources (response-interpretation.js, embedded-response-interpret.js, response-capture.js, response-reconcile.js) remain unchanged and are verified byte-identical. scripts/build-response-interpretation-workflow.js is NOT a manifest artifact and carries no revision entry. Version 3 (Phase 6.5): re-baselined the live runner after ADDITIVE harness-backend support (webhook payload injection for the test-only workflow; --inject-scenario; executeFailureInfo banner-strip via parseExecuteStdout; no behavioral change to cli/http paths) and ADDED the three Phase 6.5 test-surface artifacts to `artifacts`: the generated `Response-Interpretation V1 — Test Harness.json`, `src/response-interpretation-scenario-payloads.js`, and `src/response-interpretation-test-harness-contract.js`. All frozen hashes (e.g. the shipped workflow `ae365cd3...adb4bac`) are UNCHANGED. scripts/build-response-interpretation-test-harness.js is NOT a manifest artifact. 6.5.1 runtime revision (2026-09-14): harness-backend URL correction (harnessWebhookUrl never embeds a workflow id; dedicated RESP_INT_HARNESS_* env sourcing with N8N_BASE_URL fallback only) plus the approved single-exception empty-read continuation flag (Read Response Log alwaysOutputData=true in the harness only) re-baselined three artifacts: the live runner, the harness contract, and the generated harness JSON. The FROZEN production Response-Interpretation V1.json hash is UNCHANGED (ae365cd3b98fce08b95ccea9fae7661e4d1bde7f655326a4ed13b7031adb4bac). See reports/PHASE-6-5-REVISION-REPORT.md.",
   "revisions": [
     {
       "path": "src/response-interpretation-live-runner.js",
@@ -8,6 +8,76 @@
       "sha256": "ecf46417d700d87cefa99efa4fd37f2e9ec35e6b9f8680578303837111989f68",
       "date": "2026-09-12",
       "reason": "Phase 5 revision: fix live runner execution mechanism - configurable execution backend (RESP_INT_EXEC_BACKEND=cli|http); cli mode spawns `docker exec -u node -e N8N_RUNNERS_BROKER_PORT=<port> <container> n8n execute --id <workflow>` with 5679 port-conflict resolution; http mode preserves the REST POST path."
+    },
+    {
+      "path": "src/response-interpretation-workflow-contract.js",
+      "previous_sha256": "9d75b769145e65c2ff14fc129ec3a2f227daf27143d738e132b79e377ea67230",
+      "sha256": "dbc452121e50f7a478e7634a629729ea9b7b1f44ce5799b83b1fe1313854bcc0",
+      "date": "2026-09-12",
+      "reason": "Phase 5.1: contract hardening with explicit expected edges, orphan detection, unreachable-node checks, and $('Node Name') reference reachability. No behavioral changes; artifact sha changes only because the contract module is extended with canonical edge sets and reachability helpers."
+    },
+    {
+      "path": "Response-Interpretation V1.json",
+      "previous_sha256": "6b0c6a006d4d745f3e89702a7af8d2100f87132d5cd9b29b84e932aa7c564c03",
+      "sha256": "57b80b947fe0d08054285590ffe8ea2d5ef225bdc8e8daad79c0eae7470e2dce",
+      "date": "2026-09-13",
+      "reason": "Phase 5.2: correct the Manual Trigger connection output-slot defect. The old artifact listed the two read targets as main: [[a], [b]] while n8n-nodes-base.manualTrigger has exactly one output, so main[1] was silently discarded at runtime and every execution stopped at Read Response Log. Regenerated by scripts/build-response-interpretation-workflow.js with both targets living in a single main[0]. Reference: reports/PHASE-6-BLOCKER-REPORT.md. Phase 5.1's determination that the repo artifact was correct is invalid; only the connection block changed."
+    },
+    {
+      "path": "src/response-interpretation-workflow-contract.js",
+      "previous_sha256": "dbc452121e50f7a478e7634a629729ea9b7b1f44ce5799b83b1fe1313854bcc0",
+      "sha256": "7bfb4715ab9ba2d340e5a01a3d5383044a549c1ee2d8d7dace2e060618218115",
+      "date": "2026-09-13",
+      "reason": "Phase 5.2: contract hardening for the connection output-slot defect class - enforce n8n runtime semantics so the validator fails when a connection's main array has more branches than the source node's output count, when a branch index exceeds the output count, and when an edge references an output index >= the source output count; reference topology connection layout corrected to the single-output-slot fan-out. See reports/PHASE-5-2-REPORT.md."
+    },
+    {
+      "path": "Response-Interpretation V1.json",
+      "previous_sha256": "57b80b947fe0d08054285590ffe8ea2d5ef225bdc8e8daad79c0eae7470e2dce",
+      "sha256": "ae365cd3b98fce08b95ccea9fae7661e4d1bde7f655326a4ed13b7031adb4bac",
+      "date": "2026-09-13",
+      "reason": "Phase 5.4: rewire the workflow from the diamond (Manual Trigger -> [Read Reconciliation Report, Read Response Log] -> Interpret Responses) to a strict linear chain (Manual Trigger -> Read Reconciliation Report -> Read Response Log -> Interpret Responses -> Response Interpretation Complete). An empirical `n8n execute --id` run (1 seeded row; tested on 2026-09-13) proved the diamond fatally broken: Interpret Responses threw ExpressionError descriptionKey pairedItemNoConnectionCodeNode with message \"Node 'Read Reconciliation Report' hasn't been executed\" — n8n pairs every input item to ONE parent item, so a sibling-branch read can never be resolved by $('...'). Zero seeded rows hid the defect (no items = no pairing check). Only the connections block changed; node names, ids, types, parameters, and positions are byte-identical. Regenerated by scripts/build-response-interpretation-workflow.js (referenceWorkflow now owns the chain; the Phase 5.2 Manual Trigger override was removed). See reports/PHASE-5-4-REPORT.md."
+    },
+    {
+      "path": "src/response-interpretation-workflow-contract.js",
+      "previous_sha256": "7bfb4715ab9ba2d340e5a01a3d5383044a549c1ee2d8d7dace2e060618218115",
+      "sha256": "8bb58c9beb51931af6d64811b8dc30daa6774917bcd85ed428dc80cd68792168",
+      "date": "2026-09-13",
+      "reason": "Phase 5.4: contract rewired to the strict linear chain. TOPOLOGY and EXPECTED_EDGES changed from the diamond fan-out to the chain; referenceWorkflow() connections emit the chain (now the single source of truth); the Phase 5.1+5.2 fan-out validation block was replaced by chain fan-in/fan-out checks (every non-terminal node exactly one outgoing edge, every non-trigger node exactly one incoming edge — the fan-in check is what catches a diamond); new pure helpers incomingCounts/outgoingCounts/pairedItemAncestors exported; assertWorkflowContract now also rejects any $('X') reference that is not a transitive pairedItem ancestor (the exact failure class: both diamond reads are reachable, yet only the item's own ancestry matters). Phase 5.1 reachability/orphan and Phase 5.2 output-slot checks retained. See reports/PHASE-5-4-REPORT.md."
+    },
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "previous_sha256": "ecf46417d700d87cefa99efa4fd37f2e9ec35e6b9f8680578303837111989f68",
+      "sha256": "7cffb808ca6480268fb8d5b1e0a0e220bcb63334a24f9a6354bead2c7bcc7dae",
+      "date": "2026-09-13",
+      "reason": "Phase 5.4: runner error surfacing. Added executeFailureInfo(stdout) — a pure extractor returning the structured n8n execution error (stage:'execute', name, message, nodeCause/lastNodeExecuted from resultData.error.context; subset-only, never stack trace or runData) or { stage:'execute', name:'UnparseableOutput', message:<300-chars> } for non-empty non-JSON stdout and null for empty stdout. executeCli FAIL now attaches the structured failure so it survives into outcomes.failures -> report failure_info (fullRun and runSelectedPhases push ex.failure or fall back to the string detail); printSummary JSON-stringifies object failures; SECRET_PATTERNS extended with Bearer-token and JWT shapes so redact masks them even inside extracted error text. See reports/PHASE-5-4-REPORT.md."
+    },
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "previous_sha256": "7cffb808ca6480268fb8d5b1e0a0e220bcb63334a24f9a6354bead2c7bcc7dae",
+      "sha256": "8b48a3299132bdb05661debc5a5a14c0dea808d2e829c49d7d58b98779b51a20",
+      "date": "2026-09-13",
+      "reason": "Phase 6.5: ADDITIVE harness backend. executeShipped/collectExecution route through effectiveExecBackend (args.injectScenario || RESP_INT_EXEC_BACKEND=harness) to executeHarness, which POSTs buildScenarioPayload(scenario, ns) to the versioned webhook url and captures the lastNode Interpret report (normalizeHarnessResponse unwraps a single-item array; null -> NOT_CONFIGURED, non-ok/transport-throw -> FAIL, contract-gate -> FAIL). readConfig gains exec.harness.{baseUrl,workflowId,ready} (ready = baseUrl && workflowId, API key not required); buildRunReport execution block gains base_url + webhook_path; preflight adds informational harness-artifact checks under harness mode; parseArgs/usage document --inject-scenario and the harness backend. Fix: executeFailureInfo now strips n8n banner/noise lines via parseExecuteStdout before extracting the error (bare JSON path unchanged). cli/http behavior byte-identical. See reports/PHASE-6-5-REPORT.md."
+    },
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "previous_sha256": "8b48a3299132bdb05661debc5a5a14c0dea808d2e829c49d7d58b98779b51a20",
+      "sha256": "f921263bb37d4dc9c2fbe1cc5b2afe3ea71b45ad2a3f4cac57ba6374aff5eff9",
+      "date": "2026-09-14",
+      "reason": "Phase 6.5.1: harness backend URL/env correction. harnessWebhookUrl drops the abandoned two-segment workflow-id experiment (production mounts at /webhook/<path>, test at /webhook-test/<path>; the workflow id is NEVER part of a webhook URL). readConfig gains exec.harness.{baseUrl,workflowId,webhookPath,webhookMode,ready} sourced ONLY from dedicated RESP_INT_HARNESS_BASE_URL / RESP_INT_HARNESS_WORKFLOW_ID / RESP_INT_HARNESS_WEBHOOK_PATH / RESP_INT_HARNESS_WEBHOOK_MODE (N8N_BASE_URL fallback for baseUrl only; N8N_WORKFLOW_ID alone never satisfies the harness -> NOT_CONFIGURED). .env.example documents the harness block. Empirically, the serene_swartz container (n8n 2.38.7) registers the production webhook under a workflow-id-prefixed path (/webhook/harnessRespIntV10000001/webhook/test/resp-int-harness; the plain /webhook/test/resp-int-harness 404s even after a clean restart), so the operator MUST set RESP_INT_HARNESS_WEBHOOK_PATH to the live-registered path. See reports/PHASE-6-5-REVISION-REPORT.md."
+    },
+    {
+      "path": "Response-Interpretation V1 — Test Harness.json",
+      "previous_sha256": "62664c7c4e3cda56830b8d403fe9b8479d70478f2d17478dd86edd8b31ad30fd",
+      "sha256": "9a75ace5635072f63ec73fb591b204c646a6ad4d761cbab9c17879a8f536956e",
+      "date": "2026-09-14",
+      "reason": "Phase 6.5.1: approved single-exception empty-read continuation flag — the harness Read Response Log (googleSheets) node now sets alwaysOutputData=true (documented contract exception HARNESS_CONTINUATION_FLAG_NODES). A live Response Log sheet with zero data rows makes the read emit an empty branch; an empty main terminates the frozen chain and responseMode=lastNode then 500s with 'No item to return was found' (verified from n8n source webhook-last-node-response-extractor.js + decoded execution runData). The flag passes the input item through on an empty read, so the frozen Interpret Responses -> Response Interpretation Complete chain always runs and the webhook returns a structured report (empirically 200 + full report JSON after re-import + re-activate). Regenerated by scripts/build-response-interpretation-test-harness.js; the FROZEN Response-Interpretation V1.json is untouched."
+    },
+    {
+      "path": "src/response-interpretation-test-harness-contract.js",
+      "previous_sha256": "284b694c51fb5d198bee11894803ce8eabe5aba53b4edd348235b26d5379ff7a",
+      "sha256": "3b05058480ec6bce6b207ab666827093c06007198b734abb95eafd9f594d13b9",
+      "date": "2026-09-14",
+      "reason": "Phase 6.5.1: splice-identity alwaysOutputData check is exception-aware. Read Response Log may set the documented empty-read continuation flag (alwaysOutputData=true; HARNESS_CONTINUATION_FLAG_NODES) while every other spliced node keeps the strict frozen-equal alwaysOutputData check. Module header + hygiene-rule docs describe the single allowance; +2 phase-6-5 tests (flag present on the harness node, flag on a non-exception spliced node rejected)."
     }
   ],
   "artifacts": [
@@ -18,23 +88,23 @@
     },
     {
       "path": "src/response-interpretation-workflow-contract.js",
-      "sha256": "9d75b769145e65c2ff14fc129ec3a2f227daf27143d738e132b79e377ea67230",
-      "note": "Phase 3 workflow contract (pinned SPREADSHEET_ID, timestamps/run ids)"
+      "sha256": "8bb58c9beb51931af6d64811b8dc30daa6774917bcd85ed428dc80cd68792168",
+      "note": "Phase 3 workflow contract (pinned SPREADSHEET_ID, timestamps/run ids) — Phase 5.1 hardening (EXPECTED_EDGES, reachability helpers), Phase 5.2 output-slot validity, and Phase 5.4 chain: TOPOLOGY/EXPECTED_EDGES are the strict linear chain, referenceWorkflow owns the chain wiring, chain fan-in/fan-out checks + pairedItemAncestors + transitive-ancestor code-reference check"
     },
     {
       "path": "src/embedded-response-interpret.js",
       "sha256": "8d56121734094e3e9f14d0a8ab1f82db76d7b7b45f81e115753535acf0d7894c",
-      "note": "Phase 4 embedded mirror shipped inside the workflow"
+      "note": "Phase 4 embedded mirror shipped inside the workflow (unchanged by Phase 5.4; references only the chain's transitive ancestors)"
     },
     {
       "path": "src/response-interpretation-live-runner.js",
-      "sha256": "ecf46417d700d87cefa99efa4fd37f2e9ec35e6b9f8680578303837111989f68",
-      "note": "Phase 5 live runner (Phase 5 revision: cli/http execution backend + 5679 broker-port resolution); exit codes 0/1/2/3/4; NOT_CONFIGURED never fabricates PASS"
+      "sha256": "f921263bb37d4dc9c2fbe1cc5b2afe3ea71b45ad2a3f4cac57ba6374aff5eff9",
+      "note": "Phase 5+6.5 live runner (cli/http execution backend; Phase 5.4: executeFailureInfo + structured failure_info; Phase 6.5: ADDITIVE harness backend with --inject-scenario; Phase 6.5.1: harnessWebhookUrl never embeds a workflow id + dedicated RESP_INT_HARNESS_* env sourcing)"
     },
     {
       "path": "Response-Interpretation V1.json",
-      "sha256": "6b0c6a006d4d745f3e89702a7af8d2100f87132d5cd9b29b84e932aa7c564c03",
-      "note": "Shipped Response Interpretation V1 workflow"
+      "sha256": "ae365cd3b98fce08b95ccea9fae7661e4d1bde7f655326a4ed13b7031adb4bac",
+      "note": "Shipped Response Interpretation V1 workflow (Phase 5.4 strict chain: Manual Trigger -> Read Reconciliation Report -> Read Response Log -> Interpret Responses -> Response Interpretation Complete)"
     },
     {
       "path": "src/response-capture.js",
@@ -45,6 +115,21 @@
       "path": "src/response-reconcile.js",
       "sha256": "7554973cbab19f7e68cdf363833bd34f6518843b05ce46d597a6a16dad0a6131",
       "note": "Response Reconciliation engine"
+    },
+    {
+      "path": "Response-Interpretation V1 — Test Harness.json",
+      "sha256": "9a75ace5635072f63ec73fb591b204c646a6ad4d761cbab9c17879a8f536956e",
+      "note": "Phase 6.5 TEST-ONLY harness (webhook payload-injection surface; generated, deterministic; spliced nodes byte-identical to the frozen chain except the two documented modular allowances on Read Response Log: reference-only credential block + alwaysOutputData=true empty-read continuation flag)"
+    },
+    {
+      "path": "src/response-interpretation-scenario-payloads.js",
+      "sha256": "a4914a85f503a7d44a5a4faa1ec09ffc466e8299575a2c5c356fb9e7bb627ded",
+      "note": "Phase 6.5 scenario -> trigger-input payload builder (parity with runner.injectedTriggerInputFor)"
+    },
+    {
+      "path": "src/response-interpretation-test-harness-contract.js",
+      "sha256": "3b05058480ec6bce6b207ab666827093c06007198b734abb95eafd9f594d13b9",
+      "note": "Phase 6.5 harness contract + constants (checkHarnessContract/assertHarnessContract; frozen splice identity with the documented alwaysOutputData continuation-flag exception on Read Response Log; hygiene scans)"
     }
   ]
 }

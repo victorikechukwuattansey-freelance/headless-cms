@@ -1,0 +1,179 @@
+{
+  "id": "harnessRespIntV10000001",
+  "name": "Response Interpretation V1 — Test Harness (Phase 6.5)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "test/resp-int-harness",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "b619c17c-h000-4b2e-9a3c-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn [{ json: (($input.first().json.body) || {}) }];\n"
+      },
+      "id": "b619c17c-h000-4b2e-9a3c-000000000002",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\nconst triggerItems = $('Manual Trigger').all();\n\nlet responseLogReadError = '';\nlet reconciliationReadError = '';\nlet injectedReport = null;\nfor (const item of triggerItems) {\n  const j = (item && item.json) || {};\n  if (typeof j.response_log_read_error === 'string' && j.response_log_read_error !== '') {\n    responseLogReadError = j.response_log_read_error;\n  }\n  if (typeof j.reconciliation_read_error === 'string' && j.reconciliation_read_error !== '') {\n    reconciliationReadError = j.reconciliation_read_error;\n  }\n  if (injectedReport === null && j.reconciliation_report !== undefined && j.reconciliation_report !== null) {\n    injectedReport = j.reconciliation_report;\n  }\n}\n\nconst report = injectedReport !== null ? injectedReport : { status: 'COMPLETED', results: [] };\nconst payload =\n  reconciliationReadError === ''\n    ? report\n    : Object.assign({}, report, { reconciliation_read_error: reconciliationReadError });\n\nreturn [{ json: payload }];\n"
+      },
+      "id": "resp-int-read-recon-0001",
+      "name": "Read Reconciliation Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list"
+        },
+        "operation": "read",
+        "sheetName": {
+          "mode": "name",
+          "value": "Response Log"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "resp-int-read-response-0001",
+      "name": "Read Response Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        260,
+        -40
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Q2J6wmozbkk3NCTM",
+          "name": "Google Sheets account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\nconst triggerItems = $('Manual Trigger').all();\nconst responseLogItems = $('Read Response Log').all();\nconst reportItems = $('Read Reconciliation Report').all();\n\nconst str = (value) => (value === undefined || value === null ? '' : String(value));\nconst digits14 = (value) => String(value).replace(/\\D/g, '').slice(0, 14).padEnd(14, '0');\nconst RUN_LABEL = 'RESPINT';\nconst INTERPRETATION_VERSION = 'RESP-INT-V1';\nconst SUPPORTED_CHANNELS = ['email', 'call'];\nconst RESPONSE_STATUSES = ['CAPTURED', 'UNMATCHED'];\nconst STATUS = { COMPLETED: 'COMPLETED', INCOMPLETE: 'INCOMPLETE' };\nconst INTERPRETATION_STATUS = { INTERPRETED: 'INTERPRETED', SKIPPED: 'SKIPPED' };\nconst INTENT_LABELS = [\n  'RESPOND',\n  'QUESTION',\n  'OBJECTION',\n  'NOT_INTERESTED',\n  'OPT_OUT',\n  'UNDELIVERABLE',\n  'SPAM_OR_AUTOMATED',\n  'NO_INTENT',\n];\nconst ACTIONABILITY = {\n  HARD_STOP: 'HARD_STOP',\n  AUTO_REPLY: 'AUTO_REPLY',\n  MANUAL_REVIEW: 'MANUAL_REVIEW',\n  NO_ACTION: 'NO_ACTION',\n};\nconst CONFIDENCE = { HIGH: 'HIGH', MEDIUM: 'MEDIUM', LOW: 'LOW' };\nconst CONFIDENCE_THRESHOLDS = { HIGH: 0.7, MEDIUM: 0.4 };\nconst EXCEPTION_TYPE = {\n  INVALID_RESPONSE_RECORD: 'INVALID_RESPONSE_RECORD',\n  MISSING_RECONCILIATION_EVIDENCE: 'MISSING_RECONCILIATION_EVIDENCE',\n  READ_FAILURE: 'READ_FAILURE',\n};\nconst SEVERITY = { ERROR: 'ERROR', WARNING: 'WARNING' };\nconst EXCEPTION_SEVERITY = {};\nEXCEPTION_SEVERITY[EXCEPTION_TYPE.INVALID_RESPONSE_RECORD] = SEVERITY.WARNING;\nEXCEPTION_SEVERITY[EXCEPTION_TYPE.MISSING_RECONCILIATION_EVIDENCE] = SEVERITY.WARNING;\nEXCEPTION_SEVERITY[EXCEPTION_TYPE.READ_FAILURE] = SEVERITY.ERROR;\nconst EXCEPTION_REASON = {};\nEXCEPTION_REASON[EXCEPTION_TYPE.INVALID_RESPONSE_RECORD] = 'Response Log row is missing required identity fields, carries a non-canonical response_status, or has no response text.';\nEXCEPTION_REASON[EXCEPTION_TYPE.MISSING_RECONCILIATION_EVIDENCE] = 'No reconciliation evidence for response_id; treated as NOT_VERIFIABLE.';\nEXCEPTION_REASON[EXCEPTION_TYPE.READ_FAILURE] = 'A required interpretation source could not be read.';\nconst TIE_BREAK_ORDER = ['NOT_INTERESTED', 'QUESTION', 'OBJECTION', 'RESPOND'];\nconst REPORT_SUMMARY_FIELDS = [\n  'response_records',\n  'interpreted_records',\n  'skipped_records',\n  'by_intent',\n  'by_confidence_band',\n  'by_actionability',\n  'stop_contact_count',\n  'manual_review_count',\n  'conflict_count',\n  'coverage_rate',\n  'exception_count',\n];\n\nconst fnv1a32Hex = (input) => {\n  let hash = 0x811c9dc5;\n  for (let i = 0; i < input.length; i += 1) {\n    hash ^= input.charCodeAt(i);\n    hash = Math.imul(hash, 0x01000193);\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n};\n\nconst interpretationIdFor = (responseId) => 'INTERP-' + fnv1a32Hex(responseId + '::' + INTERPRETATION_VERSION);\n\nconst isSupportedChannel = (channel) => channel !== '' && SUPPORTED_CHANNELS.indexOf(channel) !== -1;\n\nconst RULES = [\n  {\n    id: 'OPT-OUT-01',\n    clause: 'OPT_OUT',\n    polarity: 'opt_out',\n    weight: 10,\n    phrases: [\n      'unsubscribe',\n      'opt out',\n      'opt-out',\n      'do not contact',\n      'do not email',\n      'do not call',\n      'remove me',\n      'stop sending',\n      'stop emailing',\n      'take me off',\n    ],\n  },\n  {\n    id: 'UNDELIVERABLE-01',\n    clause: 'UNDELIVERABLE',\n    polarity: 'mechanical',\n    weight: 4,\n    phrases: [\n      'mailer-daemon',\n      'undeliverable',\n      'delivery status notification',\n      'delivery failure',\n      'message could not be delivered',\n      'failure notice',\n      'out of office',\n      'automatic reply',\n      'auto-reply',\n      'autoreply',\n    ],\n  },\n  {\n    id: 'SPAM-01',\n    clause: 'SPAM_OR_AUTOMATED',\n    polarity: 'mechanical',\n    weight: 4,\n    phrases: [\n      'newsletter',\n      'you are receiving this email',\n      'email preferences',\n      'no-reply',\n      'do not reply',\n      'unsolicited',\n      'bulk mail',\n      'this is a sponsored message',\n    ],\n  },\n  {\n    id: 'CSQ-01',\n    clause: 'QUESTION',\n    polarity: 'question',\n    weight: 2,\n    phrases: [\n      'what',\n      'when',\n      'how',\n      'why',\n      'where',\n      'which',\n      'can you',\n      'could you',\n      'do you',\n      'have you',\n      'is it',\n      'is this',\n      'are you',\n      'how much',\n      'how long',\n      'whats',\n      'when is',\n    ],\n  },\n  {\n    id: 'CSQ-02',\n    clause: 'QUESTION',\n    polarity: 'question',\n    weight: 1,\n    regex: '\\\\?',\n    regexPhrase: '?',\n  },\n  {\n    id: 'INST-01',\n    clause: 'RESPOND',\n    polarity: 'positive',\n    weight: 3,\n    phrases: [\n      'yes',\n      'sounds good',\n      'looks good',\n      'sounds great',\n      'please send',\n      'send details',\n      'send me',\n      'go ahead',\n      'lets talk',\n      'count me in',\n      'would like',\n      'very interested',\n      'definitely interested',\n      'great',\n      'perfect',\n    ],\n  },\n  {\n    id: 'NINT-01',\n    clause: 'NOT_INTERESTED',\n    polarity: 'negative',\n    weight: 3,\n    phrases: [\n      'not interested',\n      'no thanks',\n      'no thank you',\n      'thanks but',\n      'thank you but',\n      'do not need',\n      'dont need',\n      'not for us',\n      'no longer',\n      'not now',\n      'already have',\n      'we are good',\n      'not necessary',\n      'hard pass',\n      'not needed',\n    ],\n  },\n  {\n    id: 'OBJ-01',\n    clause: 'OBJECTION',\n    polarity: 'negative',\n    weight: 2,\n    phrases: [\n      'too expensive',\n      'expensive',\n      'price',\n      'cost',\n      'budget',\n      'no budget',\n      'too busy',\n      'not enough time',\n      'no time',\n      'we already use',\n      'already using',\n      'have a solution',\n      'need to think',\n      'let me think',\n      'think about it',\n      'maybe later',\n      'too early',\n      'wrong time',\n      'not the right time',\n      'too much',\n    ],\n  },\n];\n\nconst escapeRegExp = (value) =>\n  String(value).replace(new RegExp('[.*+?^' + String.fromCharCode(36) + '{}()|[\\]\\\\]', 'g'), '\\\\$&');\n\nconst boundaryRegExp = (phrase) =>\n  new RegExp('(?:^|[^a-z0-9])' + escapeRegExp(phrase) + '(?:$|[^a-z0-9])', 'gi');\n\nconst zeroLabelCounts = () => Object.fromEntries(INTENT_LABELS.map((label) => [label, 0]));\n\nconst zeroObject = (keys) => Object.fromEntries(keys.map((key) => [key, 0]));\n\nconst evaluateRules = (text) => {\n  const hits = [];\n  for (const rule of RULES) {\n    const phrases = [];\n    let count = 0;\n    for (const phrase of rule.phrases || []) {\n      const matches = text.match(boundaryRegExp(phrase)) || [];\n      if (matches.length > 0) {\n        phrases.push(phrase);\n        count += matches.length;\n      }\n    }\n    if (rule.regex) {\n      const matches = text.match(new RegExp(rule.regex, 'gi')) || [];\n      if (matches.length > 0) {\n        phrases.push(rule.regexPhrase || rule.regex);\n        count += matches.length;\n      }\n    }\n    if (count > 0) {\n      hits.push({ rule, count, phrases });\n    }\n  }\n  return hits;\n};\n\nconst resolveConversational = (scores) => {\n  const entries = INTENT_LABELS.filter((label) =>\n    ['RESPOND', 'QUESTION', 'OBJECTION', 'NOT_INTERESTED'].includes(label),\n  )\n    .map((label) => [label, scores[label] || 0])\n    .filter((entry) => entry[1] > 0);\n\n  if (entries.length === 0) {\n    return { label: 'NO_INTENT', decidingClause: 'NO_INTENT', conflict: false };\n  }\n\n  let best = entries[0];\n  for (const entry of entries) {\n    if (entry[1] > best[1]) best = entry;\n  }\n  const tied = entries.filter((entry) => entry[1] === best[1]);\n  let winner;\n  if (tied.length === 1) {\n    winner = best[0];\n  } else {\n    winner = TIE_BREAK_ORDER.find((label) => tied.some((entry) => entry[0] === label));\n    winner = winner || best[0];\n  }\n  return { label: winner, decidingClause: winner, conflict: false };\n};\n\nconst buildEvidence = (hits) => {\n  const entries = [];\n  for (const hit of hits) {\n    for (const phrase of hit.phrases) {\n      entries.push({\n        rule_id: hit.rule.id,\n        phrase,\n        weight: hit.rule.weight,\n        polarity: hit.rule.polarity,\n        clause: hit.rule.clause,\n      });\n    }\n  }\n  entries.sort((a, b) => {\n    if (b.weight !== a.weight) return b.weight - a.weight;\n    if (a.clause !== b.clause) return a.clause < b.clause ? -1 : 1;\n    if (a.rule_id !== b.rule_id) return a.rule_id < b.rule_id ? -1 : 1;\n    if (a.phrase !== b.phrase) return a.phrase < b.phrase ? -1 : 1;\n    return 0;\n  });\n  const clauseHits = {};\n  for (const entry of entries) {\n    clauseHits[entry.clause] = (clauseHits[entry.clause] || 0) + 1;\n  }\n  return { evidence: entries, clauseHits };\n};\n\nconst confidenceBandFor = (confidence) => {\n  const value = Number(confidence);\n  if (!Number.isFinite(value) || value < CONFIDENCE_THRESHOLDS.MEDIUM) return CONFIDENCE.LOW;\n  if (value >= CONFIDENCE_THRESHOLDS.HIGH) return CONFIDENCE.HIGH;\n  return CONFIDENCE.MEDIUM;\n};\n\nconst classifyIntent = (text) => {\n  const normalized = str(text).toLowerCase();\n  const hits = evaluateRules(normalized);\n\n  const scores = Object.fromEntries(INTENT_LABELS.map((label) => [label, 0]));\n  let totalWeight = 0;\n  for (const hit of hits) {\n    scores[hit.rule.clause] += hit.rule.weight * hit.count;\n    totalWeight += hit.rule.weight * hit.count;\n  }\n\n  let label;\n  let decidingClause;\n  let conflict = false;\n\n  if (scores.OPT_OUT > 0) {\n    label = 'OPT_OUT';\n    decidingClause = 'OPT_OUT';\n  } else if (scores.UNDELIVERABLE > 0) {\n    label = 'UNDELIVERABLE';\n    decidingClause = 'UNDELIVERABLE';\n  } else if (scores.SPAM_OR_AUTOMATED > 0) {\n    label = 'SPAM_OR_AUTOMATED';\n    decidingClause = 'SPAM_OR_AUTOMATED';\n  } else {\n    const conversational = resolveConversational(scores);\n    if (scores.RESPOND > 0 && scores.NOT_INTERESTED > 0) {\n      conflict = true;\n      conversational.label = 'NO_INTENT';\n      conversational.decidingClause = 'CONFLICT';\n    }\n    label = conversational.label;\n    decidingClause = conversational.decidingClause;\n  }\n\n  const topScore =\n    label === 'NO_INTENT' ? Math.max(0, ...Object.values(scores)) : scores[label];\n  const confidence = totalWeight > 0 ? topScore / totalWeight : 0;\n  const band = confidenceBandFor(confidence);\n\n  const evidenceBag = buildEvidence(hits);\n\n  return {\n    label,\n    confidence: Number.isFinite(confidence) ? confidence : 0,\n    band,\n    evidence: evidenceBag.evidence,\n    clauseHits: evidenceBag.clauseHits,\n    matchedTermsTotal: evidenceBag.evidence.length,\n    decidingClause,\n    conflict,\n  };\n};\n\nconst normalizeResponseRows = (rows) =>\n  (Array.isArray(rows) ? rows : []).map((row) => ({\n    response_id: str(row.response_id),\n    idempotency_key: str(row.idempotency_key),\n    lead_id: str(row.lead_id),\n    outreach_id: str(row.outreach_id),\n    channel: str(row.channel).toLowerCase(),\n    response_status: str(row.response_status).toUpperCase(),\n    response_text: str(row.response_text),\n  }));\n\nconst normalizeReconciliation = (report) => {\n  if (report === undefined || report === null) return { status: STATUS.COMPLETED, results: [] };\n  const source = report && typeof report === 'object' && !Array.isArray(report) ? report : {};\n  const results = Array.isArray(source.results) ? source.results : [];\n  return { status: str(source.status).toUpperCase() || STATUS.COMPLETED, results };\n};\n\nconst indexReconciliation = (results) => {\n  const index = new Map();\n  for (const card of results) {\n    const responseId = str(card && card.response_id);\n    if (responseId && !index.has(responseId)) index.set(responseId, card);\n  }\n  return index;\n};\n\nconst isInterpretable = (row) =>\n  str(row.response_id) !== '' &&\n  str(row.idempotency_key) !== '' &&\n  isSupportedChannel(row.channel) &&\n  RESPONSE_STATUSES.includes(row.response_status) &&\n  str(row.response_text).trim() !== '';\n\nconst skipReason = (row) => {\n  if (str(row.response_id) === '') return 'missing response_id';\n  if (str(row.idempotency_key) === '') return 'missing idempotency_key';\n  if (!isSupportedChannel(row.channel)) return 'unsupported channel';\n  if (!RESPONSE_STATUSES.includes(row.response_status)) return 'invalid response_status';\n  if (str(row.response_text).trim() === '') return 'empty response_text';\n  return 'invalid response record';\n};\n\nconst actionabilityFor = (input) => {\n  const label = input.label;\n  const band = input.band;\n  const reconciliationStatus = input.reconciliationStatus;\n  if (label === 'OPT_OUT') {\n    return { actionability: ACTIONABILITY.HARD_STOP, recommendedAction: 'stop-contact: suppress future outreach', priority: 'HIGH' };\n  }\n  if (band === CONFIDENCE.LOW) {\n    return { actionability: ACTIONABILITY.MANUAL_REVIEW, recommendedAction: 'manual review required', priority: 'MEDIUM' };\n  }\n  if (reconciliationStatus === 'VIOLATION') {\n    return { actionability: ACTIONABILITY.MANUAL_REVIEW, recommendedAction: 'manual review required', priority: 'HIGH' };\n  }\n  if (reconciliationStatus === 'NOT_VERIFIABLE') {\n    return { actionability: ACTIONABILITY.MANUAL_REVIEW, recommendedAction: 'manual review required', priority: 'MEDIUM' };\n  }\n  if (label === 'NO_INTENT') {\n    return { actionability: ACTIONABILITY.MANUAL_REVIEW, recommendedAction: 'manual review required', priority: 'MEDIUM' };\n  }\n  if (label === 'RESPOND' || label === 'QUESTION' || label === 'OBJECTION') {\n    return { actionability: ACTIONABILITY.AUTO_REPLY, recommendedAction: 'auto-draft reply permitted; send owned by a later stage', priority: 'LOW' };\n  }\n  if (label === 'NOT_INTERESTED' || label === 'UNDELIVERABLE' || label === 'SPAM_OR_AUTOMATED') {\n    return { actionability: ACTIONABILITY.NO_ACTION, recommendedAction: 'no action: close/archive', priority: 'LOW' };\n  }\n  return { actionability: ACTIONABILITY.MANUAL_REVIEW, recommendedAction: 'manual review required', priority: 'MEDIUM' };\n};\n\nconst exception = (type, record, evidence) => {\n  const src = record || {};\n  return {\n    category: type,\n    severity: EXCEPTION_SEVERITY[type] || SEVERITY.WARNING,\n    response_id: str(src.response_id),\n    lead_id: str(src.lead_id),\n    outreach_id: str(src.outreach_id),\n    channel: str(src.channel),\n    reason: EXCEPTION_REASON[type],\n    evidence: evidence || {},\n  };\n};\n\nconst sortedBy = (list, keys) =>\n  list.slice().sort((a, b) => {\n    for (const key of keys) {\n      const av = a[key] || '';\n      const bv = b[key] || '';\n      if (av < bv) return -1;\n      if (av > bv) return 1;\n    }\n    return 0;\n  });\n\nconst sortedExceptions = (exceptions) =>\n  exceptions\n    .map((entry) => Object.assign({}, entry))\n    .sort((a, b) => {\n      const keys = ['category', 'response_id', 'lead_id', 'outreach_id', 'channel', 'reason'];\n      for (const key of keys) {\n        const av = a[key];\n        const bv = b[key];\n        if (av < bv) return -1;\n        if (av > bv) return 1;\n      }\n      return JSON.stringify(a.evidence || {}).localeCompare(JSON.stringify(b.evidence || {}));\n    });\n\nconst buildCard = (input) => {\n  const row = input.row;\n  const reconciliationEvidence = input.reconciliationEvidence;\n  const exceptions = input.exceptions;\n  const reconciliationStatus = reconciliationEvidence\n    ? str(reconciliationEvidence.reconciliation_status).toUpperCase()\n    : 'NOT_VERIFIABLE';\n\n  const card = {\n    interpretation_id: '',\n    response_id: row.response_id,\n    lead_id: row.lead_id,\n    outreach_id: row.outreach_id,\n    channel: row.channel,\n    response_status: row.response_status,\n    reconciliation_status: reconciliationStatus,\n    interpretation_status: '',\n    intent_label: '',\n    intent_confidence: null,\n    confidence_band: '',\n    actionability: '',\n    recommended_action: '',\n    stop_contact: false,\n    priority: '',\n    actionable: false,\n    matched_terms_total: 0,\n    clause_hits: {},\n    deciding_clause: '',\n    conflict_detected: false,\n    interpretation_version: INTERPRETATION_VERSION,\n    evidence: [],\n    text_preview: '',\n    reason: '',\n    notes: '',\n  };\n\n  if (!isInterpretable(row)) {\n    const reason = skipReason(row);\n    card.interpretation_status = INTERPRETATION_STATUS.SKIPPED;\n    card.reason = 'skipped: ' + reason;\n    exceptions.push(exception(EXCEPTION_TYPE.INVALID_RESPONSE_RECORD, row, { reason }));\n    return card;\n  }\n\n  if (!reconciliationEvidence) {\n    exceptions.push(exception(EXCEPTION_TYPE.MISSING_RECONCILIATION_EVIDENCE, row, {}));\n  }\n\n  const classified = classifyIntent(row.response_text);\n  const unmatched = row.response_status === 'UNMATCHED';\n  const action = actionabilityFor({\n    label: classified.label,\n    band: classified.band,\n    reconciliationStatus,\n  });\n\n  card.interpretation_status = INTERPRETATION_STATUS.INTERPRETED;\n  card.interpretation_id = interpretationIdFor(row.response_id);\n  card.intent_label = classified.label;\n  card.intent_confidence = classified.confidence;\n  card.confidence_band = classified.band;\n  card.matched_terms_total = classified.matchedTermsTotal;\n  card.clause_hits = classified.clauseHits;\n  card.deciding_clause = classified.decidingClause;\n  card.conflict_detected = classified.conflict;\n  card.evidence = classified.evidence;\n  card.actionability = action.actionability;\n  card.recommended_action = action.recommendedAction;\n  card.stop_contact = classified.label === 'OPT_OUT';\n  card.priority = action.priority;\n  card.actionable = !unmatched;\n  card.reason = classified.label + ' with ' + classified.band + ' confidence';\n\n  const notes = [];\n  if (unmatched) notes.push('unmatched response; not actionable');\n  if (!reconciliationEvidence)\n    notes.push('no reconciliation evidence for response_id; treated as NOT_VERIFIABLE');\n  if (classified.conflict) notes.push('conflicting conversational clauses resolved to NO_INTENT');\n  card.notes = notes.join('; ');\n\n  return card;\n};\n\nconst computeSummary = (input) => {\n  const rows = input.rows;\n  const cards = input.cards;\n  const reported = input.reported;\n  const interpreted = cards.filter((c) => c.interpretation_status === INTERPRETATION_STATUS.INTERPRETED);\n  const byIntent = zeroLabelCounts();\n  const byBand = zeroObject([CONFIDENCE.HIGH, CONFIDENCE.MEDIUM, CONFIDENCE.LOW]);\n  const byAction = zeroObject([\n    ACTIONABILITY.HARD_STOP,\n    ACTIONABILITY.AUTO_REPLY,\n    ACTIONABILITY.MANUAL_REVIEW,\n    ACTIONABILITY.NO_ACTION,\n  ]);\n\n  let stopContactCount = 0;\n  let manualReviewCount = 0;\n  let conflictCount = 0;\n\n  for (const card of interpreted) {\n    byIntent[card.intent_label] = (byIntent[card.intent_label] || 0) + 1;\n    byBand[card.confidence_band] += 1;\n    byAction[card.actionability] += 1;\n    if (card.stop_contact) stopContactCount += 1;\n    if (card.actionability === ACTIONABILITY.MANUAL_REVIEW) manualReviewCount += 1;\n    if (card.conflict_detected) conflictCount += 1;\n  }\n\n  return {\n    response_records: rows.length,\n    interpreted_records: interpreted.length,\n    skipped_records: rows.length - interpreted.length,\n    by_intent: byIntent,\n    by_confidence_band: byBand,\n    by_actionability: byAction,\n    stop_contact_count: stopContactCount,\n    manual_review_count: manualReviewCount,\n    conflict_count: conflictCount,\n    coverage_rate: rows.length > 0 ? Number((interpreted.length / rows.length).toFixed(4)) : null,\n    exception_count: reported.length,\n  };\n};\n\nconst buildReport = (input) => {\n  const rows = input.rows;\n  const cards = input.cards;\n  const exceptions = input.exceptions;\n  const now = input.now;\n  const runId = input.runId;\n  const runAt = new Date(now).toISOString();\n  const reported = sortedExceptions(exceptions).map((entry) =>\n    Object.assign({}, entry, { detected_at: runAt, run_id: runId }),\n  );\n\n  return {\n    run_id: runId,\n    run_at: runAt,\n    detected_at: runAt,\n    status: STATUS.COMPLETED,\n    sources: {\n      response_log_ok: true,\n      response_log_read_error: '',\n      reconciliation_ok: true,\n      reconciliation_read_error: '',\n    },\n    summary: computeSummary({ rows, cards, reported }),\n    results: sortedBy(cards, ['response_id', 'lead_id', 'outreach_id', 'channel']),\n    exceptions: reported,\n  };\n};\n\nconst buildReadFailureReport = (input) => {\n  const responseLogReadError = input.responseLogReadError;\n  const reconciliationReadError = input.reconciliationReadError;\n  const now = input.now;\n  const runId = input.runId;\n  const runAt = new Date(now).toISOString();\n  const failures = [];\n  if (responseLogReadError) {\n    failures.push(\n      exception(EXCEPTION_TYPE.READ_FAILURE, {}, { source: 'response log', error: responseLogReadError }),\n    );\n  }\n  if (reconciliationReadError) {\n    failures.push(\n      exception(EXCEPTION_TYPE.READ_FAILURE, {}, { source: 'reconciliation report', error: reconciliationReadError }),\n    );\n  }\n  const reported = sortedExceptions(failures).map((entry) =>\n    Object.assign({}, entry, { detected_at: runAt, run_id: runId }),\n  );\n  const nulledSummary = Object.fromEntries(\n    REPORT_SUMMARY_FIELDS.filter((field) => field !== 'exception_count').map((field) => [field, null]),\n  );\n  return {\n    run_id: runId,\n    run_at: runAt,\n    detected_at: runAt,\n    status: STATUS.INCOMPLETE,\n    sources: {\n      response_log_ok: !responseLogReadError,\n      response_log_read_error: responseLogReadError,\n      reconciliation_ok: !reconciliationReadError,\n      reconciliation_read_error: reconciliationReadError,\n    },\n    summary: Object.assign({}, nulledSummary, { exception_count: reported.length }),\n    results: [],\n    exceptions: reported,\n  };\n};\n\nlet responseReadError = '';\nlet reconciliationReadError = '';\nfor (const item of triggerItems) {\n  const j = (item && item.json) || {};\n  if (typeof j.response_log_read_error === 'string' && j.response_log_read_error !== '')\n    responseReadError = j.response_log_read_error;\n  if (typeof j.reconciliation_read_error === 'string' && j.reconciliation_read_error !== '')\n    reconciliationReadError = j.reconciliation_read_error;\n}\n\nconst responseRows = responseLogItems.map((item) => (item && item.json) || {});\nconst nowMs = Date.now();\nconst runIdFinal = RUN_LABEL + '-' + digits14(String(nowMs));\n\nconst reportItemJson = reportItems.length > 0 ? reportItems[0].json : null;\nconst reconciliationInput = normalizeReconciliation(reportItemJson);\n\nlet responseErr = str(responseReadError);\nlet reconErr = str(reconciliationReadError);\nif (!responseErr && reconciliationInput.status === STATUS.INCOMPLETE) {\n  reconErr = reconErr || 'reconciliation upstream state INCOMPLETE';\n}\n\nlet report;\nif (responseErr || reconErr) {\n  report = buildReadFailureReport({\n    responseLogReadError: responseErr,\n    reconciliationReadError: reconErr,\n    now: nowMs,\n    runId: runIdFinal,\n  });\n} else {\n  const rows = normalizeResponseRows(responseRows);\n  const reconciliationIndex = indexReconciliation(reconciliationInput.results);\n  const exceptions = [];\n  const cards = rows.map((row) =>\n    buildCard({\n      row,\n      reconciliationEvidence: reconciliationIndex.get(row.response_id),\n      exceptions,\n    }),\n  );\n  report = buildReport({ rows, cards, exceptions, now: nowMs, runId: runIdFinal });\n}\n\nreturn [\n  { json: report },\n  { json: { run_id: report.run_id, exception_count: report.summary.exception_count, exceptions: report.exceptions } },\n];\n"
+      },
+      "id": "resp-int-interpret-0000001",
+      "name": "Interpret Responses",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        520,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "resp-int-complete-0000001",
+      "name": "Response Interpretation Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        780,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Manual Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Reconciliation Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Reconciliation Report": {
+      "main": [
+        [
+          {
+            "node": "Read Response Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Response Log": {
+      "main": [
+        [
+          {
+            "node": "Interpret Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpret Responses": {
+      "main": [
+        [
+          {
+            "node": "Response Interpretation Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "artifact": "Response-Interpretation V1 — Test Harness",
+    "purpose": "Phase 6.5 webhook payload-injection surface for the frozen Response Interpretation V1 chain (Mechanism B)",
+    "provenance": "generated by scripts/build-response-interpretation-test-harness.js; nodes 3-6 spliced byte-identical from Response-Interpretation V1.json",
+    "workflowId": "harnessRespIntV10000001",
+    "webhookPath": "test/resp-int-harness",
+    "credentialReference": "googleSheetsOAuth2Api -> id/name (no secret material)",
+    "spreads": [
+      "Response Log"
+    ],
+    "banned": "provider/AI/output/scheduler nodes prohibited; single Webhook entry is the only permitted exception"
+  }
+}
