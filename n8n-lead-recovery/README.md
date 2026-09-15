@@ -1,216 +1,140 @@
-# Lead Recovery Engine — Prospect Finder & Validation V1
+# Lead Recovery Engine — nine-workflow n8n pipeline
 
-Production-ready n8n workflow for prospect research and validation. Stops at **Verified Leads**. No outreach, no Hunter, no Apollo, no email.
-
-**Pipeline:** Search Input → Foursquare Places + OpenStreetMap Overpass → Raw Leads → Verified Leads → Google Sheets scoring
-
-**Providers:** the live workflow queries **Foursquare Places API** and **OpenStreetMap Overpass API** in parallel, merges the two result streams, dedupes, and writes Verified Leads. (This README describes the current Foursquare/OSM pipeline; the former Google Places-based version was removed in the hygiene rebase.)
-
----
-
-## 1. Required Credentials
-
-| Credential | Type in n8n | Configures |
-|---|---|---|
-| Google Sheets OAuth2 | `googleSheetsOAuth2Api` | The 7 Google Sheets nodes |
-| Foursquare API | `httpHeaderAuth` (named `Foursquare API`) | The **Foursquare Places API** HTTP node (`Authorization: Bearer <token>` via `=Bearer {{$credentials.value}}`) |
-| OpenStreetMap Overpass | — (public endpoint, no credential) | The **OpenStreetMap Overpass API** HTTP node |
-
-See `docs/CREDENTIALS.md` for the full nine-workflow credential inventory and import-side attach checklist.
+A local-first pipeline of nine n8n workflows for the **Lead Recovery Engine**: prospect
+discovery and validation, approval gating, outreach queue planning, execution delivery,
+and response interpretation. Every workflow is shipped as a JSON export plus a written
+spec, an offline test suite, and a live-runner/harness. The whole pipeline runs against a
+**single Google Sheets spreadsheet** whose tabs are the durable data surface.
 
 ---
 
-## 2. Environment Variables
+## 1.1 What this repository is
 
-The workflow itself needs **no environment variables**. Google Sheets auth is a stored n8n credential; the Foursquare token lives in the n8n `httpHeaderAuth` credential (never in a file). `GOOGLE_SHEET_ID` lives in each Sheets node's parameters (insert $env if you prefer).
+`n8n-lead-recovery/` contains the **Lead Recovery Engine** — a pipeline of nine n8n
+workflows plus the deterministic engines those workflows embed. It is not an external
+service and it is not a SaaS; it is a portable set of n8n workflow artifacts with the
+offline suite and live-runner tooling needed to validate and run them against one pinned
+Google spreadsheet.
 
-Live-runner environments for the downstream workflow boundaries are separate and are documented in `docs/PHASE-6-ENVIRONMENT-RUNBOOK.md` and each workflow spec.
+- **Delivery:** 9 workflow JSON exports (see §1.2), 8 spec documents, offline engines in
+  `src/`, a live-runner per workflow, and a frozen-artifact manifest
+  (`frozen-artifacts.manifest.json` + `scripts/verify-frozen.js`).
+- **Environment:** n8n Community Edition in Docker (the development container is
+  `serene_swartz`, holding the workflow DB at `/home/node/.n8n/database.sqlite`). See
+  `docs/CONTAINER-RUNBOOK.md` for the canonical run, import, and credential steps.
+- **Hygiene:** the repository carries no committed secret values; credentials are
+  referenced by id/name only and must be re-attached after import. Baseline evidence:
+  `reports/HYGIENE-H-A-SECURITY-GIT-BASELINE-REPORT.md`.
 
-**Never hard-code credentials or API keys in node parameters or committed files.** The Foursquare node now references the named credential instead of a hardcoded bearer token (Hygiene H2).
+## 1.2 The nine workflows and their lineage
 
----
+Each stage consumes the durable tab(s) the previous stage wrote. The lineage order is the
+order in which data flows:
 
-## 3. Google Sheets Credential Setup
+| # | Workflow | Export file | One-line role |
+| --- | --- | --- | --- |
+| 1 | Prospect Finder & Validation V1 | `Lead Recovery Engine — Prospect Finder & Validation V1.json` | Queries **Foursquare + OpenStreetMap (Overpass) + Google Places** in parallel with a 5-input append-mode Merge, dedupes, and writes **Verified Leads**. |
+| 2 | Approved Outreach Handoff V1 | `Approved Outreach Handoff V1.json` | The **approval gate**: promotes `Verified Leads` rows that earn a manual approval into the **Approved Outreach** approval ledger (schema shared via `src/schema.js`). |
+| 3 | Run Reconciliation V1 | `Run-Reconciliation-and-Reporting V1.json` | Read-only consistency checker between **Approved Outreach** and the **Outreach Log**; reports gaps/duplicates/violations as a structured report (no report tab — output is workflow-level). |
+| 4 | Outreach Queue & Planning V1 | `Outreach-Queue-and-Planning V1.json` | Re-derives the queue from **Approved Outreach** and builds the readiness/priority/channel queue for approved leads. |
+| 5 | Outreach Execution & Delivery V1 | `Outreach-Execution-and-Delivery V1.json` | Determines which `READY` queue work goes out, to whom, via which pre-computed channel; produces the durable **Outreach Log** row. Provider delivery is out of scope of V1 (typed provider boundary). |
+| 6 | Execution Reconciliation V1 | `Execution-Reconciliation V1.json` | Read-only: verifies every provider-confirmed execution is reflected in the **Outreach Log** and every log row is traceable to a documented execution. |
+| 7 | Response Capture V1 | `Response-Capture V1.json` | Turns normalized inbound provider events into deduplicated, identity-checked **Response Log** rows; never guesses a lead identity (unmatched events are kept as durable `UNMATCHED` rows). |
+| 8 | Response Reconciliation V1 | `Response-Reconciliation V1.json` | Read-only: verifies every captured response is traceable to a confirmed outbound attempt; unprovable traces are marked `NOT_VERIFIABLE`, never guessed. |
+| 9 | Response Interpretation V1 | `Response-Interpretation V1.json` | Read-only intent classifier: turns durable **Response Log** text into classified intents (positive/negative/neutral, action type). This is the **complete, live-validated** stage. |
 
-1. Enable the Google Sheets API in a Google Cloud project.
-2. n8n → **Settings → Credentials → Add Credential → Google Sheets OAuth2 API**.
-3. Google Cloud Console → **Create Credentials → OAuth Client ID** (Desktop app).
-4. Enter the client id/secret; add the n8n redirect URI to the OAuth consent screen.
-5. Authorize with Google; attach this credential to the 7 Sheets nodes (or ensure the exported credential id `rOKhG0ESKifN5zy2` is recreated).
+A test-only auxiliary artifact exists alongside the lineage:
+`Response-Interpretation V1 — Test Harness.json` (Phase 6.5 webhook→Manual-Trigger bridge
+used to inject scenario payloads into the frozen Response Interpretation chain). It is not
+a pipeline stage.
 
-### Foursquare credential setup (Hygiene H2 — replaces hardcoded token)
+## 1.3 Architecture
 
-1. Create an n8n credential of type **HTTP Header Auth** named exactly `Foursquare API`.
-2. Set `name = Authorization`, `value = <your bare Foursquare API token>` (no `Bearer ` prefix).
-3. The **Foursquare Places API** node's header `Authorization` = `=Bearer {{$credentials.value}}`, producing `Authorization: Bearer <token>`. A default Foursquare Places token works for Places Search.
+- **Single spreadsheet, single source of truth.** All nine workflows read/write the same
+  pinned Google spreadsheet (id `1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ`). Tabs are
+  the durable data surface; actors above (planning/reconciliation/interpretation) are
+  read-only where possible.
+- **Built-in engines, embedded code.** Each stage's behavior lives in a deterministic
+  engine under `src/` (e.g. `src/response-interpretation.js`, `src/reconcile.js`,
+  `src/queue.js`, `src/execution.js`, `src/response-capture.js`,
+  `src/response-reconcile.js`) that is byte-mirrored into the shipped workflow's Code
+  nodes. Offline suites verify engine↔embedded-code parity on every fixture.
+- **Fail-closed honesty.** Read-only stages never fabricate a healthy zero: a failed read
+  yields `INCOMPLETE`/`NOT_VERIFIABLE` with null metrics, never a false PASS. Live runners
+  print `NOT_CONFIGURED` (exit 3) instead of a fake PASS when the environment is missing.
+- **No hard-coded secrets.** Provider credentials are referenced by n8n credential id/name
+  only. The only env-var-backed key in the shipped artifacts is
+  `GOOGLE_PLACES_API_KEY` (Google Places node of the Prospect Finder). See
+  `docs/CREDENTIALS.md`.
 
----
+## 1.4 The single-spreadsheet contract
 
-## 4. Node-by-Node Explanation
+The pipeline runs against one pinned spreadsheet
+(`1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ`). The tab names and positions currently
+referenced by the shipped workflows:
 
-### Setup Chain (runs once)
+| Tab | gid | Written by | Notes |
+| --- | --- | --- | --- |
+| Search Inputs | `0` | (operated by user / seeding) | Status-driven search list; statuses `Pending`/`Running`/`Completed`/`Failed`. Read by Prospect Finder. |
+| Raw Leads | `101` | Prospect Finder | Dedupe-keyed raw captures from Foursquare/OSM/GPL. |
+| Verified Leads | `102` | Prospect Finder | Formula-owned columns P–U (dedupe key, lead score, qualification status) are never written by n8n. |
+| Approved Outreach | — | Approved Outreach Handoff | 21-column approval ledger (schema `src/schema.js`, shared with Run Reconciliation). |
+| Outreach Log | — | Outreach Execution & Delivery | Durable per-lead delivery row; read by Run Reconciliation. |
+| Response Log | — | Response Capture | Durable inbound-response rows; read by Response Reconciliation and Response Interpretation. |
 
-| Node | Type | What it does |
-|---|---|---|
-| **Manual Trigger** | Manual Trigger | Starts the workflow when you press Execute |
-| **Initialize Configuration** | Code | Sets `LOW_COST_MODE = true`, `MAX_RESULTS_PER_SEARCH` + run counters in workflow static data |
-| **Read Verified Leads** | Google Sheets Read | Reads the whole **Verified Leads** tab to build dedup memory |
-| **Cache Dedup Keys** | Code | Normalizes existing verified leads into dedupe keys (website → phone → name+city+state) into static data |
-| **Read Search Inputs** | Google Sheets Read | Reads the whole **Search Inputs** tab |
-| **Filter Pending Searches** | Code | Keeps only rows with `status` `Pending` (or empty); emits a marker item so the workflow ends cleanly when nothing is pending |
-| **Has Pending Searches?** | IF | **True** → loop. **False** → End |
+The **positional schemas are frozen artifacts** — column order and header semantics are
+asserted by the offline suites and documented per-spec. Evidence and fix history:
+`reports/PHASE-5-2-REPORT.md`, `reports/PHASE-5-3-REPORT.md`, `reports/PHASE-5-4-REPORT.md`
+and the verification harness in `GOOGLE-SHEETS-VERIFICATION-HARNESS-v0.1.md`.
 
-### Per-Search Loop
+## 1.5 How to run
 
-| Node | Type | What it does |
-|---|---|---|
-| **Loop Through Searches** | SplitInBatches | One Search Input row per iteration. Output 0 = all done, output 1 = next item |
-| **Set Status Running** | Google Sheets Update | Sets `status = Running` (matched by `input_id`) to prevent double-processing |
-| **Build FSQ API Query** | Code | Builds the Foursquare Places request: `near = {city}, {state}`, `fsq_category_ids` (per-niche category ids, e.g. HVAC `63be6904847c3692a84b9b56`), `limit`, `fields` (id, name, categories, location, tel, website) |
-| **Foursquare Places API** | HTTP Request (GET) | Calls `https://places-api.foursquare.com/places/search`. Auth via the `httpHeaderAuth` credential. API version header `X-Places-Api-Version: 2025-06-17`. On HTTP error the node throws → workflow execution fails (no graceful per-row fallback) |
-| **Process FSQ** | Code | Normizes FSQ results to Raw Leads schema: keeps businesses matching the niche category/positive patterns, rejects credit/roofing/plumbing/flooring/painting/insulation/foundation/concrete/carpet matches, computes `lead_id` + internal `dedupe_key`, removes in-batch duplicates, caps to `min(target_count, MAX_RESULTS_PER_SEARCH)` |
-| **Build OSM API Query** | Code | Builds the Overpass query (`area["name"="{city}"]`, per-niche tags like `craft=hvac`, `shop=heating`) with a candidate pool = `min(max(5 × target_count, 20), MAX_RESULTS_PER_SEARCH)` |
-| **OpenStreetMap Overpass API** | HTTP Request (POST) | POSTs to `https://overpass.kumi.systems/api/interpreter`. `fullResponse: true`, `onError: continueErrorOutput` → HTTP/transport errors go to the error branch (output 1); success goes to output 0 |
-| **API Success?** | IF | Checks OSM **HTTP status == 200**. **True** → process; **False** → Handle API Error |
-| **Process OSM** | Code | Normalizes Overpass elements (buildings/businesses with name/contact/opening tags) to the same Raw Leads schema, preserving search context, and caps like Process FSQ |
-| **Merge** | Merge | Joins the FSQ and OSM streams (both inputs) into one Raw Leads item stream |
-| **Write Raw Leads** | Google Sheets Append | Writes the merged records to **Raw Leads** via autoMapInputData |
-| **Dedup & Prepare Verified** | Code | Checks against cached verified-key set (historical dedup), keeps only new, emits **only the 17 underlying data columns** (A–O, V, W). The six derived columns `dedupe_key` (P), `has_website` (Q), `has_phone` (R), `urgent_niche` (S), `lead_score` (T), `qualification_status` (U) are deliberately **not emitted** — they are Sheet-formula-owned |
-| **Has New Verified?** | IF | **True** → Prepare Verified Sheet Row. **False** → all duplicates → mark Completed with note |
-| **Prepare Verified Sheet Row** | Code | Shapes the final Verified Leads row payload (schema row before append) |
-| **Write Verified Leads** | Google Sheets Append | Appends only genuinely-new leads to **Verified Leads**; P–U stay untouched so Sheet formulas compute them |
-| **Update Status Completed** | Google Sheets Update | Sets `status = Completed` (+ any note), loops back to the next search |
+Offline validation (no live environment required):
 
-### Error Path
+```powershell
+npm test                          # full offline suite (857 tests, 62 suites)
+npm run verify:frozen             # freeze-gate: 10 manifest artifacts vs recorded SHA-256
+node scripts/security-check.js    # secret-shape scan of the Prospect Finder export
+```
 
-| Node | Type | What it does |
-|---|---|---|
-| **Handle API Error** | Code | Reads the failed OSM response status/body, preserves `input_id` |
-| **Update Status Failed** | Google Sheets Update | Sets `status = Failed` + error to `notes`. **Row preserved** — never deleted, never marked Completed |
-| **End** | NoOp | Terminal (silent) |
+Live execution runs against the pinned spreadsheet and the n8n container. The canonical
+container setup, first-launch steps, import summary, credential re-attachment, and
+known gotchas are in **`docs/CONTAINER-RUNBOOK.md`**. The vintage.env-laden Phase 6
+live-runner environment (Response Interpretation V1) is documented in
+`docs/PHASE-6-ENVIRONMENT-RUNBOOK.md`.
 
-**Dual-provider error semantics (important):** OSM failures are caught and recorded per-row (workflow continues looping). Foursquare failures are **uncaught** — the HTTP node throws on non-2xx and the whole execution fails. There is no Foursquare graceful error branch in V1; a FSQ outage stops the run (documented limitation).
+## 1.6 Key documents
 
----
+| Document | What it is |
+| --- | --- |
+| `REPORT.md` | Master report & workstream close for Response Interpretation V1 (the fully-validated stage). |
+| `docs/PHASES.md` | Phase index (14 phases, 13 PASS + 1 superseded-amendment PASS). |
+| `docs/CONTAINER-RUNBOOK.md` | Canonical Docker run, first-launch, import, credentials, gotchas. |
+| `docs/CREDENTIALS.md` | Credential inventory — per-workflow node→credential→env-var map. |
+| `docs/ARTIFACT-IMPORT.md` | UI / CLI / API import paths + decision matrix for the workflow exports. |
+| `docs/PHASE-6-ENVIRONMENT-RUNBOOK.md` | Response Interpretation live-runner env vars and provision steps. |
+| `docs/MANIFEST-SNAPSHOT.md` | Snapshot of the frozen manifest. |
+| `reports/` index | `reports/README.md` — all phase, isolation, and hygiene reports. |
 
-## 5. One-Prospect Test Procedure
+## 1.7 Status
 
-> **The first test must use exactly ONE prospect.**
+Honest per-workflow status as of the H-B hygiene workstream:
 
-1. **Search Inputs** — add a single row:
-   `S-HVAC-001 | HVAC | Dallas | Texas | USA | HVAC repair | 1 | Pending | High | 2026-09-05 | First test`
-   (only one row; `status` = `Pending`).
-2. **Credentials** — ensure the Sheets OAuth2 credential is attached to the 7 Sheets nodes and the `Foursquare API` `httpHeaderAuth` credential exists (Section 3).
-3. **Import** — n8n → Workflows → **Import from File** → `Lead Recovery Engine — Prospect Finder & Validation V1.json`; confirm credential assignment.
-4. **Execute** — press **Execute Workflow**.
-5. **Verify**:
+| Stage | Status | Evidence |
+| --- | --- | --- |
+| Response Interpretation V1 | **COMPLETE** — live-validated A–F; workstream closed | `REPORT.md`, `docs/PHASES.md`, `reports/PHASE-6-COMPLETION-AMENDMENT.md` |
+| Prospect Finder & Validation V1 | **PARKED — PARTIAL** — Foursquare/OSM lanes validated; Google Places validation workstream parked (live isolation blocked by an n8n 2.x Merge migration + GPL enablement requirement) | `reports/PROSPECT-FINDER-GPL-WORKSTREAM-CLOSURE.md`, `reports/PROSPECT-FINDER-GPL-PREFLIGHT.md`, `reports/PROSPECT-FINDER-ISOLATION-MATRIX.md` |
+| Approved Outreach Handoff V1 | Shipped (artifact + spec + harness); live credential attach pending | `APPROVED-OUTREACH-HANDOFF-v0.1.md`, `GOOGLE-SHEETS-VERIFICATION-HARNESS-v0.1.md` |
+| Run Reconciliation V1 | Shipped (artifact + spec + offline/live suites) | `RUN-RECONCILIATION-AND-REPORTING-v1.md` |
+| Outreach Queue & Planning V1 | Shipped (artifact + spec + offline/live suites) | `OUTREACH-QUEUE-AND-PLANNING-v1.md` |
+| Outreach Execution & Delivery V1 | Shipped (artifact + spec + offline suites) | `OUTREACH-EXECUTION-AND-DELIVERY-v1.md` |
+| Execution Reconciliation V1 | Shipped (artifact + spec + offline suites) | `OUTREACH-EXECUTION-RECONCILIATION-v1.md` |
+| Response Capture V1 | Shipped (artifact + spec + offline suites) | `OUTREACH-RESPONSE-CAPTURE-v1.md` |
+| Response Reconciliation V1 | Shipped (artifact + spec + offline suites) | `OUTREACH-RESPONSE-RECONCILIATION-v1.md` |
 
-   | Tab | Expect |
-   |---|---|
-   | Search Inputs | `status` = `Completed` |
-   | Raw Leads | At most `target_count` rows (1 here), exact schema, `source` = `Foursquare` and/or `OpenStreetMap`, `lead_id` present |
-   | Verified Leads | Same rows (deduped); P–U (`dedupe_key`, `has_website`, `has_phone`, `urgent_niche`, `lead_score`, `qualification_status`) **computed by Sheet formulas**, never written by n8n |
-   | Approved Outreach | Untouched |
-   | Outreach Log | Untouched |
-
-6. **Re-run safety check** — execute again: the `S-HVAC-001` row is `Completed`, so it is skipped. No duplicates.
-7. **Scale up** — add more Search Inputs rows (HVAC, plumbing, roofing, electrical, pest) and raise `target_count` as needed.
-
----
-
-## 6. Cost Control
-
-| Variable | Location | Default | Effect |
-|---|---|---|---|
-| `LOW_COST_MODE` | Initialize Configuration | `true` | Minimal Foursquare `fields` payload; no photos/reviews/geometry |
-| `MAX_RESULTS_PER_SEARCH` | Initialize Configuration | `20` | Hard cap on businesses pulled per search (and the OSM candidate pool ceiling) |
-
-Why costs stay low:
-
-1. **Foursquare** — Places Search is on free-tier quota for typical volumes. `target_count` and `MAX_RESULTS_PER_SEARCH` cap requests and results; one request per search, no chained Place Details calls.
-2. **OpenStreetMap Overpass** — the public Overpass instances are free (be considerate of their rate limits; the query is `[out:json][timeout:60]` and lives only for the search's bounds).
-3. **No enrichment** — Hunter, Apollo, email verification, scraping: not called, not installed.
-4. **Status gating** — `Running`/`Completed`/`Failed` states mean a search is never re-queried accidentally.
-5. **In-batch + historical dedup** — a business is captured exactly once.
-
----
-
-## 7. Error Handling
-
-| Scenario | Behavior |
-|---|---|
-| Foursquare HTTP error (non-2xx) | HTTP node throws → execution fails (no per-row fallback; documented limitation) |
-| Overpass HTTP/transport error | Error branch → `Handle API Error` → `status = Failed` + `notes`; row preserved; loop continues |
-| Overpass returns non-200 status | `API Success?` → false → Failed path (as above) |
-| Both providers return zero leads | Search → `Completed`, note "No results"; no empty rows |
-| All results are in-batch duplicates | `Completed`, note "All results were in-batch duplicates" |
-| All candidates already exist in Verified Leads | `Completed`, note "All leads already exist in Verified Leads" |
-| No pending rows at all | Workflow ends cleanly through the End node |
-
-**Fail-safe principle:** the workflow never fabricates leads, never silently re-queries a `Completed` search, and preserves failed rows for inspection.
+Offline gates are green for the whole repository (`npm test` 857/857, `verify:frozen`
+10/10). No workflow is claimed live-validated unless the report says so with evidence.
 
 ---
 
-## 8. How Formula Preservation Works
-
-The **Verified Leads** sheet has formulas in columns P–U: `dedupe_key` (P), `has_website` (Q), `has_phone` (R), `urgent_niche` (S), `lead_score` (T, +20/+15/+20/+10/+15/+10/+10 = 100 max), `qualification_status` (U, 70–100 QUALIFIED / 50–69 REVIEW / 0–49 DISQUALIFIED).
-
-Because **Dedup & Prepare Verified** and **Prepare Verified Sheet Row** never emit those six keys and `autoMapInputData` only writes columns whose headers match JSON keys, **P–U are never written by n8n** — the Sheet formulas are their only writer.
-
-**Limitation:** formulas are populated down 500+ rows. Appends beyond row 500 land in rows with no formulas. Safest fixes: convert T2/U2 to `ARRAYFORMULA`, manually drag the formula column down after a crossing batch, or add a follow-up n8n step that copies formulas from the row above.
-
----
-
-## 9. Adding Hunter/Apollo Enrichment Later (Without Redesign)
-
-The core loop stops at Verified Leads. Future enrichment belongs in a **separate workflow** triggered on verified rows (e.g., rows where a manual-review flag is empty): read only approved rows, call one endpoint at a time (Hunter/Apollo) behind a `FULL_ENRICHMENT_MODE` flag (default `false`), and write result columns it owns. Do **not** add enrichment nodes to this workflow; do **not** remove the `LOW_COST_MODE` / `MAX_RESULTS_PER_SEARCH` variables; never let enrichment write `lead_score` or `qualification_status`.
-
----
-
-## 10. Deployment Checklist
-
-- [ ] Google Sheets API enabled; OAuth2 credential created and attached to the 7 Sheets nodes
-- [ ] `Foursquare API` `httpHeaderAuth` credential created (name = `Foursquare API`, value = bare token); no token in any file
-- [ ] Overpass public endpoint reachable (no credential required)
-- [ ] Sheet contains exactly the expected tabs with exact column headers
-- [ ] Verified Leads formulas present in T and U (down 500+ rows)
-- [ ] Workflow imported; credentials attached
-- [ ] One-row HVAC test executed and verified (Section 5)
-- [ ] Re-run confirms dedup + status gating
-- [ ] Error path verified (bad FSQ token → execution fails loudly; Overpass reachable)
-
----
-
-## 11. Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| Foursquare HTTP 403/401 | `Foursquare API` credential wrong/missing/rate-limited → recreate in n8n Settings → Credentials; confirm the node references it |
-| Foursquare HTTP 429 | Free-tier rate limit → wait or lower `target_count`/`MAX_RESULTS_PER_SEARCH`; the run will have failed (uncaught) — rerun pending rows |
-| Overpass timeout / 504 | Public Overpass instance busy → retry; the run marks the row `Failed` and continues, so re-run pending rows |
-| No rows written to Verified Leads | Open the Sheets nodes → confirm the OAuth2 credential is selected |
-| `lead_score` blank on new rows | Formula cells beyond row 500 — see Section 8 |
-| Search stays stuck `Running` | A previous run crashed mid-way; manually set back to `Pending` or `Failed` |
-| Duplicate leads after 1st run | Check `Cache Dedup Keys` output on a manual test run |
-
----
-
-## 12. Pipeline Ecosystem (all 9 workflows)
-
-This project is the first stage of a nine-workflow Lead Recovery Engine. Each downstream workflow has its own spec + offline test suite + live runner (see README links below and `docs/CREDENTIALS.md` for credentials):
-
-1. **Prospect Finder & Validation V1** — `Lead Recovery Engine — Prospect Finder & Validation V1.json` (this workflow)
-2. **Approved Outreach Handoff V1** — `APPROVED-OUTREACH-HANDOFF-v0.1.md` + `Approved Outreach Handoff V1.json`
-3. **Outreach Queue & Planning V1** — `OUTREACH-QUEUE-AND-PLANNING-v1.md` + `Outreach-Queue-and-Planning V1.json`
-4. **Outreach Execution & Delivery V1** — `OUTREACH-EXECUTION-AND-DELIVERY-v1.md` + `Outreach-Execution-and-Delivery V1.json`
-5. **Execution Reconciliation V1** — `OUTREACH-EXECUTION-RECONCILIATION-v1.md` + `Execution-Reconciliation V1.json`
-6. **Outreach Response Capture V1** — `OUTREACH-RESPONSE-CAPTURE-v1.md` + `Response-Capture V1.json`
-7. **Outreach Response Reconciliation V1** — `OUTREACH-RESPONSE-RECONCILIATION-v1.md` + `Response-Reconciliation V1.json`
-8. **Response Interpretation V1** — `OUTREACH-RESPONSE-INTERPRETATION-v1.md` + `Response-Interpretation V1.json` (spec v1.6 includes the Phase 6 environment-gate result; see `docs/PHASE-6-ENVIRONMENT-RUNBOOK.md` to execute A–F live)
-9. **Run Reconciliation and Reporting V1** — `RUN-RECONCILIATION-AND-REPORTING-v1.md` + `Run-Reconciliation-and-Reporting V1.json`
-
-**Verification infrastructure:** `GOOGLE-SHEETS-VERIFICATION-HARNESS-v0.1.md` (deterministic TEST-AOH-* fixture harness), `scripts/verify-frozen.js` + `frozen-artifacts.manifest.json` (`npm run verify:frozen` — freezes the 7 Phase-1–5 artifacts against their recorded SHA-256), and `.github/workflows/test.yml` (CI: `npm test` + `npm run verify:frozen`). Run the full offline suite with `npm test` (637 tests).
-
----
-
-*Version 2 (hygiene rebase) — 2026-09-12. Pipeline: Foursquare + Overpass → Raw Leads → Verified Leads. Foursquare token moved to a named n8n credential (H2). Supersedes the Google Places-era v1 README.*
+*Rebased by the H-B hygiene workstream (documentation only — no artifacts modified).*
