@@ -1,8 +1,8 @@
 # Prospect Finder GPL Isolation — Workstream Closure
 **Date:** 2026-09-15
 **Status:** PARKED — PARTIAL
-**Artifact SHA-256:** 51739c9b…dad6347
-**Test suite:** 857/857 PASS
+**Artifact SHA-256:** 630aae88…e1e580 (re-baselined by A.10 — D7 fixed)
+**Test suite:** 867/867 PASS (857 + A.10 additions)
 **Frozen manifest:** 10/10 PASS
 
 ---
@@ -71,7 +71,7 @@ manifest, and byte-verified.
 
 ## 6. Open defects
 
-### D7 — Merge waits for all inputs
+### D7 — Merge waits for all inputs — **FIXED (Prompt A.10, R6)**
 
 **Symptom:** with `mode: append` and `numberOfInputs: 5`, when the
 three success-path inputs (Process FSQ, Process OSM, Process GPL)
@@ -84,9 +84,9 @@ success and error. On any run, one of each pair fires and the
 other stays empty. Merge requires all declared inputs before
 emitting.
 
-**Proposed fix (A.10):** consolidate to `numberOfInputs: 3`, one
-input per provider. Route each provider's success and error paths
-to the same input:
+**Fix applied (A.10):** consolidated to `numberOfInputs: 3`, one
+input per provider. Each provider's success and error paths now
+feed the same input:
 
     Process FSQ         → Merge[0]
     FSQ Error Envelope  → Merge[0]
@@ -95,16 +95,35 @@ to the same input:
     Process GPL         → Merge[2]
     GPL Error Envelope  → Merge[2]
 
-Requires: adding `OSM Error Envelope`, rewiring two existing
-edges, removing two existing edges, changing `numberOfInputs`.
+Applied through the canonical spec +
+`scripts/build-prospect-finder-workflow.js` (no artifact hand-edits):
+- New `OSM Error Envelope` code node (mirrors the FSQ/GPL envelope
+  byte-pattern; context `$('Build OSM API Query')`), fed by the
+  `OpenStreetMap Overpass API` error output AND the `API Success?`
+  false branch.
+- Deviations from the original A.10 sketch, both deliberate: the
+  two OSM error edges were **NOT removed** — they now fan out to
+  both `OSM Error Envelope` and `Handle API Error` (raw data to the
+  envelope, same raw data to the status-marking path), preserving
+  the failing-search status update (`Handle API Error → Update
+  Status Failed`) that §3 validated live; the FSQ/GPL envelope
+  edges were retargeted Merge index 4→0 and 3→2.
+- New artifact SHA-256 `630aae88…e1e580` (83,406 bytes, 33 nodes /
+  16 code nodes). Re-baselined in `tests/prospect-finder-builder.test.js`
+  (hash anchor), `reports/PROSPECT-FINDER-GPL-PREFLIGHT.md` §12.3
+  (R6), and this doc. See
+  `reports/PROSPECT-FINDER-A10-MERGE-CONSOLIDATION-REPORT.md`.
+
+**Residual (out of A.10 scope):** if a provider *succeeds with zero
+results*, `Process GPL` emits a `_noResults` sentinel (input 2 stays
+fed), but `Process FSQ` / `Process OSM` emit nothing on an empty
+success — that input would remain empty on such a run. Not
+addressed here (would change provider code bodies, out of scope);
+noted so a future re-run watches for it.
 
 **Impact if unfixed:** every run in which any provider's success
 path is empty will stall at Merge. In practice, this is the normal
 case for a partially-credentialed environment.
-
-**Scope estimate:** ~30 minutes through the builder. Not attempted
-in this workstream to avoid scope creep after the operator chose to
-park.
 
 ---
 
@@ -123,8 +142,10 @@ workflow behaved correctly given each response.
 
 ## 8. Resume conditions
 
-1. **A.10** — apply the D7 fix through the builder; re-baseline
-   manifest; re-import; re-attach credentials.
+1. **A.10 — DONE (2026-09-15).** D7 fix applied through the builder;
+   artifact re-baselined (`630aae88…e1e580`). Re-importing into the
+   container and re-attaching credentials are still required before
+   any live run — out of A.10 scope (STOP after re-baseline).
 2. **Restore GCP billing** — enables the all-success and
    GPL-returns-empty cells.
 3. **Provision a valid FSQ token** — enables the all-success cell.
@@ -149,12 +170,12 @@ PARTIAL to PASS.
 | Item | Value |
 |---|---|
 | Production workflow JSON | `Lead Recovery Engine — Prospect Finder & Validation V1.json` |
-| SHA-256 | `51739c9b…dad6347` |
-| Bytes | 81,715 |
-| Node count | 32 |
+| SHA-256 | `630aae88…e1e580` (R6 — A.10 re-baseline) |
+| Bytes | 83,406 |
+| Node count | 33 (16 code nodes) |
 | Builder | `scripts/build-prospect-finder-workflow.js` (byte-identical on double build) |
 | Mutation script retired | `scripts/add-gpl-to-workflow.js` (header-commented, not deleted) |
-| Tests | 857/857 PASS, 0 failures |
+| Tests | 867/867 PASS, 0 failures |
 | Frozen manifest | 10/10 PASS |
 | Secret scan | GREEN |
 | Container | `serene_swartz` (Docker, named volume `serene_swartz_data`) |
@@ -171,19 +192,22 @@ PARTIAL to PASS.
 | R3 | A.7 | Schema drift guards |
 | R4 | A.8 | Merge param rename; GPL HTTP v4 migration |
 | R5 | A.9 | Merge append mode; `alwaysOutputData` on Dedup |
+| R6 | A.10 | D7 FIXED: Merge consolidated 5→3 (one input per provider); `OSM Error Envelope` added (success+error feed same input) |
 
 ---
 
 ## 11. Recommendation
 
-Move to the security & repository hygiene workstream while the
-external blockers are resolved out-of-band. Resume the Prospect
-Finder workstream with A.10 and a re-run when:
+A.10 (D7 fix) is now applied and re-baselined (R6, 2026-09-15) — the
+allocated engineering work for merging is complete. The next live
+step is an operator task: re-import the artifact into the container and
+re-attach credentials, then re-run when:
 
+- re-imported into `serene_swartz` with credentials re-attached
 - GCP billing is restored
 - A valid FSQ token is available
 
-Neither is code work. Both are operator tasks. Neither blocks
-progress on the hygiene workstream (Foursquare hardcoded token,
-git baseline, README correction, credentials review) — which is
-where the next session's effort should go.
+None of these are code work. The remaining code-adjacent item is the
+hygiene workstream (Foursquare hardcoded token, git baseline, README
+correction, credentials review) — where the next session's effort
+should go.

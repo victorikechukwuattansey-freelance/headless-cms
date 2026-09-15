@@ -1472,8 +1472,21 @@
     },
     {
       "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst input = $input.first();\nconst payload = input.json || {};\n\nconst error = payload.error || {};\nconst httpCode = error.httpCode ?? error.statusCode ?? payload.statusCode ?? 0;\nconst errorMsg = error.message || error.description || 'Unknown API error';\nconst statusText = httpCode ? ` (HTTP ${httpCode})` : '';\n\nlet searchInput = {};\n\ntry {\n  searchInput = $('Build OSM API Query').first().json || {};\n} catch {\n  searchInput = {};\n}\n\nconst inputId = searchInput.input_id || '';\n\nstaticData.errorsEncountered = (staticData.errorsEncountered || 0) + 1;\n\nreturn [{\n  json: {\n    input_id: inputId,\n    search_input_id: inputId,\n    _provider: 'openstreetmap',\n    _status: 'error',\n    _errorMessage: 'OpenStreetMap API error: ' + errorMsg + statusText,\n    _rawStatus: httpCode ? ('HTTP ' + httpCode) : 'ERROR',\n    source: 'openstreetmap:error',\n    notes: 'OpenStreetMap API error: ' + errorMsg + statusText\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        176
+      ],
+      "id": "e0d8f43a-7b21-4c9e-9a56-1f3c0b8d2e77",
+      "name": "OSM Error Envelope"
+    },
+    {
+      "parameters": {
         "mode": "append",
-        "numberOfInputs": 5
+        "numberOfInputs": 3
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -1728,6 +1741,11 @@
         ],
         [
           {
+            "node": "OSM Error Envelope",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Handle API Error",
             "type": "main",
             "index": 0
@@ -1830,6 +1848,11 @@
         ],
         [
           {
+            "node": "OSM Error Envelope",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Handle API Error",
             "type": "main",
             "index": 0
@@ -1861,7 +1884,7 @@
           {
             "node": "Merge",
             "type": "main",
-            "index": 4
+            "index": 0
           }
         ]
       ]
@@ -1900,6 +1923,17 @@
       ]
     },
     "Process OSM": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OSM Error Envelope": {
       "main": [
         [
           {
@@ -1978,7 +2012,7 @@
           {
             "node": "Merge",
             "type": "main",
-            "index": 3
+            "index": 2
           }
         ]
       ]

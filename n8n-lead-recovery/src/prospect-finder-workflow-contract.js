@@ -15,6 +15,8 @@
  * Empty Envelopes, Merge numberOfInputs 3 → 5. Revised for Prompt A.9 (R4):
  * D1 Merge mode combine → append (Cartesian product kills error envelopes),
  * D2' Dedup & Prepare Verified gains alwaysOutputData (all-empty loop stall).
+ * Revised for Prompt A.10 (R6): D7 Merge numberOfInputs 5 → 3 (one input per
+ * provider; success + error paths feed the same input), +OSM Error Envelope.
  * Current artifact SHA-256 is computed by the builder.
  * Node and workflow property ORDER is significant: the builder
  * serializes with JSON.stringify(..., null, 2) with NO trailing newline, and
@@ -41,6 +43,7 @@ const CODE_NODE_NAMES = [
   "Build OSM API Query",
   "Build FSQ API Query",
   "Process OSM",
+  "OSM Error Envelope",
   "Prepare Verified Sheet Row",
   "Build GPL API Query",
   "Process GPL",
@@ -1501,9 +1504,20 @@ function referenceWorkflow() {
         "name": "Process OSM"
     },
     {
+        "parameters": {},
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+            2160,
+            176
+        ],
+        "id": "e0d8f43a-7b21-4c9e-9a56-1f3c0b8d2e77",
+        "name": "OSM Error Envelope"
+    },
+    {
         "parameters": {
             "mode": "append",
-            "numberOfInputs": 5
+            "numberOfInputs": 3
         },
         "type": "n8n-nodes-base.merge",
         "typeVersion": 3.2,
@@ -1748,6 +1762,11 @@ function referenceWorkflow() {
             ],
             [
                 {
+                    "node": "OSM Error Envelope",
+                    "type": "main",
+                    "index": 0
+                },
+                {
                     "node": "Handle API Error",
                     "type": "main",
                     "index": 0
@@ -1850,6 +1869,11 @@ function referenceWorkflow() {
             ],
             [
                 {
+                    "node": "OSM Error Envelope",
+                    "type": "main",
+                    "index": 0
+                },
+                {
                     "node": "Handle API Error",
                     "type": "main",
                     "index": 0
@@ -1881,7 +1905,7 @@ function referenceWorkflow() {
                 {
                     "node": "Merge",
                     "type": "main",
-                    "index": 4
+                    "index": 0
                 }
             ]
         ]
@@ -1920,6 +1944,17 @@ function referenceWorkflow() {
         ]
     },
     "Process OSM": {
+        "main": [
+            [
+                {
+                    "node": "Merge",
+                    "type": "main",
+                    "index": 1
+                }
+            ]
+        ]
+    },
+    "OSM Error Envelope": {
         "main": [
             [
                 {
@@ -1998,7 +2033,7 @@ function referenceWorkflow() {
                 {
                     "node": "Merge",
                     "type": "main",
-                    "index": 3
+                    "index": 2
                 }
             ]
         ]

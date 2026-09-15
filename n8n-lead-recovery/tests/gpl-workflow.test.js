@@ -218,23 +218,28 @@ describe('Google Places workflow integration', () => {
       mergeNode = workflow.nodes.find(n => n.name === 'Merge');
     });
 
-    it('declares five append inputs on the Merge node — A.9 D1', () => {
-      assert.equal(mergeNode.parameters.numberOfInputs, 5);
+    it('declares three append inputs on the Merge node — A.10 D7', () => {
+      assert.equal(mergeNode.parameters.numberOfInputs, 3);
       assert.equal(mergeNode.parameters.mode, 'append');
     });
 
-    it('routes the three providers plus two error envelopes onto distinct Merge input indices 0-4', () => {
+    it('routes each provider and its error envelope onto the same Merge input index', () => {
       const connections = workflow.connections;
-      const inputs = ['Process FSQ', 'Process OSM', 'Process GPL', 'GPL Error Envelope', 'FSQ Error Envelope'].map(p => {
+      const expectedIndex = {
+        'Process FSQ': 0,
+        'FSQ Error Envelope': 0,
+        'Process OSM': 1,
+        'OSM Error Envelope': 1,
+        'Process GPL': 2,
+        'GPL Error Envelope': 2,
+      };
+      const inputs = Object.keys(expectedIndex).map(p => {
         const edge = connections[p]?.main?.[0]?.find(c => c.node === 'Merge');
         assert.ok(edge, `${p} should connect to Merge`);
+        assert.equal(edge.index, expectedIndex[p], `${p} must feed Merge input ${expectedIndex[p]}`);
         return edge.index;
       });
-      assert.deepEqual([...inputs].sort(), [0, 1, 2, 3, 4]);
-      const gplIndex = connections['Process GPL'].main[0].find(c => c.node === 'Merge').index;
-      assert.equal(gplIndex, 2, 'GPL must feed Merge input index 2, not collide with FSQ at 0');
-      assert.equal(connections['GPL Error Envelope'].main[0].find(c => c.node === 'Merge').index, 3);
-      assert.equal(connections['FSQ Error Envelope'].main[0].find(c => c.node === 'Merge').index, 4);
+      assert.deepEqual([...new Set(inputs)].sort(), [0, 1, 2]);
     });
 
     it('Merge has exactly one output edge — to Filter Empty Envelopes (R3)', () => {

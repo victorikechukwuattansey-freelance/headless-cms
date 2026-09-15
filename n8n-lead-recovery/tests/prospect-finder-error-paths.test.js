@@ -82,8 +82,8 @@ describe('Prospect Finder error paths & sink filtering (R3)', () => {
       );
     });
 
-    it('the GPL Error Envelope reaches Merge at a distinct input index', () => {
-      assert.equal(mergeEdge('GPL Error Envelope').index, 3);
+    it('the GPL Error Envelope reaches Merge on the GPL input index', () => {
+      assert.equal(mergeEdge('GPL Error Envelope').index, 2);
     });
 
     it('converts a real HTTP failure into an explicit failure envelope (offline)', () => {
@@ -138,8 +138,8 @@ describe('Prospect Finder error paths & sink filtering (R3)', () => {
       );
     });
 
-    it('the FSQ Error Envelope reaches Merge at a distinct input index', () => {
-      assert.equal(mergeEdge('FSQ Error Envelope').index, 4);
+    it('the FSQ Error Envelope reaches Merge on the FSQ input index', () => {
+      assert.equal(mergeEdge('FSQ Error Envelope').index, 0);
     });
 
     it('converts a real FSQ HTTP failure into an explicit failure envelope (offline)', () => {
@@ -202,13 +202,28 @@ describe('Prospect Finder error paths & sink filtering (R3)', () => {
   });
 
   describe('Structural integrity (R3)', () => {
-    it('Merge is fed by the three providers on indices 0,1,2 and error envelopes on 3,4', () => {
-      const indices = ['Process FSQ', 'Process OSM', 'Process GPL', 'GPL Error Envelope', 'FSQ Error Envelope'].map((p) => {
+    it('Merge is fed by each provider on indices 0,1,2 and its error envelope on the same input (D7 — A.10)', () => {
+      const expectedIndex = {
+        'Process FSQ': 0,
+        'FSQ Error Envelope': 0,
+        'Process OSM': 1,
+        'OSM Error Envelope': 1,
+        'Process GPL': 2,
+        'GPL Error Envelope': 2,
+      };
+      const indices = Object.keys(expectedIndex).map((p) => {
         const edge = mergeEdge(p);
         assert.ok(edge, `${p} must connect to Merge`);
+        assert.equal(edge.index, expectedIndex[p], `${p} must feed Merge input ${expectedIndex[p]}`);
         return edge.index;
       });
-      assert.deepEqual([...indices].sort((a, b) => a - b), [0, 1, 2, 3, 4]);
+      assert.deepEqual([...new Set(indices)].sort((a, b) => a - b), [0, 1, 2]);
+    });
+
+    it('Merge declares append mode with numberOfInputs 3 (D7 — A.10)', () => {
+      const merge = nodesByName.get('Merge');
+      assert.equal(merge.parameters.mode, 'append');
+      assert.equal(merge.parameters.numberOfInputs, 3);
     });
 
     it('wires error-path consumer chain Merge → Filter Empty Envelopes → Write Raw Leads', () => {
@@ -223,7 +238,7 @@ describe('Prospect Finder error paths & sink filtering (R3)', () => {
       // Searches`; the R1 defect was a *direct* Merge → Process GPL edge. The
       // guarded invariant: Merge may never write back into any node that feeds
       // its own input slots.
-      const mergeInputSources = ['Process FSQ', 'Process OSM', 'Process GPL', 'GPL Error Envelope', 'FSQ Error Envelope'];
+      const mergeInputSources = ['Process FSQ', 'Process OSM', 'Process GPL', 'GPL Error Envelope', 'FSQ Error Envelope', 'OSM Error Envelope'];
       const mergeOut = workflow.connections['Merge']?.main?.[0] || [];
       for (const edge of mergeOut) {
         assert.ok(
@@ -251,6 +266,73 @@ describe('Prospect Finder error paths & sink filtering (R3)', () => {
       assert.equal(mergeEdge('Process FSQ').index, 0);
       assert.equal(mergeEdge('Process OSM').index, 1);
       assert.equal(mergeEdge('Process GPL').index, 2);
+    });
+  });
+
+  describe('§D7 OSM error consolidation (A.10)', () => {
+    it('routes the Overpass HTTP error output to OSM Error Envelope (keeping Handle API Error)', () => {
+      const osm = nodesByName.get('OpenStreetMap Overpass API');
+      assert.equal(osm.onError, 'continueErrorOutput', 'Overpass node must opt into the error output');
+      assert.deepEqual(
+        workflow.connections['OpenStreetMap Overpass API'].main[1].map((e) => e.node),
+        ['OSM Error Envelope', 'Handle API Error'],
+        'Overpass error output must fan out to the envelope AND the failing-search status path',
+      );
+    });
+
+    it('routes the API Success? false branch to OSM Error Envelope (keeping Handle API Error)', () => {
+      assert.deepEqual(
+        workflow.connections['API Success?'].main[1].map((e) => e.node),
+        ['OSM Error Envelope', 'Handle API Error'],
+      );
+    });
+
+    it('the OSM Error Envelope reaches Merge on the OSM input index (1)', () => {
+      assert.equal(mergeEdge('OSM Error Envelope').index, 1);
+    });
+
+    it('converts a real Overpass HTTP failure into an explicit failure envelope (offline)', () => {
+      const { items, staticData } = runNode(nodeJsCode('OSM Error Envelope'), {
+        inputItems: [
+          { json: { error: { message: 'Dispatcher_Client::request_read_and_idx::timeout', httpCode: 504 } } },
+        ],
+        nodeData: { 'Build OSM API Query': [{ json: { input_id: 'TEST-GPL-LIVE-ISO-001', niche: 'HVAC' } }] },
+      });
+      assert.equal(items.length, 1);
+      const env = items[0].json;
+      assert.equal(env._provider, 'openstreetmap');
+      assert.equal(env._status, 'error');
+      assert.equal(env.input_id, 'TEST-GPL-LIVE-ISO-001');
+      assert.equal(env.search_input_id, 'TEST-GPL-LIVE-ISO-001');
+      assert.match(env._errorMessage, /^OpenStreetMap API error: .*\(HTTP 504\)/);
+      assert.equal(env._rawStatus, 'HTTP 504');
+      assert.equal(env.source, 'openstreetmap:error');
+      assert.ok(env.notes.length > 0);
+      assert.equal(env.lead_id, undefined, 'error envelope must not fabricate lead fields');
+      assert.equal(staticData.errorsEncountered, 1, 'live HTTP failure increments errorsEncountered');
+    });
+
+    it('degrades gracefully if the HTTP error payload carries no httpCode/statusCode', () => {
+      const { items } = runNode(nodeJsCode('OSM Error Envelope'), {
+        inputItems: [{ json: { error: { message: 'Network error' } } }],
+        nodeData: { 'Build OSM API Query': [{ json: { input_id: 'T-OSM-001' } }] },
+      });
+      assert.equal(items[0].json._rawStatus, 'ERROR');
+      assert.equal(items[0].json._errorMessage, 'OpenStreetMap API error: Network error');
+    });
+
+    it('reads the search context from the Build OSM API Query node (not the payload)', () => {
+      const { items } = runNode(nodeJsCode('OSM Error Envelope'), {
+        inputItems: [{ json: { error: { message: 'boom', httpCode: 500 } } }],
+        nodeData: { 'Build OSM API Query': [{ json: { input_id: 'T-OSM-002' } }] },
+      });
+      assert.equal(items[0].json.input_id, 'T-OSM-002');
+      assert.equal(items[0].json.search_input_id, 'T-OSM-002');
+    });
+
+    it('OSM errors reach Merge input 1 while Process OSM also feeds input 1 (success path preserved)', () => {
+      assert.equal(mergeEdge('Process OSM').index, 1);
+      assert.equal(mergeEdge('OSM Error Envelope').index, 1);
     });
   });
 });

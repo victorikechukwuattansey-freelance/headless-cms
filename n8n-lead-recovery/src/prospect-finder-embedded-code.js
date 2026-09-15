@@ -10,7 +10,9 @@
  * artifact (SHA-256 E7CCCBFB214D8B0425DD0EE697E4F2E1BD5C0496C6ED47BC244838792C14BCB4) on 2026-09-14 so the value set is
  * canonical and editable without touching artifact JSON. Revised for Prompt
  * A.6 (R3): +3 node bodies (FSQ Error Envelope, GPL Error Envelope, Filter
- * Empty Envelopes). Current artifact SHA-256 is computed by the builder.
+ * Empty Envelopes). Revised for Prompt A.10 (R6): +1 node body (OSM Error
+ * Envelope), mirroring the FSQ/GPL envelope byte-pattern for OpenStreetMap.
+ * Current artifact SHA-256 is computed by the builder.
  */
 
 const CODE_BY_NODE = {
@@ -960,6 +962,41 @@ const CODE_BY_NODE = {
     "}",
     "",
     "return output;",
+  ].join('\n'),
+  "OSM Error Envelope": [
+    "const staticData = $getWorkflowStaticData('global');",
+    "const input = $input.first();",
+    "const payload = input.json || {};",
+    "",
+    "const error = payload.error || {};",
+    "const httpCode = error.httpCode ?? error.statusCode ?? payload.statusCode ?? 0;",
+    "const errorMsg = error.message || error.description || 'Unknown API error';",
+    "const statusText = httpCode ? ` (HTTP ${httpCode})` : '';",
+    "",
+    "let searchInput = {};",
+    "",
+    "try {",
+    "  searchInput = $('Build OSM API Query').first().json || {};",
+    "} catch {",
+    "  searchInput = {};",
+    "}",
+    "",
+    "const inputId = searchInput.input_id || '';",
+    "",
+    "staticData.errorsEncountered = (staticData.errorsEncountered || 0) + 1;",
+    "",
+    "return [{",
+    "  json: {",
+    "    input_id: inputId,",
+    "    search_input_id: inputId,",
+    "    _provider: 'openstreetmap',",
+    "    _status: 'error',",
+    "    _errorMessage: 'OpenStreetMap API error: ' + errorMsg + statusText,",
+    "    _rawStatus: httpCode ? ('HTTP ' + httpCode) : 'ERROR',",
+    "    source: 'openstreetmap:error',",
+    "    notes: 'OpenStreetMap API error: ' + errorMsg + statusText",
+    "  }",
+    "}];",
   ].join('\n'),
   "Prepare Verified Sheet Row": [
     "return $input.all().map(item => {",

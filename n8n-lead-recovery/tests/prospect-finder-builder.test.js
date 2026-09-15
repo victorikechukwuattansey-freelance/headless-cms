@@ -14,13 +14,13 @@ const { referenceWorkflow, CODE_NODE_NAMES } = require('../src/prospect-finder-w
 
 /*
  * Frozen-by-convention hash anchor — the current artifact fingerprint
- * (revision R1). This guard FAILS if any hand-edit changes the artifact
- * without rebuilding and updating this anchor. When you intentionally change
- * the workflow through the builder (spec or embedded code edit + build),
+ * (revision R6, Prompt A.10). This guard FAILS if any hand-edit changes the
+ * artifact without rebuilding and updating this anchor. When you intentionally
+ * change the workflow through the builder (spec or embedded code edit + build),
  * update this constant to the new artifact hash (see
  * reports/PROSPECT-FINDER-GPL-PREFLIGHT.md §12.3 revision log).
  */
-const ARTIFACT_HASH = '51739c9bb18def72af9250ed54bd6b07bb0baa3f73bfc9e2014c9ac04dad6347';
+const ARTIFACT_HASH = '630aae88d8a6bfc157a431988abe50c84ba4124113d5e18db711bb8da9e1e580';
 
 const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 
@@ -50,7 +50,7 @@ describe('Prospect Finder deterministic builder', () => {
   it('emits the artifact byte-for-byte (no regeneration drift)', () => {
     const built = serialize(prospectFinderWorkflow());
     assert.equal(built, artifactBytes(), 'builder output must equal the shipped artifact bytes');
-    assert.equal(Buffer.byteLength(built, 'utf8'), 81715);
+    assert.equal(Buffer.byteLength(built, 'utf8'), 83406);
     assert.equal(sha256(built), sha256(artifactBytes()));
   });
 
@@ -72,7 +72,7 @@ describe('Prospect Finder deterministic builder', () => {
 
   it('workflow identity and node count are preserved', () => {
     const built = prospectFinderWorkflow();
-    assert.equal(built.nodes.length, 32);
+    assert.equal(built.nodes.length, 33);
     assert.equal(built.name, 'Lead Recovery Engine — Prospect Finder & Validation V1');
     assert.equal(built.id, 'WcUgtTPiKXPL0BLH');
     assert.equal(built.versionId, 'd4206a64-3385-4ea8-b8c1-51628540674f');
@@ -116,10 +116,30 @@ describe('Prospect Finder deterministic builder', () => {
     assert.equal(merge.parameters.combinationMode, undefined, 'combinationMode must not be emitted');
   });
 
-  it('Merge numberOfInputs is 5 — A.9 D1 fix', () => {
+  it('Merge numberOfInputs is 3 — A.10 D7 fix (one input per provider)', () => {
     const built = prospectFinderWorkflow();
     const merge = built.nodes.find((n) => n.name === 'Merge');
-    assert.equal(merge.parameters.numberOfInputs, 5);
+    assert.equal(merge.parameters.numberOfInputs, 3);
+  });
+
+  it('Merge numberOfInputs cannot regress above 3 (D7 drift guard)', () => {
+    const built = prospectFinderWorkflow();
+    const merge = built.nodes.find((n) => n.name === 'Merge');
+    assert.ok(
+      merge.parameters.numberOfInputs <= 3,
+      'D7 fix requires at most one Merge input per provider',
+    );
+  });
+
+  it('OSM Error Envelope is a code node feeding Merge input 1 (A.10 D7)', () => {
+    const built = prospectFinderWorkflow();
+    const byName = new Map(built.nodes.map((n) => [n.name, n]));
+    const env = byName.get('OSM Error Envelope');
+    assert.ok(env, 'OSM Error Envelope node must exist');
+    assert.equal(env.type, 'n8n-nodes-base.code');
+    assert.equal(env.parameters.jsCode, CODE_BY_NODE['OSM Error Envelope']);
+    const edge = built.connections['OSM Error Envelope'].main[0].find((c) => c.node === 'Merge');
+    assert.equal(edge.index, 1, 'OSM Error Envelope must feed Merge input 1');
   });
 
   it('Merge has no combine-mode parameters — A.9 D1 drift guard', () => {
@@ -174,26 +194,40 @@ describe('Prospect Finder deterministic builder', () => {
   it('structural wiring invariants hold on the freshly-built workflow', () => {
     // Mirror of tests/gpl-workflow.test.js "Merge wiring integrity" (canonical
     // block) — asserted here against BUILT output so spec/regeneration changes
-    // cannot silently reintroduce the R1 wiring defect.
+    // cannot silently reintroduce the R1/R3/D7 wiring defect.
     const built = prospectFinderWorkflow();
     const conns = built.connections;
     const merge = built.nodes.find((n) => n.name === 'Merge');
 
-    assert.equal(merge.parameters.numberOfInputs, 5);
+    assert.equal(merge.parameters.numberOfInputs, 3);
     assert.equal(merge.parameters.mode, 'append');
 
-    const inputs = [];
-    for (const p of ['Process FSQ', 'Process OSM', 'Process GPL', 'GPL Error Envelope', 'FSQ Error Envelope']) {
+    // D7 topology (A.10): exactly one Merge input per provider; each provider's
+    // success AND error paths feed the SAME input.
+    const expectedIndex = {
+      'Process FSQ': 0,
+      'FSQ Error Envelope': 0,
+      'Process OSM': 1,
+      'OSM Error Envelope': 1,
+      'Process GPL': 2,
+      'GPL Error Envelope': 2,
+    };
+    for (const [p, expected] of Object.entries(expectedIndex)) {
       const edge = conns[p].main[0].find((c) => c.node === 'Merge');
       assert.ok(edge, `${p} must connect to Merge`);
-      inputs.push(edge.index);
+      assert.equal(edge.index, expected, `${p} must feed Merge input ${expected}`);
     }
-    assert.deepEqual([...inputs].sort((x, y) => x - y), [0, 1, 2, 3, 4]);
-    assert.equal(conns['Process GPL'].main[0].find((c) => c.node === 'Merge').index, 2);
-    assert.equal(conns['GPL Error Envelope'].main[0].find((c) => c.node === 'Merge').index, 3);
-    assert.equal(conns['FSQ Error Envelope'].main[0].find((c) => c.node === 'Merge').index, 4);
+    assert.deepEqual([...new Set(Object.values(expectedIndex))].sort((x, y) => x - y), [0, 1, 2]);
 
-    // Error outputs of the provider HTTP nodes are wired (R3/§6.3, §6.4).
+    // Every Merge input has at least one producer.
+    for (let i = 0; i < 3; i++) {
+      const producers = Object.keys(conns).filter(
+        (src) => (conns[src].main?.[0] || []).some((e) => e.node === 'Merge' && e.index === i),
+      );
+      assert.ok(producers.length >= 1, `Merge input ${i} must have at least one producer`);
+    }
+
+    // Error outputs of the provider HTTP/IF nodes are wired (R3 + A.10).
     assert.deepEqual(
       conns['Google Places API'].main[1].map((e) => e.node),
       ['GPL Error Envelope'],
@@ -201,6 +235,14 @@ describe('Prospect Finder deterministic builder', () => {
     assert.deepEqual(
       conns['Foursquare Places API'].main[1].map((e) => e.node),
       ['FSQ Error Envelope'],
+    );
+    assert.deepEqual(
+      conns['OpenStreetMap Overpass API'].main[1].map((e) => e.node),
+      ['OSM Error Envelope', 'Handle API Error'],
+    );
+    assert.deepEqual(
+      conns['API Success?'].main[1].map((e) => e.node),
+      ['OSM Error Envelope', 'Handle API Error'],
     );
 
     const mergeOut = conns['Merge'].main[0];
@@ -219,7 +261,7 @@ describe('Prospect Finder deterministic builder', () => {
 
   it('the contract is a functional spec (referenceWorkflow builds a valid base)', () => {
     const base = referenceWorkflow();
-    assert.equal(base.nodes.length, 32);
+    assert.equal(base.nodes.length, 33);
     // Contract code nodes carry a parameters: {} placeholder, ready for injection.
     for (const name of CODE_NODE_NAMES) {
       const node = base.nodes.find((n) => n.name === name);
