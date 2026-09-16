@@ -1,8 +1,8 @@
 # Prospect Finder GPL Isolation — Workstream Closure
-**Date:** 2026-09-15
+**Date:** 2026-09-15 (updated 2026-09-16 for A.12/R8; updated 2026-09-16 for A.12.2)
 **Status:** PARKED — PARTIAL
-**Artifact SHA-256:** b065a3f6…b2582fb (re-baselined by A.11 — R7)
-**Test suite:** 873/873 PASS (867 + A.10 additions + A.11 additions)
+**Artifact SHA-256:** 7E335F38B50D1742FBACF502F8B73458F0BDEA13C12B9DF884DF5F097E407511 (re-baselined by A.12 — R8, then A.12.2)
+**Test suite:** 987/987 (A.12.2 suite; the 3 pre-existing GPL-oracle failures were resolved by A.12.2 fixture reconciliation)
 **Frozen manifest:** 10/10 PASS
 
 ---
@@ -170,10 +170,32 @@ workflow behaved correctly given each response.
    applied through the builder (`Process FSQ` / `Process OSM` now
    mirror GPL); artifact re-baselined (`b065a3f6…b2582fb`). Still out
    of scope for live run — STOP after re-baseline.
-3. **Restore GCP billing** — enables the all-success and
+3. **A.12 — DONE (2026-09-16).** Single canonical phone normalization
+   via `CANONICAL_PHONE_NORMALIZER` injected into Process FSQ + Process
+   OSM; stored phone AND dedupe key both canonicalized (US 10-digit
+   local form); FSQ↔OSM cross-provider phone-key collision now works
+   for the common Foursquare/US-number case (`+`/digits divergence
+   documented, not changed in Cache/GPL). Artifact re-baselined
+   (`7154b753…5b5a24`, 84,074 bytes). **NOTE: this revision reuses
+   the "R8" label per the user's letter (<record R8 as the A.12
+   manifest entry>); it is DISAMBIGUATED from the Prompt C-B row that
+   also used "R8" in §12.3 of the preflight report.** STOP after
+   re-baseline.
+4. **A.12.2 — DONE (2026-09-16).** The 3 pre-existing GPL-oracle
+   fixture failures **resolved** via fixture reconciliation (fixtures
+   re-pinned to the gate-carrying oracle with valid US
+   `formattedAddress` rows) + new gate A/B/C unit tests; the C-A GPL
+   gates (in `src/google-places.js` since pre-A.12, previously
+   uncommitted) were mirrored into the embedded `Process GPL` body so
+   the shipped artifact ≡ the oracle. Artifact re-baselined
+   (`7E335F…097E407511`, 88,253 bytes). Full suite **987/987**
+   (resolves the "964 pass / 3 pre-existing failures" status). Gate
+   logic NOT weakened (purely additive). `.gitattributes` CRLF guard
+   added (artifact LF-only). STOP after re-baseline.
+5. **Restore GCP billing** — enables the all-success and
    GPL-returns-empty cells.
-4. **Provision a valid FSQ token** — enables the all-success cell.
-5. **Re-run Prompt B** — with a fresh seed of ISO-001 through
+6. **Provision a valid FSQ token** — enables the all-success cell.
+7. **Re-run Prompt B** — with a fresh seed of ISO-001 through
    ISO-003 in Austin, TX.
 
 On successful re-run:
@@ -194,12 +216,12 @@ PARTIAL to PASS.
 | Item | Value |
 |---|---|
 | Production workflow JSON | `Lead Recovery Engine — Prospect Finder & Validation V1.json` |
-| SHA-256 | `b065a3f6…b2582fb` (R7 — A.11 re-baseline) |
-| Bytes | 83,708 |
+| SHA-256 | `7E335F38B50D1742FBACF502F8B73458F0BDEA13C12B9DF884DF5F097E407511` (A.12.2 re-baseline) |
+| Bytes | 88,253 |
 | Node count | 33 (16 code nodes) |
 | Builder | `scripts/build-prospect-finder-workflow.js` (byte-identical on double build) |
 | Mutation script retired | `scripts/add-gpl-to-workflow.js` (header-commented, not deleted) |
-| Tests | 873/873 PASS, 0 failures |
+| Tests | **987/987** (A.12.2 suite; the 3 pre-existing GPL-oracle failures resolved by A.12.2 fixture reconciliation) |
 | Frozen manifest | 10/10 PASS |
 | Secret scan | GREEN |
 | Container | `serene_swartz` (Docker, named volume `serene_swartz_data`) |
@@ -218,6 +240,8 @@ PARTIAL to PASS.
 | R5 | A.9 | Merge append mode; `alwaysOutputData` on Dedup |
 | R6 | A.10 | D7 FIXED: Merge consolidated 5→3 (one input per provider); `OSM Error Envelope` added (success+error feed same input) |
 | R7 | A.11 | Empty-success parity: `Process FSQ` / `Process OSM` emit `_noResults` sentinel on zero results (mirrors GPL); `Filter Empty Envelopes` drops it |
+| R8 | A.12 | Canonical phone normalization: FSQ + OSM share one `CANONICAL_PHONE_NORMALIZER` → cross-provider phone dedupe keys collide for US numbers; stored phone always a string |
+| R8 (A.12.2) | A.12.2 | C-A residual reconciliation: GPL gates A/B/C mirrored into embedded `Process GPL` body; fixtures reconciled to gate-carrying oracle; 3 pre-existing oracle failures resolved → full suite 987/987; artifact re-baselined `7E335F…097E407511` (88,253 bytes) |
 
 ---
 
