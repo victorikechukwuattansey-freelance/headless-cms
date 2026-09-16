@@ -1,0 +1,5 @@
+# n8n-lead-recovery line-ending policy.
+# The determinism contract requires LF-only artifacts (byte-for-byte builder
+# comparison). core.autocrlf=true on Windows otherwise converts JSON to CRLF
+# on a fresh checkout, which breaks the builder byte-identity tests.
+*.json text eol=lf

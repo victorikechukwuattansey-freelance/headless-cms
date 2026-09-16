@@ -9,7 +9,10 @@ const {
   buildDedupeKey,
   generateLeadId,
   normalizeGooglePlace,
-  normalizeGooglePlacesResponse
+  normalizeGooglePlacesResponse,
+  rejectPatterns,
+  normalizeState,
+  extractGeo
 } = require('../src/google-places');
 
 const FIXED_NOW = '2026-09-12T00:00:00.000Z';
@@ -87,6 +90,63 @@ describe('google-places normalization', () => {
       const id1 = generateLeadId('ChIJ123', 0);
       const id2 = generateLeadId('ChIJ456', 0);
       assert.notEqual(id1, id2);
+    });
+  });
+
+  describe('rejectPatterns', () => {
+    it('contains the business-relevance rejection patterns (gate A)', () => {
+      assert.equal(rejectPatterns.length, 17);
+      assert.ok(rejectPatterns.some((p) => /supply/.test(p.source)));
+      assert.ok(rejectPatterns.some((p) => /wholesale/.test(p.source)));
+      assert.ok(rejectPatterns.some((p) => /rental/.test(p.source)));
+      assert.ok(rejectPatterns.every((p) => p instanceof RegExp));
+    });
+  });
+
+  describe('normalizeState', () => {
+    it('recognizes two-letter codes case-insensitively', () => {
+      assert.equal(normalizeState('TX'), 'tx');
+      assert.equal(normalizeState('tx'), 'tx');
+      assert.equal(normalizeState('GA'), 'ga');
+      assert.equal(normalizeState('DC'), 'dc');
+    });
+    it('maps full state names to abbreviations', () => {
+      assert.equal(normalizeState('Texas'), 'tx');
+      assert.equal(normalizeState('New Mexico'), 'nm');
+      assert.equal(normalizeState('District of Columbia'), 'dc');
+    });
+    it('returns empty for unrecognized values', () => {
+      assert.equal(normalizeState('Saskatchewan'), '');
+      assert.equal(normalizeState(''), '');
+      assert.equal(normalizeState(null), '');
+      assert.equal(normalizeState(undefined), '');
+    });
+  });
+
+  describe('extractGeo', () => {
+    it('extracts city and state from a US formatted address', () => {
+      assert.deepEqual(extractGeo('123 Main St, Dallas, TX 75201, USA'), { city: 'dallas', state: 'tx' });
+    });
+    it('handles "City ST ZIP" without commas', () => {
+      assert.deepEqual(extractGeo('Dallas TX 75201'), { city: 'dallas', state: 'tx' });
+    });
+    it('handles ZIP+4', () => {
+      assert.deepEqual(extractGeo('123 Main St, Dallas, TX 75201-1234, USA'), { city: 'dallas', state: 'tx' });
+    });
+    it('keeps multi-word city names', () => {
+      assert.deepEqual(extractGeo('456 Main St, San Antonio, TX 78201'), { city: 'san antonio', state: 'tx' });
+    });
+    it('returns the actual state, not the target state', () => {
+      assert.deepEqual(extractGeo('1717 Dallas Hwy, Dallas, GA 30132'), { city: 'dallas', state: 'ga' });
+    });
+    it('skips unrecognized state tokens and keeps scanning', () => {
+      assert.deepEqual(extractGeo('123 Main St, Unit 75201, Dallas, TX 75201'), { city: 'dallas', state: 'tx' });
+    });
+    it('returns null when no recognized state segment exists', () => {
+      assert.equal(extractGeo('7334 South Westmoreland Rd'), null);
+      assert.equal(extractGeo('123 Somewhere Lane, Paris, France'), null);
+      assert.equal(extractGeo(''), null);
+      assert.equal(extractGeo(undefined), null);
     });
   });
 
@@ -218,7 +278,7 @@ describe('google-places normalization', () => {
           {
             id: 'ChIJ123',
             displayName: { text: 'Test HVAC', languageCode: 'en' },
-            formattedAddress: '123 Test St',
+            formattedAddress: '123 Test St, Dallas, TX 75201, USA',
             internationalPhoneNumber: '+1 555-0001',
             websiteUri: 'https://test.example.com',
             rating: 4.0,
@@ -240,6 +300,7 @@ describe('google-places normalization', () => {
       const places = Array.from({ length: 25 }, (_, i) => ({
         id: `ChIJ${i}`,
         displayName: { text: `Biz ${i}`, languageCode: 'en' },
+        formattedAddress: '123 Dallas St, Dallas, TX 75201',
         types: ['establishment']
       }));
       const response = { places };
@@ -282,6 +343,7 @@ describe('google-places normalization', () => {
       const places = Array.from({ length: 10 }, (_, i) => ({
         id: `ChIJ${i}`,
         displayName: { text: `Biz ${i}`, languageCode: 'en' },
+        formattedAddress: '123 Dallas St, Dallas, TX 75201',
         types: ['establishment']
       }));
       const response = { places };
@@ -289,6 +351,113 @@ describe('google-places normalization', () => {
 
       const result = normalizeGooglePlacesResponse(response, searchInputLow, staticData);
       assert.equal(result.leads.length, 6);
+    });
+
+    it('rejects business-relevance matches before lead creation (gate A)', () => {
+      const sd = { MAX_RESULTS_PER_SEARCH: 20 };
+      const response = {
+        places: [
+          {
+            id: 'ChIJSupply1', displayName: { text: 'Dallas HVAC Supply Co', languageCode: 'en' },
+            formattedAddress: '123 Dallas St, Dallas, TX 75201', types: ['store']
+          },
+          {
+            id: 'ChIJGood1', displayName: { text: 'North Dallas Air & Heating', languageCode: 'en' },
+            formattedAddress: '456 Dallas St, Dallas, TX 75201', websiteUri: 'https://air.example.com',
+            internationalPhoneNumber: '+1 214-555-0100', types: ['hvac_contractor']
+          }
+        ]
+      };
+
+      const result = normalizeGooglePlacesResponse(response, searchInput, sd);
+      assert.equal(result.leads.length, 1);
+      assert.equal(result.leads[0].business_name, 'North Dallas Air & Heating');
+      assert.equal(sd.gplRelevanceRejected, 1);
+      assert.equal(sd.gplGeoRejected, 0);
+      assert.equal(sd.gplNoContact, 0);
+    });
+
+    it('rejects geographic mismatches and fails closed on missing evidence (gate B)', () => {
+      const sd = { MAX_RESULTS_PER_SEARCH: 20 };
+      const gateSearchInput = { ...searchInput, target_count: 10 };
+      const response = {
+        places: [
+          {
+            id: 'ChIJPlano1', displayName: { text: 'Plano Climate Masters', languageCode: 'en' },
+            formattedAddress: '789 Plano Rd, Plano, TX 75075', types: ['hvac_contractor']
+          },
+          {
+            id: 'ChIJNoAddr1', displayName: { text: 'Dallas Comfort Experts', languageCode: 'en' },
+            formattedAddress: '', types: ['hvac_contractor']
+          },
+          {
+            id: 'ChIJGa1', displayName: { text: 'Cowboy Air Co', languageCode: 'en' },
+            formattedAddress: '1717 Dallas Hwy, Dallas, GA 30132', types: ['hvac_contractor']
+          },
+          {
+            id: 'ChIJGood2', displayName: { text: 'Bella Mesa Heating & Air', languageCode: 'en' },
+            formattedAddress: '1000 Dallas St, Dallas, TX 75201', websiteUri: 'https://bella.example.com',
+            internationalPhoneNumber: '+1 214-555-0200', types: ['hvac_contractor']
+          }
+        ]
+      };
+
+      const result = normalizeGooglePlacesResponse(response, gateSearchInput, sd);
+      assert.equal(result.leads.length, 1);
+      assert.equal(result.leads[0].business_name, 'Bella Mesa Heating & Air');
+      assert.equal(sd.gplGeoRejected, 3);
+      assert.equal(sd.gplRelevanceRejected, 0);
+    });
+
+    it('marks no-contact records with an empty dedupe key and note (gate C)', () => {
+      const sd = { MAX_RESULTS_PER_SEARCH: 20 };
+      const response = {
+        places: [
+          {
+            id: 'ChIJNoContact1', displayName: { text: 'Suburban Air Balance', languageCode: 'en' },
+            formattedAddress: '1100 Dallas St, Dallas, TX 75201', types: ['hvac_contractor']
+          }
+        ]
+      };
+
+      const result = normalizeGooglePlacesResponse(response, searchInput, sd);
+      assert.equal(result.leads.length, 1);
+      const lead = result.leads[0];
+      assert.equal(lead.dedupe_key, '');
+      assert.ok(lead.notes.includes('no_contact=true'));
+      assert.equal(sd.gplNoContact, 1);
+      assert.equal(sd.gplRelevanceRejected, 0);
+      assert.equal(sd.gplGeoRejected, 0);
+    });
+
+    it('accumulates gate counters across calls and does not require staticData', () => {
+      const sd = { MAX_RESULTS_PER_SEARCH: 20 };
+      const gated = {
+        places: [
+          {
+            id: 'ChIJRejectA', displayName: { text: 'HVAC Rental Co', languageCode: 'en' },
+            formattedAddress: '123 Dallas St, Dallas, TX 75201', types: ['rental']
+          }
+        ]
+      };
+      normalizeGooglePlacesResponse(gated, searchInput, sd);
+      assert.equal(sd.gplRelevanceRejected, 1);
+
+      const noChange = {
+        places: [
+          {
+            id: 'ChIJGood3', displayName: { text: 'Dal-Tex Air Pros', languageCode: 'en' },
+            formattedAddress: '2000 Dallas St, Dallas, TX 75201', websiteUri: 'https://daltex.example.com',
+            internationalPhoneNumber: '+1 214-555-0300', types: ['hvac_contractor']
+          }
+        ]
+      };
+      normalizeGooglePlacesResponse(noChange, searchInput, sd);
+      assert.equal(sd.gplRelevanceRejected, 1);
+      assert.equal(sd.gplGeoRejected, 0);
+
+      normalizeGooglePlacesResponse(gated, searchInput, null);
+      normalizeGooglePlacesResponse(noChange, searchInput, undefined);
     });
   });
 });

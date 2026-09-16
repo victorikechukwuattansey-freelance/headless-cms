@@ -8,6 +8,97 @@
 
 const MAX_RESULTS_PER_SEARCH = 20;
 
+/*
+ * Business-relevance rejection patterns (provider neutral, mirrored from the
+ * Foursquare Process FSQ branch, Prompt C-A / GPL business-logic gate A).
+ * A place whose display name OR types text matches any of these is not a
+ * direct HVAC contractor prospect and is dropped before it becomes a Raw Lead.
+ * Applied against business name + types joined text only; no positive-pattern
+ * gating (a legit HVAC name containing the niche term is never rejected).
+ */
+const rejectPatterns = [
+  /\bcredit\b/i,
+  /\broofing\b/i,
+  /\bplumbing\b/i,
+  /\bflooring\b/i,
+  /\bpainting\b/i,
+  /\binsulation\b/i,
+  /\bfoundation\b/i,
+  /\bconcrete\b/i,
+  /\bcarpet\b/i,
+  /\bdryer\s+vents?\b/i,
+  /\bducts?\s*cleaning\b/i,
+  /\bpower\s+cleaning\b/i,
+  /\bsupply\b/i,
+  /\bwholesale\b/i,
+  /\bhardware\b/i,
+  /\brental\b/i,
+  /\bconstruction\s+supply\b/i,
+];
+
+/*
+ * US state normalizer for the Google Places geographic gate (business-logic
+ * gate B). Recognizes the 50 states + DC by abbreviation or full name and
+ * collapses either form to the 2-letter code. Anything else normalizes to ''
+ * so the geographic gate fails closed on unrecognized location evidence.
+ */
+const STATE_ALIASES = {
+  'alabama': 'al', 'alaska': 'ak', 'arizona': 'az', 'arkansas': 'ar',
+  'california': 'ca', 'colorado': 'co', 'connecticut': 'ct', 'delaware': 'de',
+  'district of columbia': 'dc', 'florida': 'fl', 'georgia': 'ga',
+  'hawaii': 'hi', 'idaho': 'id', 'illinois': 'il', 'indiana': 'in',
+  'iowa': 'ia', 'kansas': 'ks', 'kentucky': 'ky', 'louisiana': 'la',
+  'maine': 'me', 'maryland': 'md', 'massachusetts': 'ma', 'michigan': 'mi',
+  'minnesota': 'mn', 'mississippi': 'ms', 'missouri': 'mo', 'montana': 'mt',
+  'nebraska': 'ne', 'nevada': 'nv', 'new hampshire': 'nh', 'new jersey': 'nj',
+  'new mexico': 'nm', 'new york': 'ny', 'north carolina': 'nc',
+  'north dakota': 'nd', 'ohio': 'oh', 'oklahoma': 'ok', 'oregon': 'or',
+  'pennsylvania': 'pa', 'rhode island': 'ri', 'south carolina': 'sc',
+  'south dakota': 'sd', 'tennessee': 'tn', 'texas': 'tx', 'utah': 'ut',
+  'vermont': 'vt', 'virginia': 'va', 'washington': 'wa',
+  'west virginia': 'wv', 'wisconsin': 'wi', 'wyoming': 'wy',
+};
+
+const STATE_CODE_REGEX = /^(al|ak|az|ar|ca|co|ct|de|dc|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)$/;
+
+function normalizeState(value) {
+  const state = clean(value).toLowerCase();
+  if (STATE_CODE_REGEX.test(state)) return state;
+  return STATE_ALIASES[state] || '';
+}
+
+/*
+ * Extracts { city, state } from a Google Places formattedAddress (US format).
+ * Only the address text itself is evidence — the field mask is NOT expanded.
+ * Expects a comma-separated segment ending "<state> <zip>" (optionally
+ * "<state> <zip+4>"), where the state token is a recognized US state. The
+ * city is the text before the state token in that segment, falling back to the
+ * preceding segment when the state segment carries no city. Returns null when
+ * no recognized state segment exists — the geographic gate then fails closed.
+ */
+function extractGeo(formattedAddress) {
+  const address = clean(formattedAddress);
+  if (!address) return null;
+
+  const segments = address.split(',').map((s) => clean(s)).filter(Boolean);
+  const STATE_SEGMENT = /^([A-Za-z][\w.' ]*?)\s+(\d{5})(?:[-\s]\d{4})?$/;
+
+  for (let idx = 0; idx < segments.length; idx++) {
+    const match = segments[idx].match(STATE_SEGMENT);
+    if (!match) continue;
+
+    const tokens = match[1].trim().split(/\s+/);
+    const state = normalizeState(tokens[tokens.length - 1]);
+    if (!state) continue; // unrecognized state token — keep scanning
+
+    const cityInSegment = tokens.slice(0, -1).join(' ').toLowerCase();
+    const city = cityInSegment || (idx > 0 ? segments[idx - 1].toLowerCase() : '');
+    return { city, state };
+  }
+
+  return null;
+}
+
 function clean(value) {
   return String(value ?? '').trim();
 }
@@ -132,10 +223,75 @@ function normalizeGooglePlacesResponse(gplResponse, searchInput, staticData) {
     Number(staticData?.MAX_RESULTS_PER_SEARCH) || 20
   );
 
+  const targetCity = clean(searchInput?.city).toLowerCase();
+  const targetState = normalizeState(clean(searchInput?.state || ''));
+
   const leads = [];
+  let relevanceRejected = 0;
+  let geoRejected = 0;
+  let noContact = 0;
+
   for (let i = 0; i < Math.min(places.length, maxResults); i++) {
-    const lead = normalizeGooglePlace(places[i], searchInput, i, capturedAt);
-    if (lead) leads.push(lead);
+    const place = places[i];
+    const displayName = place?.displayName?.text ?? '';
+    if (!displayName) continue; // Skip malformed places with empty names
+
+    // Gate A — business relevance (suppliers / parts-wholesale / rental / non-HVAC trades).
+    const types = place?.types || [];
+    if (
+      rejectPatterns.some((pattern) => pattern.test(displayName)) ||
+      rejectPatterns.some((pattern) => pattern.test(types.join(' ')))
+    ) {
+      relevanceRejected++;
+      continue;
+    }
+
+    // Gate B — geography: only formattedAddress is evidence; fail closed.
+    const geo = extractGeo(place?.formattedAddress);
+    if (!geo || !geo.state) {
+      geoRejected++;
+      continue;
+    }
+    let geoOk = false;
+    if (geo.city) {
+      if (targetCity && geo.city === targetCity) geoOk = true;
+      else if (targetCity) {
+        geoRejected++;
+        continue;
+      }
+    }
+    if (geo.state) {
+      if (targetState && geo.state === targetState) geoOk = true;
+      else if (targetState) {
+        geoRejected++;
+        continue;
+      }
+    }
+    if (!geoOk) {
+      geoRejected++;
+      continue;
+    }
+
+    const lead = normalizeGooglePlace(place, searchInput, i, capturedAt);
+    if (!lead) continue;
+
+    // Gate C — verification semantics: a record with neither phone nor website
+    // cannot be contact-verified. Keep it in Raw Leads but neutralize the
+    // dedupe key so Dedup & Prepare Verified's `if (!key) continue` can never
+    // promote it to Verified, and mark it for visibility in notes.
+    if (!lead.phone && !lead.website) {
+      lead.dedupe_key = '';
+      lead.notes += '; no_contact=true';
+      noContact++;
+    }
+
+    leads.push(lead);
+  }
+
+  if (staticData) {
+    staticData.gplRelevanceRejected = (staticData.gplRelevanceRejected || 0) + relevanceRejected;
+    staticData.gplGeoRejected = (staticData.gplGeoRejected || 0) + geoRejected;
+    staticData.gplNoContact = (staticData.gplNoContact || 0) + noContact;
   }
 
   return { leads, error: false };
@@ -149,5 +305,8 @@ module.exports = {
   generateLeadId,
   normalizeGooglePlace,
   normalizeGooglePlacesResponse,
+  rejectPatterns,
+  normalizeState,
+  extractGeo,
   MAX_RESULTS_PER_SEARCH
 };

@@ -14,13 +14,15 @@ const { referenceWorkflow, CODE_NODE_NAMES } = require('../src/prospect-finder-w
 
 /*
  * Frozen-by-convention hash anchor — the current artifact fingerprint
- * (revision R7, Prompt A.11). This guard FAILS if any hand-edit changes the
- * artifact without rebuilding and updating this anchor. When you intentionally
- * change the workflow through the builder (spec or embedded code edit + build),
- * update this constant to the new artifact hash (see
- * reports/PROSPECT-FINDER-GPL-PREFLIGHT.md §12.3 revision log).
+ * (revision R8, Prompt A.12 — replaces the R8 C-B anchor; the C-B changes
+ * are retained in both bodies, only the phone-key shape differs). This guard
+ * FAILS if any hand-edit changes the artifact without rebuilding and updating
+ * this anchor. When you intentionally change the workflow through the builder
+ * (spec or embedded code edit + build), update this constant to the new
+ * artifact hash (see reports/PROSPECT-FINDER-GPL-PREFLIGHT.md §12.3 revision
+ * log and reports/PROSPECT-FINDER-A12-PHONE-NORMALIZATION-REPORT.md).
  */
-const ARTIFACT_HASH = 'b065a3f6b1e1c3f33e1ce2b969fc7158d0dd2413e3f579b32904c95b2b2582fb';
+const ARTIFACT_HASH = '7e335f38b50d1742fbacf502f8b73458f0bdea13c12b9df884df5f097e407511';
 
 const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 
@@ -50,8 +52,21 @@ describe('Prospect Finder deterministic builder', () => {
   it('emits the artifact byte-for-byte (no regeneration drift)', () => {
     const built = serialize(prospectFinderWorkflow());
     assert.equal(built, artifactBytes(), 'builder output must equal the shipped artifact bytes');
-    assert.equal(Buffer.byteLength(built, 'utf8'), 83708);
+    assert.equal(Buffer.byteLength(built, 'utf8'), 88253);
     assert.equal(sha256(built), sha256(artifactBytes()));
+  });
+
+  it('the artifact is LF-only (no \\r\\n) — CRLF line-ending drift guard', () => {
+    const bytes = artifactBytes();
+    assert.ok(
+      !bytes.includes('\r\n'),
+      'artifact must be LF-only; core.autocrlf=true + a fresh checkout converts JSON to CRLF, ' +
+        'which breaks byte-for-byte builder comparison (.gitattributes forces *.json eol=lf)',
+    );
+    assert.ok(
+      !bytes.includes('\r'),
+      'artifact must not contain any carriage return character',
+    );
   });
 
   it('an exact second build also byte-matches the artifact (fresh object each call)', () => {
@@ -162,6 +177,44 @@ describe('Prospect Finder deterministic builder', () => {
     const merge = built.nodes.find((n) => n.name === 'Merge');
     assert.equal(merge.parameters.fieldsToMatch, undefined, 'fieldsToMatch must not be emitted');
     assert.equal(merge.parameters.joinMode, undefined, 'joinMode must not be emitted');
+  });
+
+  it('Process FSQ reads real Foursquare category ids — R8 (Prompt C-B) shape pin', () => {
+    const body = CODE_BY_NODE['Process FSQ'];
+    assert.ok(
+      body.includes('.map(c => clean(c.id) || clean(c.fsq_category_id))'),
+      'getCategoryIds must read the real `categories[].id` field with an fsq_category_id fallback',
+    );
+    assert.ok(
+      !/\.map\(c => clean\(c\.fsq_category_id\)\)/.test(body),
+      'the fsq_category_id-only read must be gone (it never fired on live payloads)',
+    );
+  });
+
+  it('Process FSQ and Process OSM embed the byte-identical canonical normalizePhone — R8 (Prompt A.12) shape pin', () => {
+    const { CANONICAL_PHONE_NORMALIZER } = require('../src/prospect-finder-embedded-code.js');
+    const fsq = CODE_BY_NODE['Process FSQ'];
+    const osm = CODE_BY_NODE['Process OSM'];
+    const canonical = CANONICAL_PHONE_NORMALIZER.join('\n');
+    assert.ok(fsq.includes(canonical), 'Process FSQ must embed the shared canonical normalizePhone');
+    assert.ok(osm.includes(canonical), 'Process OSM must embed the shared canonical normalizePhone');
+    assert.ok(
+      fsq.match(/function normalizePhone[\s\S]*?\n\}/)[0]
+        === osm.match(/function normalizePhone[\s\S]*?\n\}/)[0],
+      'FSQ and OSM helpers must be byte-identical (single source injected into both)',
+    );
+    assert.ok(
+      fsq.includes('phone:${normalizePhone(phone)}'),
+      'FSQ buildDedupeKey must key on the canonical digits (no + kept)',
+    );
+    assert.ok(
+      !/normalize\(phone\)\.replace\(\\\/\[\\\^\\d\+\\\]\\\/g, ''\)/.test(fsq),
+      'the C-B +-keeping phone-key branch must be gone from FSQ',
+    );
+    assert.ok(
+      !osm.includes('return clean(value).replace(/[^\\d+]/g, \'\')'),
+      'the OSM +-keeping normalizePhone must be gone (replaced by the canonical helper)',
+    );
   });
 
   it('Dedup & Prepare Verified has alwaysOutputData: true — A.9 D2\' fix', () => {

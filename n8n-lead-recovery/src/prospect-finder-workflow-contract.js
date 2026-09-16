@@ -20,6 +20,13 @@
  * Revised for Prompt A.11 (R7): Process FSQ and Process OSM mirror Process
  * GPL's `_noResults` sentinel on empty success (no structural change — the
  * sentinels live in src/prospect-finder-embedded-code.js).
+ * Revised for Prompt A.12 (R8): single canonical phone normalization —
+ * `CANONICAL_PHONE_NORMALIZER` injected into Process FSQ and Process OSM
+ * (stored phone + dedupe key both canonicalized). No structural change in
+ * the contract — the helper lives in src/prospect-finder-embedded-code.js.
+ * NOTE: this revision reuses the "R8" label per the user's letter; it is
+ * disambiguated from the Prompt C-B row that also used "R8" in the
+ * preflight §12.3 revision log (history rows are not renamed).
  * Current artifact SHA-256 is computed by the builder.
  * Node and workflow property ORDER is significant: the builder
  * serializes with JSON.stringify(..., null, 2) with NO trailing newline, and

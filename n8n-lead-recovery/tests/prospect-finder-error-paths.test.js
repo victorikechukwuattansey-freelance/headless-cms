@@ -4,7 +4,11 @@ const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
+
+const {
+  runNode,
+  artifactNodeCode,
+} = require('./helpers/prospect-finder-vm');
 
 const workflowPath = path.join(__dirname, '..', 'Lead Recovery Engine — Prospect Finder & Validation V1.json');
 
@@ -16,53 +20,8 @@ before(() => {
   nodesByName = new Map(workflow.nodes.map((n) => [n.name, n]));
 });
 
-/*
- * Minimal offline n8n Code-node sandbox: evaluates a node body from
- * prosepect-finder-embedded-code.js against $input / $('Node') mocks.
- * No live HTTP, no credentials — deterministic, provider-agnostic.
- */
-function runNode(jsCode, { inputItems = [{ json: {} }], nodeData = {}, staticData = {} } = {}) {
-  const state = { staticData };
-  const accessorCache = new Map();
-  const resolve = (name) => {
-    if (accessorCache.has(name)) return accessorCache.get(name);
-    const items = (nodeData[name] || []).map((raw) => ({ json: raw && raw.json !== undefined ? raw.json : raw }));
-    const accessor = { first: () => items[0] || { json: {} }, all: () => items };
-    accessorCache.set(name, accessor);
-    return accessor;
-  };
-  const sandbox = {
-    $input: {
-      first: () => inputItems[0] || { json: {} },
-      all: () => inputItems,
-    },
-    $getWorkflowStaticData: () => state.staticData,
-    $: resolve,
-    Math,
-    Date,
-    JSON,
-    Object,
-    Array,
-    String,
-    Number,
-    RegExp,
-    Boolean,
-    Error,
-    Symbol,
-    Set,
-    Map,
-    Promise,
-    undefined,
-  };
-  const fn = vm.runInNewContext(`(function() {\n${jsCode}\n})`, sandbox, { filename: 'embedded-node.js' });
-  const items = fn();
-  return { items, staticData: state.staticData };
-}
-
 function nodeJsCode(name) {
-  const node = nodesByName.get(name);
-  assert.ok(node, `node ${name} must exist in the artifact`);
-  return node.parameters.jsCode;
+  return artifactNodeCode(name);
 }
 
 function mergeEdge(sourceNode) {
@@ -389,7 +348,7 @@ describe('Prospect Finder error paths & sink filtering (R3)', () => {
       });
       assert.equal(items.length, 1);
       assert.equal(items[0].json._noResults, undefined);
-      assert.equal(items[0].json.lead_id, 'FSQ-PHONE-15125550101');
+      assert.equal(items[0].json.lead_id, 'FSQ-PHONE-5125550101');
     });
 
     it('Filter Empty Envelopes silently drops the FSQ/OSM/GPL _noResults sentinels', () => {
