@@ -12,6 +12,10 @@ reports/*.tmp
 *.log
 npm-debug.log*
 
+# Real Overture downloads — never commit; the committed synthetic fixture stays
+*.parquet
+!fixtures/overture-places-synthetic.parquet
+
 # Dependencies & OS (defined here for repo portability; root .gitignore also covers)
 node_modules/
 .DS_Store

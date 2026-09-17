@@ -171,6 +171,16 @@ Consolidated during the hygiene workstream (H-A `/` H-B `/` H-C).
 | 10 | Archive/dedupe decision for the ~85 historical run reports deferred (kept as evidence; see `reports/README.md`) | hygiene |
 | 11 | Seed the live Response Log spreadsheet and re-run the verify leg with real data rows (post-freeze; blocked on Google credentials on the host) | coverage |
 
+### RESOLVED via the D2-FORMULA workstream
+
+| # | item | category |
+| --- | --- | --- |
+| D2 | Rating source for qualification: **RESOLVED (2026-09-17).** Option 3 chosen — `rating`/`review_count` dropped as required signals; `operating_status='open'` added as the QUALIFIED gate; pipeline reaches QUALIFIED without GCP billing. See `docs/QUALIFICATION-FORMULA.md`. | formula |
+
+**D2 additionally resolved 2026-09-17 via per-column formula restoration** after an initial
+unified-spill attempt introduced regressions. See `docs/QUALIFICATION-FORMULA.md §2` for the
+full revision arc.
+
 ### NEW (surfaced by the hygiene workstream)
 
 | # | item | category |
