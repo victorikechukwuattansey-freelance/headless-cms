@@ -1,5 +1,16 @@
 'use strict';
 
+/*
+ * Column ownership contract (Enrichment V1, H.6):
+ *   - Approved Outreach has 23 columns; the handoff workflow owns the FIRST 21
+ *     (lead_id … notes) and the enrichment workflow owns the LAST 2
+ *     (contact_blocked, contact_source_provider). Enrichment writes those two
+ *     via its update node; the handoff append must NEVER write them.
+ *   - Verified Leads has 28 columns; the last 4 (enrichment_business_status,
+ *     enrichment_confidence, enrichment_gers_id, enrichment_last_run) are the
+ *     business-half enrichment write surface and start out empty.
+ */
+
 const VERIFIED_COLUMNS = [
   'lead_id',
   'business_name',
@@ -25,6 +36,10 @@ const VERIFIED_COLUMNS = [
   'verified_at',
   'notes',
   'manual_review_notes',
+  'enrichment_business_status',
+  'enrichment_confidence',
+  'enrichment_gers_id',
+  'enrichment_last_run',
 ];
 
 const APPROVED_COLUMNS = [
@@ -49,6 +64,8 @@ const APPROVED_COLUMNS = [
   'outreach_status',
   'approved_at',
   'notes',
+  'contact_blocked',
+  'contact_source_provider',
 ];
 
 const VERIFIED_COLUMN_INDEX = Object.fromEntries(VERIFIED_COLUMNS.map((c, i) => [c, i]));
