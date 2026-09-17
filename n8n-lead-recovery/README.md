@@ -114,6 +114,7 @@ live-runner environment (Response Interpretation V1) is documented in
 | `docs/ARTIFACT-IMPORT.md` | UI / CLI / API import paths + decision matrix for the workflow exports. |
 | `docs/PHASE-6-ENVIRONMENT-RUNBOOK.md` | Response Interpretation live-runner env vars and provision steps. |
 | `docs/MANIFEST-SNAPSHOT.md` | Snapshot of the frozen manifest. |
+| `docs/QUALIFICATION-FORMULA.md` | Verified Leads qualification contract (Q:U formula) — thresholds, revision history, change protocol, sheet-edit instructions. |
 | `reports/` index | `reports/README.md` — all phase, isolation, and hygiene reports. |
 
 ## 1.7 Status
