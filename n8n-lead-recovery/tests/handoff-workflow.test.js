@@ -358,6 +358,29 @@ test('T8: source integrity — Verified Leads are only read, nothing leaked into
   assert.ok(!('_noNewApproved' in columns.value));
 });
 
+test('write-subset guard: the handoff append maps ONLY the 21 handoff-owned columns', () => {
+  const write = byName('Write Approved Outreach');
+  const columns = write.parameters.columns;
+  assert.equal(columns.mappingMode, 'defineBelow');
+  const mapped = Object.keys(columns.value);
+  const enrichmentOwned = ['contact_blocked', 'contact_source_provider'];
+  for (const key of mapped) {
+    assert.ok(
+      APPROVED_OUTREACH_COLUMNS.includes(key),
+      'handoff must not map a column outside its 21-owned contract: ' + key,
+    );
+    assert.ok(
+      !enrichmentOwned.includes(key),
+      'handoff must never write an enrichment-owned column: ' + key,
+    );
+  }
+  assert.deepEqual(
+    mapped.sort(),
+    [...APPROVED_OUTREACH_COLUMNS].sort(),
+    'handoff writes exactly its 21-owned columns',
+  );
+});
+
 test('T9: failure recovery — re-running after a failed/partial write never duplicates', () => {
   const verified = [lead('lead-001'), lead('lead-002')];
 

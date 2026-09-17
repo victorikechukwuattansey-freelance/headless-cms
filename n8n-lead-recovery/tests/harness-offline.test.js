@@ -64,6 +64,8 @@ function preparedApprovedRow(lead) {
     outreach_status: 'not_ready',
     approved_at: new Date().toISOString(),
     notes: '',
+    contact_blocked: '',
+    contact_source_provider: '',
   };
 }
 
@@ -122,7 +124,7 @@ test('fixtures: eligibility and preseed dedupe produce the declared expectations
   assert.equal(expectedOutcome(fixtures.verifiedSeeds[5], fixtures.preseedIds), 'skip');
 });
 
-test('fixtures: verified rows carry the full 24-column schema with formula-owned Q:U', () => {
+test('fixtures: verified rows carry the full 28-column schema with formula-owned Q:U', () => {
   const fixtures = loadFixtures();
   const row001 = fixtures.verifiedSeeds.find((r) => r.lead_id === 'TEST-AOH-001');
   assert.equal(row001.has_website, 'TRUE');
@@ -141,8 +143,14 @@ test('fixtures: verified rows carry the full 24-column schema with formula-owned
 });
 
 test('schema: header and helper conventions are consistent', () => {
-  assert.equal(VERIFIED_COLUMNS.length, 24);
-  assert.equal(APPROVED_COLUMNS.length, 21);
+  assert.equal(VERIFIED_COLUMNS.length, 28);
+  assert.equal(APPROVED_COLUMNS.length, 23);
+  assert.ok(VERIFIED_COLUMNS.includes('enrichment_business_status'));
+  assert.ok(VERIFIED_COLUMNS.includes('enrichment_confidence'));
+  assert.ok(VERIFIED_COLUMNS.includes('enrichment_gers_id'));
+  assert.ok(VERIFIED_COLUMNS.includes('enrichment_last_run'));
+  assert.ok(APPROVED_COLUMNS.includes('contact_blocked'));
+  assert.ok(APPROVED_COLUMNS.includes('contact_source_provider'));
   assert.ok(isHeaderRow(VERIFIED_COLUMNS), 'Verified header row is the column list itself');
   assert.ok(isControlName('_control'));
   assert.ok(isControlName('_noNewApproved'));
@@ -171,7 +179,7 @@ test('report: schema contract flags control-field leakage', () => {
     .filter((r) => fixtures.expectedInsert.has(r.lead_id))
     .map((r) => {
       const row = gridFromObjects(APPROVED_COLUMNS, [preparedApprovedRow(r)])[1];
-      row.push('_control'); // stray control field appended past the 21-column contract
+      row.push('_control'); // stray control field appended past the 23-column contract
       row.push(JSON.stringify({ eligible: 1 }));
       return row;
     });
@@ -280,9 +288,9 @@ test('e2e: SEED (dry-run then live) -> RUN -> VERIFY(12/13) -> repeat -> CLEANUP
     target_niche: 'General', score: '85', qualification_status: 'QUALIFIED', verified_at: '2026-09-01T00:00:00.000Z',
     notes: '', manual_review_notes: '',
   }])[1]]);
-  mock.appendRows('Approved Outreach', [[
-    'LEAD-ALPHA', 'Alpha Roofer', 'Roofing', 'Austin', 'Texas', 'USA', '', '', '', '', '', '',
-    '', '', '', '70', 'QUALIFIED', 'email', 'ready', '2026-09-02T00:00:00.000Z', '',
+mock.appendRows('Approved Outreach', [[
+    'LEAD-ALPHA', 'Alpha Roofer', 'Roofing', 'Austin', 'Texas', 'USA', '', '', '', '', '', '', '',
+    '', '', '70', 'QUALIFIED', 'email', 'ready', '2026-09-02T00:00:00.000Z', '', '', '',
   ]]);
   assert.equal(simulateHandoff(mock), 1); // LEAD-BETA now flows through the handoff
 
