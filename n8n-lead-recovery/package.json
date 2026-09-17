@@ -2,7 +2,7 @@
   "name": "lre-approved-outreach-handoff",
   "version": "0.1.0",
   "private": true,
-  "description": "Lead Recovery Engine — Approved Outreach Handoff V1 (n8n) + Google Sheets Verification & Fixture Harness v0.1 + Run Reconciliation and Reporting V1 + Outreach Queue & Planning V1 + Outreach Response Capture V1 + Outreach Response Reconciliation V1. Zero runtime dependencies.",
+  "description": "Lead Recovery Engine — Approved Outreach Handoff V1 (n8n) + Google Sheets Verification & Fixture Harness v0.1 + Run Reconciliation and Reporting V1 + Outreach Queue & Planning V1 + Outreach Response Capture V1 + Outreach Response Reconciliation V1 + Enrichment V1 (Overture business + Hunter contact + OSS fallback).",
   "type": "commonjs",
   "scripts": {
     "test": "node --test \"tests/*.test.js\"",
@@ -32,9 +32,16 @@
     "response-interpret:live:seed": "node scripts/run-response-interpretation-live.js --seed",
     "response-interpret:live:run": "node scripts/run-response-interpretation-live.js --run",
     "response-interpret:live:cleanup": "node scripts/run-response-interpretation-live.js --cleanup",
-    "response-interpret:phase-6-5:test": "node --test tests/response-interpretation-phase-6-5.test.js"
+    "response-interpret:phase-6-5:test": "node --test tests/response-interpretation-phase-6-5.test.js",
+    "enrichment:build": "node scripts/build-enrichment-workflow.js",
+    "enrichment:test": "node --test tests/enrichment-contact-engine.test.js tests/enrichment-workflow-build.test.js",
+    "enrichment:security": "node scripts/security-check.js"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@absolutejs/enrich": "0.1.4",
+    "@duckdb/node-api": "^1.5.5-r.5"
   }
 }

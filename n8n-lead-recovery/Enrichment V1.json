@@ -1,0 +1,575 @@
+{
+  "name": "Lead Recovery Engine — Enrichment V1",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "event": "workflow"
+      },
+      "id": "enrich-manual-trigger-0001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": ""
+        },
+        "operation": "read",
+        "sheetName": {
+          "mode": "name",
+          "value": "Contact Enrichment Log"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "enrich-read-log-0001",
+      "name": "Read Contact Enrichment Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": ""
+        },
+        "operation": "read",
+        "sheetName": {
+          "mode": "name",
+          "value": "Approved Outreach"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {
+          "returnAllMatches": true
+        }
+      },
+      "id": "enrich-read-approved-0001",
+      "name": "Read Approved Outreach",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst approvedItems = $('Read Approved Outreach').all();\nconst triggerItems = $('Manual Trigger').all();\nconst trigger = (triggerItems && triggerItems.length && triggerItems[0] && triggerItems[0].json) || {};\n\nconst inputRows = (items || []).map((item) => (item && item.json) || {}).filter((r) => r && typeof r === 'object');\nconst approvedRows = (approvedItems || []).map((item) => (item && item.json) || {}).filter((r) => r && typeof r === 'object');\nconst leads = inputRows.length > 0 ? inputRows : approvedRows;\n\nif (leads.length === 0) {\n  return [];\n}\n\nconst seams = {\n  now: trigger.now || trigger.run_timestamp || '',\n  runId: trigger.runId || trigger.run_id || '',\n  run_timestamp: trigger.run_timestamp || '',\n  run_id: trigger.run_id || '',\n  provider: trigger.provider || 'agentdata',\n  agentdataResults: trigger.agentdataResults || {},\n  agentdataFailures: trigger.agentdataFailures || {},\n  hunterResults: trigger.hunterResults || {},\n  hunterFailures: trigger.hunterFailures || {},\n};\n\nreturn leads.map((row, index) =>\n  index === 0 ? { json: Object.assign({}, row, seams) } : { json: Object.assign({}, row) },\n);\n"
+      },
+      "id": "enrich-prepare-scope-0001",
+      "name": "Prepare Enrichment Scope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n/*\n * Enrich Contact — Lead Recovery Engine · Enrichment V1 (contact half).\n * Self-contained mirror composed from src/enrichment-schema.js +\n * src/enrichment-cache.js + src/enrichment-contact.js (single source of truth).\n * Provider transport comes from the runner-injected client (payload seams:\n * agentdataResults / agentdataFailures for the default provider; hunterResults\n * / hunterFailures when payload.provider signals 'hunter'). Deterministic:\n * now/runId injected from input.\n */\nconst ENRICHMENT_LOG_COLUMNS = [\n  'enrichment_id',\n  'enrichment_key',\n  'lead_id',\n  'provider',\n  'query_input',\n  'result_email',\n  'result_contact_name',\n  'result_contact_title',\n  'result_verified',\n  'credits_consumed',\n  'enriched_at',\n  'ttl_expires_at',\n  'cache_hit_count',\n  'notes',\n];\nconst PROVIDERS = ['hunter', 'oss', 'manual'];\nconst ENRICHMENT_ID_PREFIX = 'ENRICH-';\nconst DEFAULT_TTL_DAYS = 60;\nconst GENERIC_EMAIL_PATTERNS = new Set([\n  'info',\n  'contact',\n  'sales',\n  'support',\n  'admin',\n  'hello',\n  'mail',\n  'office',\n  'help',\n  'service',\n  'enquiries',\n  'inquiries',\n  'bookings',\n  'careers',\n  'jobs',\n  'recruit',\n]);\nconst HUNTER_MIN_SCORE = 50;\nconst US_COUNTRIES = new Set(['USA', 'US', 'UNITED STATES', 'UNITED STATES OF AMERICA']);\nfunction normalize(value) {\n  return value === undefined || value === null ? '' : String(value).trim();\n}\nfunction isGenericEmail(localPart) {\n  return GENERIC_EMAIL_PATTERNS.has(normalize(localPart).toLowerCase());\n}\nfunction isUsCountry(value) {\n  return US_COUNTRIES.has(normalize(value).toUpperCase());\n}\n\nconst DAY_MS = 24 * 60 * 60 * 1000;\nfunction normalize(value) {\n  return value === undefined || value === null ? '' : String(value).trim();\n}\nfunction fnv1a32(input) {\n  let hash = 0x811c9dc5;\n  const text = normalize(input);\n  for (let i = 0; i < text.length; i += 1) {\n    hash ^= text.charCodeAt(i);\n    hash = Math.imul(hash, 0x01000193) >>> 0;\n  }\n  return hash >>> 0;\n}\nfunction enrichmentIdFor(enrichmentKey, enrichedAt) {\n  const digest = fnv1a32(`${normalize(enrichmentKey)}::${normalize(enrichedAt)}`);\n  return `${ENRICHMENT_ID_PREFIX}${digest.toString(16).padStart(8, '0')}`;\n}\nfunction ttlExpiresAt(enrichedAt, ttlDays) {\n  const base = Date.parse(normalize(enrichedAt));\n  const days = ttlDays === undefined || ttlDays === null ? DEFAULT_TTL_DAYS : Number(ttlDays);\n  if (!Number.isFinite(base) || !Number.isFinite(days) || days <= 0) {\n    throw new Error(`enrichment-cache: invalid ttl input enriched_at=${enrichedAt} ttlDays=${ttlDays}`);\n  }\n  return new Date(base + days * DAY_MS).toISOString();\n}\nfunction compareStrings(a, b) {\n  const left = normalize(a);\n  const right = normalize(b);\n  if (left < right) return -1;\n  if (left > right) return 1;\n  return 0;\n}\nfunction sortLogRows(rows) {\n  return rows\n    .slice()\n    .map((row) => (row && typeof row === 'object' ? row : {}))\n    .sort((x, y) => {\n      const byKey = compareStrings(x.enrichment_key, y.enrichment_key);\n      if (byKey !== 0) return byKey;\n      const byAt = compareStrings(x.enriched_at, y.enriched_at);\n      if (byAt !== 0) return byAt;\n      return compareStrings(x.lead_id, y.lead_id);\n    });\n}\nfunction lookupCache(rows, key, options) {\n  const opts = options || {};\n  const target = normalize(key);\n  const now = opts.now ? Date.parse(normalize(opts.now)) : 0;\n  const strict = opts.now !== undefined && opts.now !== null && opts.now !== '';\n  for (const row of rows || []) {\n    if (normalize(row && row.enrichment_key) !== target) continue;\n    if (!strict) return row;\n    const expires = row && row.ttl_expires_at ? Date.parse(normalize(row.ttl_expires_at)) : Number.NaN;\n    if (Number.isFinite(now) && Number.isFinite(expires) && expires > now) return row;\n  }\n  return null;\n}\nfunction upsertCache(entries, entry) {\n  const target = normalize(entry && entry.enrichment_key);\n  const next = [];\n  let replaced = false;\n  for (const row of entries || []) {\n    if (normalize(row && row.enrichment_key) === target) {\n      next.push(entry);\n      replaced = true;\n    } else {\n      next.push(row);\n    }\n  }\n  if (!replaced) next.push(entry);\n  return sortLogRows(next);\n}\nfunction incrementCacheHit(logRows, entry) {\n  const target = normalize(entry && entry.enrichment_key);\n  let bumped = false;\n  const next = (logRows || []).map((row) => {\n    if (!bumped && normalize(row && row.enrichment_key) === target) {\n      bumped = true;\n      const current = Number.parseInt(normalize(row.cache_hit_count), 10);\n      return Object.assign({}, row, {\n        cache_hit_count: String(Number.isFinite(current) ? current + 1 : 1),\n      });\n    }\n    return row;\n  });\n  return sortLogRows(next);\n}\n\nconst PROVIDER_AGENTDATA = 'agentdata';\nconst PROVIDER_HUNTER = 'hunter';\nconst DOMAIN_SEARCH_CREDITS = 1;\nconst SKIP_REASONS = Object.freeze({\n  NON_US: 'non_us',\n  NO_DOMAIN: 'no_domain',\n  ALREADY_ENRICHED: 'already_enriched',\n});\nconst NO_EMAILS_FOUND = 'no_emails_found';\nconst NO_ACCEPTED_EMAIL = 'no_accepted_email';\nfunction normalizeDomain(value) {\n  let url = normalize(value).toLowerCase();\n  url = url.replace(/^[a-z][a-z0-9+.-]*:\\/\\//, '');\n  url = url.replace(/^www\\./, '');\n  url = url.split('/')[0];\n  url = url.split('?')[0];\n  url = url.split('#')[0];\n  return url.replace(/[.:]+$/, '');\n}\nfunction emailOf(email) {\n  const value = email && email.email !== undefined && email.email !== null ? email.email : email && email.value;\n  return normalize(value);\n}\nfunction scoreOf(email) {\n  const raw = email && email.confidence !== undefined && email.confidence !== null ? email.confidence : email && email.score;\n  const n = Number(raw);\n  return Number.isFinite(n) ? n : 0;\n}\nfunction verifiedOf(email) {\n  const status = normalize(email && email.verification_status);\n  if (status === 'valid') return true;\n  const v = email && email.verified;\n  if (v === true || v === 'TRUE' || v === 'true' || v === 'Y' || v === 'y' || v === '1') return true;\n  return false;\n}\nfunction contactNameFrom(email) {\n  const first = normalize(email && email.first_name);\n  const last = normalize(email && email.last_name);\n  return [first, last].filter((part) => part !== '').join(' ');\n}\nfunction pickBestEmail(emails, options) {\n  const opts = options || {};\n  const rawMin = opts.minScore === undefined || opts.minScore === null ? HUNTER_MIN_SCORE : opts.minScore;\n  const minScore = Number.isFinite(Number(rawMin)) ? Number(rawMin) : HUNTER_MIN_SCORE;\n  const candidates = (emails || [])\n    .filter((email) => emailOf(email).indexOf('@') !== -1)\n    .filter((email) => !isGenericEmail(emailOf(email).split('@')[0]))\n    .filter((email) => scoreOf(email) >= minScore)\n    .slice()\n    .sort((a, b) => {\n      const byScore = scoreOf(b) - scoreOf(a);\n      if (byScore !== 0) return byScore;\n      const byVerified = verifiedOf(b) ? 1 : 0;\n      const aVerified = verifiedOf(a) ? 1 : 0;\n      if (byVerified !== aVerified) return byVerified - aVerified;\n      return emailOf(a).localeCompare(emailOf(b));\n    });\n  return candidates[0] || null;\n}\nfunction logRowFor(options) {\n  const best = options.result || null;\n  return {\n    enrichment_id: enrichmentIdFor(options.enrichmentKey, options.now),\n    enrichment_key: normalize(options.enrichmentKey),\n    lead_id: String(options.leadId || ''),\n    provider: normalize(options.provider) || PROVIDER_AGENTDATA,\n    query_input: normalize(options.domain),\n    result_email: best ? emailOf(best) : '',\n    result_contact_name: best ? contactNameFrom(best) : '',\n    result_contact_title: best ? normalize(best.position) : '',\n    result_verified: best && verifiedOf(best) ? 'TRUE' : 'FALSE',\n    credits_consumed: Number.isFinite(Number(options.credits)) && Number(options.credits) > 0 ? String(Number(options.credits)) : '',\n    enriched_at: normalize(options.now),\n    ttl_expires_at: ttlExpiresAt(options.now, options.ttlDays),\n    cache_hit_count: '0',\n    notes: normalize(options.notes),\n  };\n}\nfunction fieldsForBest(best, provider) {\n  if (!best) return {};\n  return {\n    email: emailOf(best),\n    contact_name: contactNameFrom(best),\n    contact_title: normalize(best.position),\n    email_verified: verifiedOf(best) ? 'Y' : '',\n    email_source: normalize(provider) || PROVIDER_AGENTDATA,\n  };\n}\nfunction cachedFieldsOf(row) {\n  const email = normalize(row && row.result_email);\n  return {\n    email,\n    contact_name: normalize(row && row.result_contact_name),\n    contact_title: normalize(row && row.result_contact_title),\n    email_verified: normalize(row && row.result_verified) === 'TRUE' ? 'Y' : '',\n    email_source: email !== '' ? normalize(row && row.provider) : '',\n  };\n}\nfunction applyContactFields(lead, fields, provider) {\n  const out = Object.assign({}, lead || {});\n  for (const key of ['email', 'contact_name', 'contact_title', 'email_verified', 'email_source']) {\n    if (normalize(out[key]) === '' && fields[key] !== undefined) out[key] = fields[key];\n  }\n  out.contact_source_provider = normalize(provider) || PROVIDER_AGENTDATA;\n  return out;\n}\nfunction sortLeads(rows) {\n  return rows\n    .slice()\n    .map((row) => (row && typeof row === 'object' ? row : {}))\n    .sort((x, y) => String(x.lead_id || '').localeCompare(String(y.lead_id || '')));\n}\nasync function enrichContactLeads(options) {\n  const opts = options || {};\n  const leads = opts.leads || [];\n  const client = opts.client || null;\n  const now = normalize(opts.now);\n  const provider =\n    normalize(opts.provider) || (client && normalize(client.provider)) || PROVIDER_AGENTDATA;\n  let log = sortLogRows(opts.logRows || []);\n  const stats = {\n    total: leads.length,\n    enriched: 0,\n    skipped: 0,\n    failed: 0,\n    credits_consumed: 0,\n    cache_hits: 0,\n  };\n  const enriched = [];\n  const skipped = [];\n  const failed = [];\n  let fatal;\n  const lookup =\n    client && typeof client.domainSearch === 'function'\n      ? client.domainSearch\n      : client && typeof client.search === 'function'\n        ? client.search\n        : null;\n  for (const rawLead of leads || []) {\n    const lead = rawLead || {};\n    if (fatal) {\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: fatal.reason }));\n      stats.failed += 1;\n      continue;\n    }\n    const domain = normalizeDomain(lead.website);\n    if (!isUsCountry(lead.country)) {\n      skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.NON_US }));\n      stats.skipped += 1;\n      continue;\n    }\n    if (domain === '') {\n      skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.NO_DOMAIN }));\n      stats.skipped += 1;\n      continue;\n    }\n    if (normalize(lead.email) !== '') {\n      skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.ALREADY_ENRICHED }));\n      stats.skipped += 1;\n      continue;\n    }\n    const key = `${domain}::${provider}`;\n    const cached = lookupCache(log, key, { now });\n    if (cached) {\n      log = incrementCacheHit(log, { enrichment_key: key });\n      enriched.push(applyContactFields(lead, cachedFieldsOf(cached), provider));\n      stats.enriched += 1;\n      stats.cache_hits += 1;\n      continue;\n    }\n    if (!lookup) {\n      fatal = { reason: 'no_client_configured', status: null };\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: fatal.reason }));\n      stats.failed += 1;\n      continue;\n    }\n    let result;\n    try {\n      result = await lookup(domain);\n    } catch (err) {\n      const reason = normalize(err && err.reason) || normalize(err && err.message) || 'provider_error';\n      if (err && err.fatal === true) {\n        fatal = { reason, status: err.status || null };\n        failed.push(Object.assign({}, lead, { enrichment_failure_reason: fatal.reason }));\n        stats.failed += 1;\n        continue;\n      }\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: reason }));\n      stats.failed += 1;\n      continue;\n    }\n    if (result && result.ok === false) {\n      const reason = normalize(result.reason) || 'provider_error';\n      if (result.fatal === true) {\n        fatal = { reason, status: result.status || null };\n        failed.push(Object.assign({}, lead, { enrichment_failure_reason: fatal.reason }));\n        stats.failed += 1;\n        continue;\n      }\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: reason }));\n      stats.failed += 1;\n      continue;\n    }\n    if (!result || typeof result !== 'object' || !Array.isArray(result.emails)) {\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: 'provider_error' }));\n      stats.failed += 1;\n      continue;\n    }\n    const credits = Number.isFinite(Number(result.creditsUsed)) ? Number(result.creditsUsed) : DOMAIN_SEARCH_CREDITS;\n    const best = pickBestEmail(result.emails, { minScore: opts.minScore });\n    const notes = best ? '' : (result.emails && result.emails.length ? NO_ACCEPTED_EMAIL : NO_EMAILS_FOUND);\n    log = upsertCache(\n      log,\n      logRowFor({\n        enrichmentKey: key,\n        leadId: lead.lead_id,\n        domain,\n        result: best,\n        credits,\n        now,\n        ttlDays: opts.ttlDays,\n        provider,\n        notes,\n      }),\n    );\n    enriched.push(applyContactFields(lead, fieldsForBest(best, provider), provider));\n    stats.enriched += 1;\n    stats.credits_consumed += credits;\n  }\n  const output = {\n    provider,\n    enriched: sortLeads(enriched),\n    skipped: sortLeads(skipped),\n    failed: sortLeads(failed),\n    stats,\n    log: sortLogRows(log),\n  };\n  if (fatal) output.fatal = fatal;\n  return output;\n}\n\nconst inputItems = $input.all();\nconst payload = (inputItems[0] && inputItems[0].json) || {};\nconst leads = (inputItems || []).map((item) => (item && item.json) || {});\nconst logItems = $('Read Contact Enrichment Log').all();\nconst logRows = (logItems || []).map((item) => (item && item.json) || {});\nconst provider = String((payload && payload.provider) || 'agentdata').toLowerCase();\nconst isAgentData = provider === 'agentdata';\nconst agentdataResults = (payload && payload.agentdataResults) || {};\nconst agentdataFailures = (payload && payload.agentdataFailures) || {};\nconst hunterResults = isAgentData ? {} : ((payload && payload.hunterResults) || {});\nconst hunterFailures = isAgentData ? {} : ((payload && payload.hunterFailures) || {});\nconst resultsMap = isAgentData ? agentdataResults : hunterResults;\nconst failuresMap = isAgentData ? agentdataFailures : hunterFailures;\n\nconst client = {\n  provider,\n  domainSearch: async (domain) => {\n    if (failuresMap && failuresMap[domain]) {\n      const failure = failuresMap[domain];\n      const err = new Error(failure.reason || 'provider_failed');\n      err.fatal = failure.fatal === true;\n      err.reason = failure.reason || '';\n      err.status = failure.status || null;\n      throw err;\n    }\n    const result = (resultsMap && resultsMap[domain]) || null;\n    if (result == null) {\n      return { emails: [], source: provider, creditsUsed: 0 };\n    }\n    return {\n      emails: result.emails || [],\n      source: result.source || provider,\n      creditsUsed: result.creditsUsed === undefined || result.creditsUsed === null ? 1 : result.creditsUsed,\n    };\n  },\n};\n\nconst result = await enrichContactLeads({\n  leads,\n  logRows,\n  client,\n  now: payload.now || payload.run_timestamp || '',\n  runId: payload.runId || payload.run_id || '',\n});\n\nreturn [{\n  json: {\n    provider: result.provider,\n    enriched: result.enriched,\n    skipped: result.skipped,\n    failed: result.failed,\n    stats: result.stats,\n    log: result.log,\n    ...(result.fatal ? { fatal: result.fatal } : {}),\n  },\n}];\n"
+      },
+      "id": "enrich-contact-0001",
+      "name": "Enrich Contact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst contactItems = $('Enrich Contact').all();\nconst approvedItems = $('Read Approved Outreach').all();\nconst triggerItems = $('Manual Trigger').all();\nconst trigger = (triggerItems && triggerItems.length && triggerItems[0] && triggerItems[0].json) || {};\n\nconst envelope = (contactItems && contactItems[0] && contactItems[0].json) || {};\n\nif (envelope.fatal || !envelope.stats || envelope.stats.total === 0) {\n  return [];\n}\n\nconst approvedRows = (approvedItems || []).map((item) => (item && item.json) || {}).filter((r) => r && typeof r === 'object');\n\nconst enrichedIds = new Set();\nfor (const row of envelope.enriched || []) {\n  const id = String(row.lead_id || '').trim();\n  if (id && String(row.email || '').trim() !== '') enrichedIds.add(id);\n}\n\nconst US_COUNTRIES = ['USA', 'US', 'UNITED STATES', 'UNITED STATES OF AMERICA'];\n\nconst ossLeads = [];\nconst seen = new Set();\nfor (const lead of approvedRows) {\n  const id = String(lead.lead_id || '').trim();\n  if (!id || seen.has(id)) continue;\n  seen.add(id);\n  if (String(lead.email || '').trim() !== '') continue;\n  if (String(lead.website || '').trim() === '') continue;\n  if (!US_COUNTRIES.includes(String(lead.country || '').trim().toUpperCase())) continue;\n  if (enrichedIds.has(id)) continue;\n  ossLeads.push(lead);\n}\n\nif (ossLeads.length === 0) {\n  return [];\n}\n\nconst seams = {\n  now: trigger.now || trigger.run_timestamp || '',\n  runId: trigger.runId || trigger.run_id || '',\n  run_timestamp: trigger.run_timestamp || '',\n  run_id: trigger.run_id || '',\n  ossResults: trigger.ossResults || {},\n};\n\nreturn ossLeads.map((row, index) =>\n  index === 0 ? { json: Object.assign({}, row, seams) } : { json: Object.assign({}, row) },\n);\n"
+      },
+      "id": "enrich-prepare-oss-0001",
+      "name": "Prepare OSS Fallback Scope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "'use strict';\n\n/*\n * Enrich Contact (OSS Fallback) — Lead Recovery Engine · Enrichment V1.\n * Self-contained mirror composed from the enrichment modules (single source of\n * truth). Zero-credit fallback for Hunter-empty domains (provider 'oss');\n * resolver transport from the runner-injected seam (payload ossResults).\n * Deterministic: now/runId injected from input.\n */\nconst ENRICHMENT_LOG_COLUMNS = [\n  'enrichment_id',\n  'enrichment_key',\n  'lead_id',\n  'provider',\n  'query_input',\n  'result_email',\n  'result_contact_name',\n  'result_contact_title',\n  'result_verified',\n  'credits_consumed',\n  'enriched_at',\n  'ttl_expires_at',\n  'cache_hit_count',\n  'notes',\n];\nconst PROVIDERS = ['hunter', 'oss', 'manual'];\nconst ENRICHMENT_ID_PREFIX = 'ENRICH-';\nconst DEFAULT_TTL_DAYS = 60;\nconst GENERIC_EMAIL_PATTERNS = new Set([\n  'info',\n  'contact',\n  'sales',\n  'support',\n  'admin',\n  'hello',\n  'mail',\n  'office',\n  'help',\n  'service',\n  'enquiries',\n  'inquiries',\n  'bookings',\n  'careers',\n  'jobs',\n  'recruit',\n]);\nconst HUNTER_MIN_SCORE = 50;\nconst US_COUNTRIES = new Set(['USA', 'US', 'UNITED STATES', 'UNITED STATES OF AMERICA']);\nfunction normalize(value) {\n  return value === undefined || value === null ? '' : String(value).trim();\n}\nfunction isGenericEmail(localPart) {\n  return GENERIC_EMAIL_PATTERNS.has(normalize(localPart).toLowerCase());\n}\nfunction isUsCountry(value) {\n  return US_COUNTRIES.has(normalize(value).toUpperCase());\n}\n\nconst DAY_MS = 24 * 60 * 60 * 1000;\nfunction normalize(value) {\n  return value === undefined || value === null ? '' : String(value).trim();\n}\nfunction fnv1a32(input) {\n  let hash = 0x811c9dc5;\n  const text = normalize(input);\n  for (let i = 0; i < text.length; i += 1) {\n    hash ^= text.charCodeAt(i);\n    hash = Math.imul(hash, 0x01000193) >>> 0;\n  }\n  return hash >>> 0;\n}\nfunction enrichmentIdFor(enrichmentKey, enrichedAt) {\n  const digest = fnv1a32(`${normalize(enrichmentKey)}::${normalize(enrichedAt)}`);\n  return `${ENRICHMENT_ID_PREFIX}${digest.toString(16).padStart(8, '0')}`;\n}\nfunction ttlExpiresAt(enrichedAt, ttlDays) {\n  const base = Date.parse(normalize(enrichedAt));\n  const days = ttlDays === undefined || ttlDays === null ? DEFAULT_TTL_DAYS : Number(ttlDays);\n  if (!Number.isFinite(base) || !Number.isFinite(days) || days <= 0) {\n    throw new Error(`enrichment-cache: invalid ttl input enriched_at=${enrichedAt} ttlDays=${ttlDays}`);\n  }\n  return new Date(base + days * DAY_MS).toISOString();\n}\nfunction compareStrings(a, b) {\n  const left = normalize(a);\n  const right = normalize(b);\n  if (left < right) return -1;\n  if (left > right) return 1;\n  return 0;\n}\nfunction sortLogRows(rows) {\n  return rows\n    .slice()\n    .map((row) => (row && typeof row === 'object' ? row : {}))\n    .sort((x, y) => {\n      const byKey = compareStrings(x.enrichment_key, y.enrichment_key);\n      if (byKey !== 0) return byKey;\n      const byAt = compareStrings(x.enriched_at, y.enriched_at);\n      if (byAt !== 0) return byAt;\n      return compareStrings(x.lead_id, y.lead_id);\n    });\n}\nfunction lookupCache(rows, key, options) {\n  const opts = options || {};\n  const target = normalize(key);\n  const now = opts.now ? Date.parse(normalize(opts.now)) : 0;\n  const strict = opts.now !== undefined && opts.now !== null && opts.now !== '';\n  for (const row of rows || []) {\n    if (normalize(row && row.enrichment_key) !== target) continue;\n    if (!strict) return row;\n    const expires = row && row.ttl_expires_at ? Date.parse(normalize(row.ttl_expires_at)) : Number.NaN;\n    if (Number.isFinite(now) && Number.isFinite(expires) && expires > now) return row;\n  }\n  return null;\n}\nfunction upsertCache(entries, entry) {\n  const target = normalize(entry && entry.enrichment_key);\n  const next = [];\n  let replaced = false;\n  for (const row of entries || []) {\n    if (normalize(row && row.enrichment_key) === target) {\n      next.push(entry);\n      replaced = true;\n    } else {\n      next.push(row);\n    }\n  }\n  if (!replaced) next.push(entry);\n  return sortLogRows(next);\n}\nfunction incrementCacheHit(logRows, entry) {\n  const target = normalize(entry && entry.enrichment_key);\n  let bumped = false;\n  const next = (logRows || []).map((row) => {\n    if (!bumped && normalize(row && row.enrichment_key) === target) {\n      bumped = true;\n      const current = Number.parseInt(normalize(row.cache_hit_count), 10);\n      return Object.assign({}, row, {\n        cache_hit_count: String(Number.isFinite(current) ? current + 1 : 1),\n      });\n    }\n    return row;\n  });\n  return sortLogRows(next);\n}\n\nconst PROVIDER_AGENTDATA = 'agentdata';\nconst PROVIDER_HUNTER = 'hunter';\nconst DOMAIN_SEARCH_CREDITS = 1;\nconst SKIP_REASONS = Object.freeze({\n  NON_US: 'non_us',\n  NO_DOMAIN: 'no_domain',\n  ALREADY_ENRICHED: 'already_enriched',\n});\nconst NO_EMAILS_FOUND = 'no_emails_found';\nconst NO_ACCEPTED_EMAIL = 'no_accepted_email';\nfunction normalizeDomain(value) {\n  let url = normalize(value).toLowerCase();\n  url = url.replace(/^[a-z][a-z0-9+.-]*:\\/\\//, '');\n  url = url.replace(/^www\\./, '');\n  url = url.split('/')[0];\n  url = url.split('?')[0];\n  url = url.split('#')[0];\n  return url.replace(/[.:]+$/, '');\n}\nfunction emailOf(email) {\n  const value = email && email.email !== undefined && email.email !== null ? email.email : email && email.value;\n  return normalize(value);\n}\nfunction scoreOf(email) {\n  const raw = email && email.confidence !== undefined && email.confidence !== null ? email.confidence : email && email.score;\n  const n = Number(raw);\n  return Number.isFinite(n) ? n : 0;\n}\nfunction verifiedOf(email) {\n  const status = normalize(email && email.verification_status);\n  if (status === 'valid') return true;\n  const v = email && email.verified;\n  if (v === true || v === 'TRUE' || v === 'true' || v === 'Y' || v === 'y' || v === '1') return true;\n  return false;\n}\nfunction contactNameFrom(email) {\n  const first = normalize(email && email.first_name);\n  const last = normalize(email && email.last_name);\n  return [first, last].filter((part) => part !== '').join(' ');\n}\nfunction pickBestEmail(emails, options) {\n  const opts = options || {};\n  const rawMin = opts.minScore === undefined || opts.minScore === null ? HUNTER_MIN_SCORE : opts.minScore;\n  const minScore = Number.isFinite(Number(rawMin)) ? Number(rawMin) : HUNTER_MIN_SCORE;\n  const candidates = (emails || [])\n    .filter((email) => emailOf(email).indexOf('@') !== -1)\n    .filter((email) => !isGenericEmail(emailOf(email).split('@')[0]))\n    .filter((email) => scoreOf(email) >= minScore)\n    .slice()\n    .sort((a, b) => {\n      const byScore = scoreOf(b) - scoreOf(a);\n      if (byScore !== 0) return byScore;\n      const byVerified = verifiedOf(b) ? 1 : 0;\n      const aVerified = verifiedOf(a) ? 1 : 0;\n      if (byVerified !== aVerified) return byVerified - aVerified;\n      return emailOf(a).localeCompare(emailOf(b));\n    });\n  return candidates[0] || null;\n}\nfunction logRowFor(options) {\n  const best = options.result || null;\n  return {\n    enrichment_id: enrichmentIdFor(options.enrichmentKey, options.now),\n    enrichment_key: normalize(options.enrichmentKey),\n    lead_id: String(options.leadId || ''),\n    provider: normalize(options.provider) || PROVIDER_AGENTDATA,\n    query_input: normalize(options.domain),\n    result_email: best ? emailOf(best) : '',\n    result_contact_name: best ? contactNameFrom(best) : '',\n    result_contact_title: best ? normalize(best.position) : '',\n    result_verified: best && verifiedOf(best) ? 'TRUE' : 'FALSE',\n    credits_consumed: Number.isFinite(Number(options.credits)) && Number(options.credits) > 0 ? String(Number(options.credits)) : '',\n    enriched_at: normalize(options.now),\n    ttl_expires_at: ttlExpiresAt(options.now, options.ttlDays),\n    cache_hit_count: '0',\n    notes: normalize(options.notes),\n  };\n}\nfunction fieldsForBest(best, provider) {\n  if (!best) return {};\n  return {\n    email: emailOf(best),\n    contact_name: contactNameFrom(best),\n    contact_title: normalize(best.position),\n    email_verified: verifiedOf(best) ? 'Y' : '',\n    email_source: normalize(provider) || PROVIDER_AGENTDATA,\n  };\n}\nfunction cachedFieldsOf(row) {\n  const email = normalize(row && row.result_email);\n  return {\n    email,\n    contact_name: normalize(row && row.result_contact_name),\n    contact_title: normalize(row && row.result_contact_title),\n    email_verified: normalize(row && row.result_verified) === 'TRUE' ? 'Y' : '',\n    email_source: email !== '' ? normalize(row && row.provider) : '',\n  };\n}\nfunction applyContactFields(lead, fields, provider) {\n  const out = Object.assign({}, lead || {});\n  for (const key of ['email', 'contact_name', 'contact_title', 'email_verified', 'email_source']) {\n    if (normalize(out[key]) === '' && fields[key] !== undefined) out[key] = fields[key];\n  }\n  out.contact_source_provider = normalize(provider) || PROVIDER_AGENTDATA;\n  return out;\n}\nfunction sortLeads(rows) {\n  return rows\n    .slice()\n    .map((row) => (row && typeof row === 'object' ? row : {}))\n    .sort((x, y) => String(x.lead_id || '').localeCompare(String(y.lead_id || '')));\n}\nasync function enrichContactLeads(options) {\n  const opts = options || {};\n  const leads = opts.leads || [];\n  const client = opts.client || null;\n  const now = normalize(opts.now);\n  const provider =\n    normalize(opts.provider) || (client && normalize(client.provider)) || PROVIDER_AGENTDATA;\n  let log = sortLogRows(opts.logRows || []);\n  const stats = {\n    total: leads.length,\n    enriched: 0,\n    skipped: 0,\n    failed: 0,\n    credits_consumed: 0,\n    cache_hits: 0,\n  };\n  const enriched = [];\n  const skipped = [];\n  const failed = [];\n  let fatal;\n  const lookup =\n    client && typeof client.domainSearch === 'function'\n      ? client.domainSearch\n      : client && typeof client.search === 'function'\n        ? client.search\n        : null;\n  for (const rawLead of leads || []) {\n    const lead = rawLead || {};\n    if (fatal) {\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: fatal.reason }));\n      stats.failed += 1;\n      continue;\n    }\n    const domain = normalizeDomain(lead.website);\n    if (!isUsCountry(lead.country)) {\n      skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.NON_US }));\n      stats.skipped += 1;\n      continue;\n    }\n    if (domain === '') {\n      skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.NO_DOMAIN }));\n      stats.skipped += 1;\n      continue;\n    }\n    if (normalize(lead.email) !== '') {\n      skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.ALREADY_ENRICHED }));\n      stats.skipped += 1;\n      continue;\n    }\n    const key = `${domain}::${provider}`;\n    const cached = lookupCache(log, key, { now });\n    if (cached) {\n      log = incrementCacheHit(log, { enrichment_key: key });\n      enriched.push(applyContactFields(lead, cachedFieldsOf(cached), provider));\n      stats.enriched += 1;\n      stats.cache_hits += 1;\n      continue;\n    }\n    if (!lookup) {\n      fatal = { reason: 'no_client_configured', status: null };\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: fatal.reason }));\n      stats.failed += 1;\n      continue;\n    }\n    let result;\n    try {\n      result = await lookup(domain);\n    } catch (err) {\n      const reason = normalize(err && err.reason) || normalize(err && err.message) || 'provider_error';\n      if (err && err.fatal === true) {\n        fatal = { reason, status: err.status || null };\n        failed.push(Object.assign({}, lead, { enrichment_failure_reason: fatal.reason }));\n        stats.failed += 1;\n        continue;\n      }\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: reason }));\n      stats.failed += 1;\n      continue;\n    }\n    if (result && result.ok === false) {\n      const reason = normalize(result.reason) || 'provider_error';\n      if (result.fatal === true) {\n        fatal = { reason, status: result.status || null };\n        failed.push(Object.assign({}, lead, { enrichment_failure_reason: fatal.reason }));\n        stats.failed += 1;\n        continue;\n      }\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: reason }));\n      stats.failed += 1;\n      continue;\n    }\n    if (!result || typeof result !== 'object' || !Array.isArray(result.emails)) {\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: 'provider_error' }));\n      stats.failed += 1;\n      continue;\n    }\n    const credits = Number.isFinite(Number(result.creditsUsed)) ? Number(result.creditsUsed) : DOMAIN_SEARCH_CREDITS;\n    const best = pickBestEmail(result.emails, { minScore: opts.minScore });\n    const notes = best ? '' : (result.emails && result.emails.length ? NO_ACCEPTED_EMAIL : NO_EMAILS_FOUND);\n    log = upsertCache(\n      log,\n      logRowFor({\n        enrichmentKey: key,\n        leadId: lead.lead_id,\n        domain,\n        result: best,\n        credits,\n        now,\n        ttlDays: opts.ttlDays,\n        provider,\n        notes,\n      }),\n    );\n    enriched.push(applyContactFields(lead, fieldsForBest(best, provider), provider));\n    stats.enriched += 1;\n    stats.credits_consumed += credits;\n  }\n  const output = {\n    provider,\n    enriched: sortLeads(enriched),\n    skipped: sortLeads(skipped),\n    failed: sortLeads(failed),\n    stats,\n    log: sortLogRows(log),\n  };\n  if (fatal) output.fatal = fatal;\n  return output;\n}\n\nconst PROVIDER_OSS = 'oss';\nconst PROVIDER_MANUAL = 'manual';\nconst OSS_NO_RESULTS = 'oss_no_results';\nfunction applyOssFields(lead, fields) {\n  const out = Object.assign({}, lead || {});\n  for (const key of ['email', 'contact_name', 'contact_title', 'email_verified', 'email_source']) {\n    if (fields[key] !== undefined && normalize(out[key]) === '') out[key] = fields[key];\n  }\n  out.contact_source_provider = PROVIDER_OSS;\n  return out;\n}\nfunction markManualBlock(lead, options) {\n  const opts = options || {};\n  const base = normalize(lead && lead.notes);\n  const note = normalize(opts.notes);\n  const notes = base === '' ? note : note === '' ? base : `${base} | ${note}`;\n  return Object.assign({}, lead || {}, {\n    contact_blocked: 'TRUE',\n    contact_source_provider: PROVIDER_MANUAL,\n    notes,\n  });\n}\nfunction noteFor(emails, best) {\n  if (best) return '';\n  if ((emails || []).length > 0) return NO_ACCEPTED_EMAIL;\n  return NO_EMAILS_FOUND;\n}\nasync function enrichContactOss(options) {\n  const opts = options || {};\n  const leads = opts.leads || [];\n  const resolver = typeof opts.resolver === 'function' ? opts.resolver : null;\n  const now = normalize(opts.now);\n  const stats = {\n    total: leads.length,\n    enriched: 0,\n    skipped: 0,\n    failed: 0,\n    credits_consumed: 0,\n    cache_hits: 0,\n  };\n  const enriched = [];\n  const skipped = [];\n  const failed = [];\n  let log = sortLogRows(opts.logRows || []);\n  for (const rawLead of leads || []) {\n    const lead = rawLead || {};\n    const domain = normalizeDomain(lead.website);\n    if (!isUsCountry(lead.country)) {\n      skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.NON_US }));\n      stats.skipped += 1;\n      continue;\n    }\n    if (domain === '') {\n      skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.NO_DOMAIN }));\n      stats.skipped += 1;\n      continue;\n    }\n    if (normalize(lead.email) !== '') {\n      skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.ALREADY_ENRICHED }));\n      stats.skipped += 1;\n      continue;\n    }\n    const key = `${domain}::${PROVIDER_OSS}`;\n    const cached = lookupCache(log, key, { now });\n    if (cached) {\n      log = incrementCacheHit(log, { enrichment_key: key });\n      enriched.push(applyOssFields(lead, cachedFieldsOf(cached)));\n      stats.enriched += 1;\n      stats.cache_hits += 1;\n      continue;\n    }\n    if (!resolver) {\n      failed.push(Object.assign({}, lead, { enrichment_failure_reason: 'oss_no_resolver_configured' }));\n      stats.failed += 1;\n      continue;\n    }\n    let result = null;\n    try {\n      result = await resolver(domain, lead);\n    } catch (err) {\n      result = null;\n    }\n    const emails = result && Array.isArray(result.emails) ? result.emails : [];\n    const blocked = Boolean(result && result.blocked === true);\n    const best = pickBestEmail(emails, { minScore: opts.minScore });\n    const notes = blocked\n      ? normalize(result && result.notes) || OSS_NO_RESULTS\n      : noteFor(emails, best);\n    log = upsertCache(\n      log,\n      logRowFor({\n        enrichmentKey: key,\n        leadId: lead.lead_id,\n        domain,\n        result: best,\n        credits: 0,\n        now,\n        ttlDays: opts.ttlDays,\n        provider: blocked ? PROVIDER_MANUAL : PROVIDER_OSS,\n        notes,\n      }),\n    );\n    let out = applyOssFields(lead, best ? fieldsForBest(best) : {});\n    if (best) {\n      out.email_source = PROVIDER_OSS;\n    }\n    if (blocked) {\n      out = markManualBlock(out, { notes });\n      out.enrichment_fallback = OSS_NO_RESULTS;\n    }\n    if (!best && !blocked) {\n      out.enrichment_fallback = notes;\n    }\n    enriched.push(out);\n    stats.enriched += 1;\n  }\n  const output = {\n    enriched: sortLeads(enriched),\n    skipped: sortLeads(skipped),\n    failed: sortLeads(failed),\n    stats,\n    log: sortLogRows(log),\n  };\n  return output;\n}\n\nconst inputItems = $input.all();\nconst payload = (inputItems[0] && inputItems[0].json) || {};\nconst leads = (inputItems || []).map((item) => (item && item.json) || {});\nconst logItems = $('Read Contact Enrichment Log').all();\nconst logRows = (logItems || []).map((item) => (item && item.json) || {});\nconst ossResults = (payload && payload.ossResults) || {};\n\nconst resolver = async (domain) => {\n  const result = (ossResults && ossResults[domain]) || {};\n  return result;\n};\n\nconst result = await enrichContactOss({\n  leads,\n  logRows,\n  resolver,\n  now: payload.now || payload.run_timestamp || '',\n  runId: payload.runId || payload.run_id || '',\n});\n\nreturn [{\n  json: {\n    enriched: result.enriched,\n    skipped: result.skipped,\n    failed: result.failed,\n    stats: result.stats,\n    log: result.log,\n  },\n}];\n"
+      },
+      "id": "enrich-contact-oss-0001",
+      "name": "Enrich Contact OSS Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        1560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const contactItems = $('Enrich Contact').all();\nconst ossItems = $('Enrich Contact OSS Fallback').all();\nconst triggerItems = $('Manual Trigger').all();\nconst trigger = (triggerItems && triggerItems.length && triggerItems[0] && triggerItems[0].json) || {};\n\nconst contactEnvelope = (contactItems && contactItems[0] && contactItems[0].json) || {};\nconst ossEnvelope = (ossItems && ossItems[0] && ossItems[0].json) || {};\n\nconst UPDATED_FIELDS = [\n  'email',\n  'contact_name',\n  'contact_title',\n  'email_source',\n  'email_verified',\n  'contact_source_provider',\n  'contact_blocked',\n];\n\nfunction hasContent(row) {\n  for (const field of UPDATED_FIELDS) {\n    if (String(row[field] || '').trim() !== '') return true;\n  }\n  return false;\n}\n\nfunction contentScore(update) {\n  let n = 0;\n  for (const field of UPDATED_FIELDS) {\n    if (String(update[field] || '').trim() !== '') n += 1;\n  }\n  return n;\n}\n\nconst contactUpdates = [];\nconst indexById = new Map();\nfor (const row of (contactEnvelope.enriched || []).concat(ossEnvelope.enriched || [])) {\n  const id = String(row.lead_id || '').trim();\n  if (!id) continue;\n  const update = { lead_id: id };\n  for (const field of UPDATED_FIELDS) {\n    update[field] = row[field] === undefined || row[field] === null ? '' : String(row[field]);\n  }\n  if (!hasContent(update)) continue;\n  const index = indexById.get(id);\n  if (index === undefined) {\n    indexById.set(id, contactUpdates.length);\n    contactUpdates.push(update);\n  } else if (contentScore(update) > contentScore(contactUpdates[index])) {\n    contactUpdates[index] = update;\n  }\n}\ncontactUpdates.sort((a, b) => String(a.lead_id).localeCompare(String(b.lead_id)));\n\nconst logByKey = new Map();\nfor (const row of (contactEnvelope.log || []).concat(ossEnvelope.log || [])) {\n  const key = String(row.enrichment_key || '').trim();\n  if (!key || logByKey.has(key)) continue;\n  logByKey.set(key, row);\n}\nconst logRows = Array.from(logByKey.values()).sort((a, b) => {\n  const byKey = String(a.enrichment_key || '').localeCompare(String(b.enrichment_key || ''));\n  if (byKey !== 0) return byKey;\n  const byAt = String(a.enriched_at || '').localeCompare(String(b.enriched_at || ''));\n  if (byAt !== 0) return byAt;\n  return String(a.lead_id || '').localeCompare(String(b.lead_id || ''));\n});\n\nfunction engineStats(envelope) {\n  const s = (envelope && envelope.stats) || {};\n  return {\n    total: Number.isFinite(Number(s.total)) ? Number(s.total) : 0,\n    enriched: Number.isFinite(Number(s.enriched)) ? Number(s.enriched) : 0,\n    skipped: Number.isFinite(Number(s.skipped)) ? Number(s.skipped) : 0,\n    failed: Number.isFinite(Number(s.failed)) ? Number(s.failed) : 0,\n    credits_consumed: Number.isFinite(Number(s.credits_consumed)) ? Number(s.credits_consumed) : 0,\n    cache_hits: Number.isFinite(Number(s.cache_hits)) ? Number(s.cache_hits) : 0,\n  };\n}\n\nconst result = {\n  run_id: trigger.runId || trigger.run_id || '',\n  run_timestamp: trigger.now || trigger.run_timestamp || '',\n  contact_provider: contactEnvelope.provider || 'agentdata',\n  contactUpdates,\n  logRows,\n  stats: {\n    contact: engineStats(contactEnvelope),\n    oss: engineStats(ossEnvelope),\n  },\n  _hasOutput: contactUpdates.length > 0 || logRows.length > 0,\n};\nif (contactEnvelope.fatal) result.fatal = contactEnvelope.fatal;\n\nreturn [{ json: result }];\n"
+      },
+      "id": "enrich-consolidate-0001",
+      "name": "Consolidate Enrichment Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        1820,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-enrichment-output",
+              "leftValue": "={{ $json._hasOutput }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "enrich-has-output-0001",
+      "name": "Has Enrichment Output?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst consolidated = (items && items[0] && items[0].json) || {};\nconst logItems = $('Read Contact Enrichment Log').all();\n\nconst existingKeys = new Set();\nfor (const item of logItems || []) {\n  const key = String((item && item.json && item.json.enrichment_key) || '').trim();\n  if (key) existingKeys.add(key);\n}\n\nconst logRows = (consolidated.logRows || []).filter((row) => {\n  const key = String(row.enrichment_key || '').trim();\n  return key !== '' && !existingKeys.has(key);\n});\n\nif (logRows.length === 0) {\n  return [];\n}\n\nreturn logRows.map((row) => ({ json: row }));\n"
+      },
+      "id": "enrich-split-log-0001",
+      "name": "Split Enrichment Log Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": ""
+        },
+        "operation": "append",
+        "sheetName": {
+          "mode": "name",
+          "value": "Contact Enrichment Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "enrichment_id": "={{ $json.enrichment_id }}",
+            "enrichment_key": "={{ $json.enrichment_key }}",
+            "lead_id": "={{ $json.lead_id }}",
+            "provider": "={{ $json.provider }}",
+            "query_input": "={{ $json.query_input }}",
+            "result_email": "={{ $json.result_email }}",
+            "result_contact_name": "={{ $json.result_contact_name }}",
+            "result_contact_title": "={{ $json.result_contact_title }}",
+            "result_verified": "={{ $json.result_verified }}",
+            "credits_consumed": "={{ $json.credits_consumed }}",
+            "enriched_at": "={{ $json.enriched_at }}",
+            "ttl_expires_at": "={{ $json.ttl_expires_at }}",
+            "cache_hit_count": "={{ $json.cache_hit_count }}",
+            "notes": "={{ $json.notes }}"
+          }
+        }
+      },
+      "id": "enrich-write-log-0001",
+      "name": "Write Contact Enrichment Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2600,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst consolidated = (items && items[0] && items[0].json) || {};\n\nconst UPDATED_COLUMNS = [\n  'lead_id',\n  'email',\n  'contact_name',\n  'contact_title',\n  'email_source',\n  'email_verified',\n  'contact_source_provider',\n  'contact_blocked',\n];\n\nconst updates = (consolidated.contactUpdates || []).filter((row) => row && typeof row === 'object');\n\nif (updates.length === 0) {\n  return [];\n}\n\nreturn updates.map((row) => {\n  const json = {};\n  for (const col of UPDATED_COLUMNS) {\n    json[col] = row[col] === undefined || row[col] === null ? '' : String(row[col]);\n  }\n  return { json };\n});\n"
+      },
+      "id": "enrich-split-updates-0001",
+      "name": "Split Contact Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine Prospecting System",
+          "cachedResultUrl": ""
+        },
+        "operation": "update",
+        "sheetName": {
+          "mode": "name",
+          "value": "Approved Outreach"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $json.email }}",
+            "contact_name": "={{ $json.contact_name }}",
+            "contact_title": "={{ $json.contact_title }}",
+            "email_source": "={{ $json.email_source }}",
+            "email_verified": "={{ $json.email_verified }}",
+            "contact_source_provider": "={{ $json.contact_source_provider }}",
+            "contact_blocked": "={{ $json.contact_blocked }}"
+          },
+          "matchingColumns": [
+            "lead_id"
+          ],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "contact_name",
+              "displayName": "contact_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "contact_title",
+              "displayName": "contact_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_source",
+              "displayName": "email_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_verified",
+              "displayName": "email_verified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "contact_source_provider",
+              "displayName": "contact_source_provider",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "contact_blocked",
+              "displayName": "contact_blocked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "enrich-update-approved-0001",
+      "name": "Update Approved Outreach Contacts",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2600,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const consolidatedItems = $('Consolidate Enrichment Results').all();\nconst consolidated = (consolidatedItems && consolidatedItems[0] && consolidatedItems[0].json) || {};\nconst stats = consolidated.stats || {};\nconst contactProvider = String(consolidated.contact_provider || 'agentdata');\n\nfunction providerMetrics(engineStats) {\n  return {\n    total: (engineStats && engineStats.total) || 0,\n    enriched: (engineStats && engineStats.enriched) || 0,\n    skipped: (engineStats && engineStats.skipped) || 0,\n    failed: (engineStats && engineStats.failed) || 0,\n    credits_consumed: (engineStats && engineStats.credits_consumed) || 0,\n    cache_hits: (engineStats && engineStats.cache_hits) || 0,\n  };\n}\n\nconst report = {\n  run_id: consolidated.run_id || '',\n  run_timestamp: consolidated.run_timestamp || '',\n  provider_runs: {\n    [contactProvider]: providerMetrics(stats.contact),\n    oss: providerMetrics(stats.oss),\n  },\n  approved_updates: (consolidated.contactUpdates || []).length,\n  enrichment_log_rows: (consolidated.logRows || []).length,\n  _hasOutput: true,\n};\nif (consolidated.fatal) report.fatal = consolidated.fatal;\n\nreturn [{ json: report }];\n"
+      },
+      "id": "enrich-report-0001",
+      "name": "Report Enrichment Run",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "position": [
+        2860,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "enrich-complete-0001",
+      "name": "Enrichment Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "enrich-noop-0001",
+      "name": "No-Op End",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2340,
+        320
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Contact Enrichment Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Contact Enrichment Log": {
+      "main": [
+        [
+          {
+            "node": "Read Approved Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Approved Outreach": {
+      "main": [
+        [
+          {
+            "node": "Prepare Enrichment Scope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Enrichment Scope": {
+      "main": [
+        [
+          {
+            "node": "Enrich Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Contact": {
+      "main": [
+        [
+          {
+            "node": "Prepare OSS Fallback Scope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare OSS Fallback Scope": {
+      "main": [
+        [
+          {
+            "node": "Enrich Contact OSS Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Contact OSS Fallback": {
+      "main": [
+        [
+          {
+            "node": "Consolidate Enrichment Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidate Enrichment Results": {
+      "main": [
+        [
+          {
+            "node": "Has Enrichment Output?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Enrichment Output?": {
+      "main": [
+        [
+          {
+            "node": "Split Enrichment Log Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Contact Updates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No-Op End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Enrichment Log Rows": {
+      "main": [
+        [
+          {
+            "node": "Write Contact Enrichment Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Contact Updates": {
+      "main": [
+        [
+          {
+            "node": "Update Approved Outreach Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Approved Outreach Contacts": {
+      "main": [
+        [
+          {
+            "node": "Report Enrichment Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Report Enrichment Run": {
+      "main": [
+        [
+          {
+            "node": "Enrichment Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "artifact": "Enrichment V1",
+    "spreadsheetId": "1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ",
+    "readOnly": false,
+    "sheets": [
+      "Contact Enrichment Log",
+      "Approved Outreach"
+    ],
+    "contactLog": "Contact Enrichment Log tab (sheet-backed cache; reads + appends only; dedupe by enrichment_key)",
+    "approvedWriteSurface": "update on Approved Outreach matching lead_id writing only the two enrichment-owned columns (contact_blocked, contact_source_provider) plus the five handoff-empty contact fields (schema.js ownership contract)",
+    "emptyRunBehavior": "Prepare nodes emit [] when the scope is empty; with alwaysOutputData a run with nothing to do reaches Consolidate with zero items and routes to No-Op End (no writes, no report)",
+    "fatalBehavior": "a fatal provider failure (AgentData/Hunter auth, missing provider) halts the contact engine, Prepare OSS Fallback Scope emits [], and the fatal-only run routes to No-Op End (Consolidate._hasOutput false)",
+    "generatedBy": "scripts/build-enrichment-workflow.js"
+  }
+}
