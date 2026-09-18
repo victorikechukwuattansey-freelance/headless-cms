@@ -263,3 +263,54 @@ aborts before any read/enrich/write.
   empty before any `--execute`. Nothing was migrated; the frozen workflow
   writes both fields by name, so the correction is runner-only.
 - No workflow / frozen artifact / engine / manifest changes. No --execute.
+
+
+## Phase H.8c - Schema reconciliation + configurable country policy
+
+- Objective: close the H.8c reconciliation window so the full suite is green on
+  the canonical schema, the frozen manifest is re-baselined under an approved
+  change, and the enrichment country policy is configurable WITHOUT touching the
+  frozen US-only default behavior of the shipped workflow.
+- Schema reconciliation (canonical Approved Outreach contract, 24 columns):
+  `lead_score` renamed to `score`, `outreach_status` to `status`,
+  `qualification_status` / `outreach_channel` dropped, `channel` authoritative
+  (fallback), `suppressed` wins. Migrated engines, fixtures, and the three
+  runnable scripts to `APPROVED_LEAD_COL`; queue / execution / reconciliation
+  embedded bodies patched in place (they are NOT frozen-manifest artifacts) and
+  re-injected into `Outreach-Queue-and-Planning V1.json` and
+  `Run-Reconciliation-and-Reporting V1.json`. `src/cleanup.js` stays read-only.
+  Approved columns V/W/X (index 21/22/23) are enrichment-owned
+  (`contact_source_provider`, `contact_blocked`, cache-hit flag).
+- Executed-workflow verification: `npm run execution:build` regenerated
+  `Outreach-Execution-and-Delivery V1.json` from the patched embedded engine
+  (8 nodes, 3 code nodes). Execution trio green: queue 53/53,
+  execution 61/61, execution-recon 55/55; reconcile trio 48/48 after
+  stale-fixture fixes.
+- Country policy (D-C8, decided by operator): runner-side configurable policy =
+  `ENRICHMENT_COUNTRIES_ALLOW` (default "US"; "*" or empty = all) and
+  `ENRICHMENT_COUNTRIES_DENY` (wins). `isCountryInScope` does EXACT ISO-3166
+  alpha-2 matching, no aliasing (pinned by test). Missing/blank country fails
+  closed.
+- Frozen-engine seam (APPROVED re-baseline, dated 2026-09-18):
+  `src/enrichment-contact.js` and `src/enrichment-contact-oss.js` gained an
+  OPTIONAL `countryInScope` predicate defaulting to the frozen `isUsCountry`
+  gate — so the built workflow, every fixture, and all non-runner consumers are
+  byte-behavior-identical. The live runner passes its allow/deny policy through
+  that seam into both engines. `Enrichment V1.json` was deterministically
+  rebuilt (`npm run enrichment:build`; byte-deterministic builder). The two
+  embedded mirror SOURCE files are unchanged (they compose from the engines at
+  load time), so only 3 manifest entries were re-baselined:
+  `src/enrichment-contact.js`, `src/enrichment-contact-oss.js`,
+  `Enrichment V1.json`. `frozen-artifacts.manifest.json` version 6 with
+  revision entries + about note documenting the approved change. The
+  `enrichment-schema.js` US_COUNTRIES/isUsCountry constants remain frozen and
+  are the default predicate.
+- Tests: enrichment-live-runner fixture corrections (leadRow default `US`,
+  allow=CA fixture `CA`, exact-match no-aliasing preserved), then full suite
+  passes. Whole suite: 1208/1208. Runner suites green (live-runner + workflow
+  build + both contact engines + schema = 145/145).
+- Gates: npm test 1208 pass; verify:frozen 24/24 PASS; enrichment:security
+  exit 0 (GREEN).
+- Open item (operator): confirm Approved V/W orientation + write surface on the
+  live sheet before any `--execute`. Nothing was migrated; no `--execute` run.
+- No commit made (uncommitted working tree per workspace convention).
