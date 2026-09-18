@@ -9,18 +9,23 @@
       "id": "TEST-EXEC-001",
       "name": "EMAIL_REAL_SUCCESS",
       "note": "Real mode + configured mock success: one verified-email lead becomes a committed Outreach Log row with a stable EX- identity.",
-      "run": { "mode": "REAL", "provider": "SUCCESS" },
-      "message_variants": { "TEST-EXEC-001": "outreach-v1" },
+      "run": {
+        "mode": "REAL",
+        "provider": "SUCCESS"
+      },
+      "message_variants": {
+        "TEST-EXEC-001": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-001",
           "business_name": "Acme Roofing Ltd",
           "email": "hello@acme.example",
           "email_verified": "true",
-          "lead_score": "90",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-01T09:00:00.000Z"
+          "approved_at": "2026-09-01T09:00:00.000Z",
+          "score": "90",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -46,23 +51,29 @@
             "outreach_id": "EX-TEST-EXEC-001-email"
           }
         ],
-        "log_row_lead_ids": ["TEST-EXEC-001"]
+        "log_row_lead_ids": [
+          "TEST-EXEC-001"
+        ]
       }
     },
     {
       "id": "TEST-EXEC-002",
       "name": "CALL_REAL_SUCCESS",
       "note": "Real mode + mock success on the repository CALL channel; message_variant optional for calls.",
-      "run": { "mode": "REAL", "provider": "SUCCESS" },
+      "run": {
+        "mode": "REAL",
+        "provider": "SUCCESS"
+      },
       "message_variants": {},
       "approved": [
         {
           "lead_id": "TEST-EXEC-002",
           "business_name": "Bright Solar Co",
           "phone": "5125550100",
-          "lead_score": "72",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-02T09:00:00.000Z"
+          "approved_at": "2026-09-02T09:00:00.000Z",
+          "score": "72",
+          "status": "not_ready",
+          "channel": "call"
         }
       ],
       "outreach": [],
@@ -84,24 +95,32 @@
             "outreach_id": "EX-TEST-EXEC-002-call"
           }
         ],
-        "log_row_lead_ids": ["TEST-EXEC-002"]
+        "log_row_lead_ids": [
+          "TEST-EXEC-002"
+        ]
       }
     },
     {
       "id": "TEST-EXEC-003",
       "name": "EMAIL_DRY_RUN",
       "note": "Default mode: a READY candidate is skipped with DRY_RUN; provider never called, nothing written.",
-      "run": { "mode": "DRY_RUN", "provider": "SUCCESS" },
-      "message_variants": { "TEST-EXEC-003": "outreach-v1" },
+      "run": {
+        "mode": "DRY_RUN",
+        "provider": "SUCCESS"
+      },
+      "message_variants": {
+        "TEST-EXEC-003": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-003",
           "business_name": "Dry Run Marina",
           "email": "dock@drm.example",
           "email_verified": "true",
-          "lead_score": "80",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-03T09:00:00.000Z"
+          "approved_at": "2026-09-03T09:00:00.000Z",
+          "score": "80",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -131,16 +150,20 @@
       "id": "TEST-EXEC-004",
       "name": "CALL_DRY_RUN",
       "note": "Dry run remains safe even with a FAILURE provider: the provider must never be reached in DRY_RUN.",
-      "run": { "mode": "DRY_RUN", "provider": "FAILURE" },
+      "run": {
+        "mode": "DRY_RUN",
+        "provider": "FAILURE"
+      },
       "message_variants": {},
       "approved": [
         {
           "lead_id": "TEST-EXEC-004",
           "business_name": "Frozen Transport",
           "phone": "4085550199",
-          "lead_score": "55",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-04T09:00:00.000Z"
+          "approved_at": "2026-09-04T09:00:00.000Z",
+          "score": "55",
+          "status": "not_ready",
+          "channel": "call"
         }
       ],
       "outreach": [],
@@ -169,7 +192,10 @@
       "id": "TEST-EXEC-005",
       "name": "EMPTY_REAL",
       "note": "Empty sources in REAL mode produce a healthy zero run, never an error and never a false write.",
-      "run": { "mode": "REAL", "provider": "SUCCESS" },
+      "run": {
+        "mode": "REAL",
+        "provider": "SUCCESS"
+      },
       "message_variants": {},
       "approved": [],
       "outreach": [],
@@ -183,31 +209,37 @@
       "id": "TEST-EXEC-006",
       "name": "MIXED_READINESS",
       "note": "Only READY candidates are executed; BLOCKED and NOT_READY are skipped with their own reason codes.",
-      "run": { "mode": "REAL", "provider": "SUCCESS" },
-      "message_variants": { "TEST-EXEC-006": "outreach-v1" },
+      "run": {
+        "mode": "REAL",
+        "provider": "SUCCESS"
+      },
+      "message_variants": {
+        "TEST-EXEC-006": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-006",
           "business_name": "Green Canopy",
           "email": "grow@green-canopy.example",
           "email_verified": "true",
-          "lead_score": "88",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-05T09:00:00.000Z"
+          "approved_at": "2026-09-05T09:00:00.000Z",
+          "score": "88",
+          "status": "not_ready",
+          "channel": "email"
         },
         {
           "lead_id": "TEST-EXEC-0061",
           "business_name": "Stopped Co",
-          "lead_score": "60",
-          "outreach_status": "suppressed",
-          "approved_at": "2026-09-05T09:10:00.000Z"
+          "approved_at": "2026-09-05T09:10:00.000Z",
+          "score": "60",
+          "status": "suppressed"
         },
         {
           "lead_id": "TEST-EXEC-0062",
           "business_name": "No Channel Co",
-          "lead_score": "40",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-05T09:20:00.000Z"
+          "approved_at": "2026-09-05T09:20:00.000Z",
+          "score": "40",
+          "status": "not_ready"
         }
       ],
       "outreach": [],
@@ -244,24 +276,32 @@
             "outreach_id": "EX-TEST-EXEC-0062-none"
           }
         ],
-        "log_row_lead_ids": ["TEST-EXEC-006"]
+        "log_row_lead_ids": [
+          "TEST-EXEC-006"
+        ]
       }
     },
     {
       "id": "TEST-EXEC-007",
-      "name": "INVALID_PAYLOAD_EMAIL",
-      "note": "A READY email candidate with an empty email address is REJECTED, never dropped and never sent.",
-      "run": { "mode": "REAL", "provider": "SUCCESS" },
-      "message_variants": { "TEST-EXEC-007": "outreach-v1" },
+      "name": "NOT_READY_EMAIL_NO_ADDRESS",
+      "note": "Approved channel email with an empty address is NOT_READY and skipped — never payload-validated and never sent.",
+      "run": {
+        "mode": "REAL",
+        "provider": "SUCCESS"
+      },
+      "message_variants": {
+        "TEST-EXEC-007": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-007",
           "business_name": "Broken Contact Co",
           "email_verified": "true",
           "email": "",
-          "lead_score": "66",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-06T09:00:00.000Z"
+          "approved_at": "2026-09-06T09:00:00.000Z",
+          "score": "66",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -269,18 +309,19 @@
         "status": "COMPLETED",
         "approved_total": 1,
         "queue_total": 1,
-        "ready_candidates": 1,
+        "ready_candidates": 0,
         "executed_attempted": 0,
-        "executed_rejected": 1,
+        "executed_skipped": 1,
+        "executed_rejected": 0,
         "log_rows_written": 0,
         "provider_calls": 0,
         "results": [
           {
             "lead_id": "TEST-EXEC-007",
-            "status": "EXECUTION_REJECTED",
-            "reason": "INVALID_PAYLOAD",
-            "channel": "email",
-            "outreach_id": "EX-TEST-EXEC-007-email"
+            "status": "EXECUTION_SKIPPED",
+            "reason": "NOT_READY",
+            "channel": "none",
+            "outreach_id": "EX-TEST-EXEC-007-none"
           }
         ],
         "log_row_lead_ids": []
@@ -290,17 +331,23 @@
       "id": "TEST-EXEC-008",
       "name": "DUPLICATE_SUPPRESSED",
       "note": "An existing committed email row (same lead_id+channel with sent_at) suppresses a repeat attempt without touching the provider.",
-      "run": { "mode": "REAL", "provider": "SUCCESS" },
-      "message_variants": { "TEST-EXEC-008": "outreach-v1" },
+      "run": {
+        "mode": "REAL",
+        "provider": "SUCCESS"
+      },
+      "message_variants": {
+        "TEST-EXEC-008": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-008",
           "business_name": "Already Contacted Co",
           "email": "old@ac.example",
           "email_verified": "true",
-          "lead_score": "77",
-          "outreach_status": "contacted",
-          "approved_at": "2026-09-07T09:00:00.000Z"
+          "approved_at": "2026-09-07T09:00:00.000Z",
+          "score": "77",
+          "status": "contacted",
+          "channel": "email"
         }
       ],
       "outreach": [
@@ -339,17 +386,23 @@
       "id": "TEST-EXEC-009",
       "name": "PROVIDER_FAILURE",
       "note": "A provider-confirmed failure yields EXECUTION_FAILED/PROVIDER_FAILURE with zero log writes.",
-      "run": { "mode": "REAL", "provider": "FAILURE" },
-      "message_variants": { "TEST-EXEC-009": "outreach-v1" },
+      "run": {
+        "mode": "REAL",
+        "provider": "FAILURE"
+      },
+      "message_variants": {
+        "TEST-EXEC-009": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-009",
           "business_name": "Denied Dispatch",
           "email": "send@denied.example",
           "email_verified": "true",
-          "lead_score": "74",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-09T09:00:00.000Z"
+          "approved_at": "2026-09-09T09:00:00.000Z",
+          "score": "74",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -378,17 +431,23 @@
       "id": "TEST-EXEC-010",
       "name": "PROVIDER_NOT_CONFIGURED",
       "note": "REAL mode without an adapter is refused honestly (PROVIDER_NOT_CONFIGURED); nothing is sent or claimed.",
-      "run": { "mode": "REAL", "provider": "NOT_CONFIGURED" },
-      "message_variants": { "TEST-EXEC-010": "outreach-v1" },
+      "run": {
+        "mode": "REAL",
+        "provider": "NOT_CONFIGURED"
+      },
+      "message_variants": {
+        "TEST-EXEC-010": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-010",
           "business_name": "No Adapter Co",
           "email": "nowhere@no-adapter.example",
           "email_verified": "true",
-          "lead_score": "70",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-10T09:00:00.000Z"
+          "approved_at": "2026-09-10T09:00:00.000Z",
+          "score": "70",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -417,8 +476,13 @@
       "id": "TEST-EXEC-011",
       "name": "EXECUTION_INCOMPLETE_APPROVED",
       "note": "Approved Outreach read failure yields EXECUTION_INCOMPLETE with null metrics, never a false healthy run.",
-      "run": { "mode": "REAL", "provider": "SUCCESS" },
-      "read_errors": { "approved": "transport failed: 500" },
+      "run": {
+        "mode": "REAL",
+        "provider": "SUCCESS"
+      },
+      "read_errors": {
+        "approved": "transport failed: 500"
+      },
       "message_variants": {},
       "approved": [],
       "outreach": [],
@@ -445,8 +509,13 @@
       "id": "TEST-EXEC-012",
       "name": "EXECUTION_INCOMPLETE_OUTREACH",
       "note": "Outreach Log read failure also yields EXECUTION_INCOMPLETE; the execution boundary must never run blind on history.",
-      "run": { "mode": "DRY_RUN", "provider": "SUCCESS" },
-      "read_errors": { "outreach": "Outreach Log sheet unavailable" },
+      "run": {
+        "mode": "DRY_RUN",
+        "provider": "SUCCESS"
+      },
+      "read_errors": {
+        "outreach": "Outreach Log sheet unavailable"
+      },
       "message_variants": {},
       "approved": [
         {
@@ -454,9 +523,10 @@
           "business_name": "Blind Run Co",
           "email": "blind@br.example",
           "email_verified": "true",
-          "lead_score": "60",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-10T10:00:00.000Z"
+          "approved_at": "2026-09-10T10:00:00.000Z",
+          "score": "60",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -483,26 +553,34 @@
       "id": "TEST-EXEC-013",
       "name": "MULTI_EMAIL_ORDER",
       "note": "Multiple READY email leads execute in queue priority order and each staged log row keeps its own identity.",
-      "run": { "mode": "REAL", "provider": "SUCCESS" },
-      "message_variants": { "TEST-EXEC-013": "outreach-v1", "TEST-EXEC-0131": "outreach-v1" },
+      "run": {
+        "mode": "REAL",
+        "provider": "SUCCESS"
+      },
+      "message_variants": {
+        "TEST-EXEC-013": "outreach-v1",
+        "TEST-EXEC-0131": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-013",
           "business_name": "High Score Co",
           "email": "high@hs.example",
           "email_verified": "true",
-          "lead_score": "95",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-11T08:00:00.000Z"
+          "approved_at": "2026-09-11T08:00:00.000Z",
+          "score": "95",
+          "status": "not_ready",
+          "channel": "email"
         },
         {
           "lead_id": "TEST-EXEC-0131",
           "business_name": "Lower Score Co",
           "email": "low@ls.example",
           "email_verified": "true",
-          "lead_score": "70",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-11T08:05:00.000Z"
+          "approved_at": "2026-09-11T08:05:00.000Z",
+          "score": "70",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -531,15 +609,23 @@
             "outreach_id": "EX-TEST-EXEC-0131-email"
           }
         ],
-        "log_row_lead_ids": ["TEST-EXEC-013", "TEST-EXEC-0131"]
+        "log_row_lead_ids": [
+          "TEST-EXEC-013",
+          "TEST-EXEC-0131"
+        ]
       }
     },
     {
       "id": "TEST-EXEC-014",
       "name": "DIFFERENT_CHANNEL_HISTORY",
       "note": "Idempotency is per-channel: an existing call row does not suppress an email attempt.",
-      "run": { "mode": "REAL", "provider": "SUCCESS" },
-      "message_variants": { "TEST-EXEC-014": "outreach-v1" },
+      "run": {
+        "mode": "REAL",
+        "provider": "SUCCESS"
+      },
+      "message_variants": {
+        "TEST-EXEC-014": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-014",
@@ -547,9 +633,10 @@
           "email": "reach@xc.example",
           "email_verified": "true",
           "phone": "5125550141",
-          "lead_score": "81",
-          "outreach_status": "contacted",
-          "approved_at": "2026-09-10T09:00:00.000Z"
+          "approved_at": "2026-09-10T09:00:00.000Z",
+          "score": "81",
+          "status": "contacted",
+          "channel": "email"
         }
       ],
       "outreach": [
@@ -582,24 +669,32 @@
             "outreach_id": "EX-TEST-EXEC-014-email"
           }
         ],
-        "log_row_lead_ids": ["TEST-EXEC-014"]
+        "log_row_lead_ids": [
+          "TEST-EXEC-014"
+        ]
       }
     },
     {
       "id": "TEST-EXEC-015",
       "name": "DRY_RUN_DUPLICATE",
       "note": "Dedupe is a projection-level check that applies before the dry-run skip: duplicates report honestly even in DRY_RUN.",
-      "run": { "mode": "DRY_RUN", "provider": "SUCCESS" },
-      "message_variants": { "TEST-EXEC-015": "outreach-v1" },
+      "run": {
+        "mode": "DRY_RUN",
+        "provider": "SUCCESS"
+      },
+      "message_variants": {
+        "TEST-EXEC-015": "outreach-v1"
+      },
       "approved": [
         {
           "lead_id": "TEST-EXEC-015",
           "business_name": "Repeat Marine",
           "email": "again@rep.example",
           "email_verified": "true",
-          "lead_score": "65",
-          "outreach_status": "contacted",
-          "approved_at": "2026-09-11T09:00:00.000Z"
+          "approved_at": "2026-09-11T09:00:00.000Z",
+          "score": "65",
+          "status": "contacted",
+          "channel": "email"
         }
       ],
       "outreach": [

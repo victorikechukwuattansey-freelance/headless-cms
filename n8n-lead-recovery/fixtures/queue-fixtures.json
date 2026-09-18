@@ -19,10 +19,10 @@
           "country": "USA",
           "email": "owner@bluebird.example",
           "email_verified": "true",
-          "lead_score": "85",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-01T09:00:00.000Z"
+          "approved_at": "2026-09-01T09:00:00.000Z",
+          "score": "85",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -51,7 +51,7 @@
             "priority": 1,
             "outreach_count": 0,
             "enrichment_required": false,
-            "reason": "verified email available"
+            "reason": "channel email with address"
           }
         ]
       }
@@ -69,10 +69,10 @@
           "state": "Texas",
           "country": "USA",
           "phone": "5125550100",
-          "lead_score": "80",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-02T09:00:00.000Z"
+          "approved_at": "2026-09-02T09:00:00.000Z",
+          "score": "80",
+          "status": "not_ready",
+          "channel": "call"
         }
       ],
       "outreach": [],
@@ -96,7 +96,7 @@
             "priority": 1,
             "outreach_count": 0,
             "enrichment_required": false,
-            "reason": "phone available"
+            "reason": "channel call with usable phone"
           }
         ]
       }
@@ -114,10 +114,9 @@
           "state": "Texas",
           "country": "USA",
           "website": "https://delta-plumbing.example",
-          "lead_score": "70",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-04T09:00:00.000Z"
+          "approved_at": "2026-09-04T09:00:00.000Z",
+          "score": "70",
+          "status": "not_ready"
         }
       ],
       "outreach": [],
@@ -159,10 +158,9 @@
           "state": "Texas",
           "country": "USA",
           "contact_form": "https://echo-glass.example/contact",
-          "lead_score": "75",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-05T09:00:00.000Z"
+          "approved_at": "2026-09-05T09:00:00.000Z",
+          "score": "75",
+          "status": "not_ready"
         }
       ],
       "outreach": [],
@@ -205,10 +203,10 @@
           "country": "USA",
           "email": "gallery@fern-gallery.example",
           "email_verified": "true",
-          "lead_score": "78",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "contacted",
-          "approved_at": "2026-06-01T09:00:00.000Z"
+          "approved_at": "2026-06-01T09:00:00.000Z",
+          "score": "78",
+          "status": "contacted",
+          "channel": "email"
         }
       ],
       "outreach": [
@@ -244,7 +242,7 @@
             "outreach_count": 1,
             "last_outreach_at": "2026-09-10T10:00:00.000Z",
             "enrichment_required": false,
-            "reason": "verified email available"
+            "reason": "channel email with address"
           }
         ]
       }
@@ -263,10 +261,10 @@
           "country": "USA",
           "email": "hello@greenharvest.example",
           "email_verified": "true",
-          "lead_score": "82",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "follow_up_due",
-          "approved_at": "2026-07-01T09:00:00.000Z"
+          "approved_at": "2026-07-01T09:00:00.000Z",
+          "score": "82",
+          "status": "follow_up_due",
+          "channel": "email"
         }
       ],
       "outreach": [
@@ -311,7 +309,7 @@
             "outreach_count": 2,
             "last_outreach_at": "2026-09-12T14:30:00.000Z",
             "enrichment_required": false,
-            "reason": "verified email available"
+            "reason": "channel email with address"
           }
         ]
       }
@@ -344,7 +342,9 @@
         "outreach_total": 1,
         "orphan_outreach": 1,
         "exception_count": 1,
-        "exception_types": ["OUTREACH_WITHOUT_APPROVAL"],
+        "exception_types": [
+          "OUTREACH_WITHOUT_APPROVAL"
+        ],
         "queue": []
       }
     },
@@ -362,10 +362,10 @@
           "country": "USA",
           "email": "estimates@ironforge.example",
           "email_verified": "true",
-          "lead_score": "80",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-08-01T09:00:00.000Z"
+          "approved_at": "2026-08-01T09:00:00.000Z",
+          "score": "80",
+          "status": "not_ready",
+          "channel": "email"
         },
         {
           "lead_id": "TEST-QUEUE-009",
@@ -376,10 +376,10 @@
           "country": "USA",
           "email": "studio@juniper.example",
           "email_verified": "true",
-          "lead_score": "80",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-08-15T09:00:00.000Z"
+          "approved_at": "2026-08-15T09:00:00.000Z",
+          "score": "80",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -403,7 +403,7 @@
             "priority": 1,
             "outreach_count": 0,
             "enrichment_required": false,
-            "reason": "verified email available"
+            "reason": "channel email with address"
           },
           {
             "lead_id": "TEST-QUEUE-009",
@@ -412,7 +412,7 @@
             "priority": 2,
             "outreach_count": 0,
             "enrichment_required": false,
-            "reason": "verified email available"
+            "reason": "channel email with address"
           }
         ]
       }
@@ -431,10 +431,10 @@
           "country": "USA",
           "email": "cafe@kindlecoffee.example",
           "email_verified": "true",
-          "lead_score": "88",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-07-20T09:00:00.000Z"
+          "approved_at": "2026-07-20T09:00:00.000Z",
+          "score": "88",
+          "status": "not_ready",
+          "channel": "email"
         },
         {
           "lead_id": "TEST-QUEUE-010",
@@ -445,10 +445,10 @@
           "country": "USA",
           "email": "cafe@kindlecoffee.example",
           "email_verified": "true",
-          "lead_score": "88",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-07-25T09:00:00.000Z"
+          "approved_at": "2026-07-25T09:00:00.000Z",
+          "score": "88",
+          "status": "not_ready",
+          "channel": "email"
         }
       ],
       "outreach": [],
@@ -473,7 +473,7 @@
             "priority": 1,
             "outreach_count": 0,
             "enrichment_required": false,
-            "reason": "verified email available"
+            "reason": "channel email with address"
           }
         ]
       }
@@ -490,10 +490,9 @@
           "city": "Garland",
           "state": "Texas",
           "country": "USA",
-          "lead_score": "86",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-01T09:00:00.000Z"
+          "approved_at": "2026-09-01T09:00:00.000Z",
+          "score": "86",
+          "status": "not_ready"
         }
       ],
       "outreach": [],
@@ -532,10 +531,10 @@
             "country": "USA",
             "email": "hello@orchardandoak.example",
             "email_verified": "true",
-            "lead_score": "86",
-            "qualification_status": "QUALIFIED",
-            "outreach_status": "not_ready",
-            "approved_at": "2026-09-01T09:00:00.000Z"
+            "approved_at": "2026-09-01T09:00:00.000Z",
+            "score": "86",
+            "status": "not_ready",
+            "channel": "email"
           }
         ],
         "outreach": [],
@@ -558,7 +557,7 @@
               "priority": 1,
               "outreach_count": 0,
               "enrichment_required": false,
-              "reason": "verified email available"
+              "reason": "channel email with address"
             }
           ]
         }
@@ -578,10 +577,10 @@
           "country": "USA",
           "email": "service@southerncomfort.example",
           "email_verified": "true",
-          "lead_score": "90",
-          "qualification_status": "QUALIFIED",
-          "outreach_status": "suppressed",
-          "approved_at": "2026-09-06T09:00:00.000Z"
+          "approved_at": "2026-09-06T09:00:00.000Z",
+          "score": "90",
+          "status": "suppressed",
+          "channel": "email"
         }
       ],
       "outreach": [],

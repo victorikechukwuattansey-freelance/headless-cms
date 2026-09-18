@@ -215,6 +215,8 @@ async function enrichContactLeads(options) {
   const now = normalize(opts.now);
   const provider =
     normalize(opts.provider) || (client && normalize(client.provider)) || PROVIDER_AGENTDATA;
+  const countryInScope =
+    typeof opts.countryInScope === 'function' ? opts.countryInScope : isUsCountry;
   let log = sortLogRows(opts.logRows || []);
 
   const stats = {
@@ -249,7 +251,7 @@ async function enrichContactLeads(options) {
 
     const domain = normalizeDomain(lead.website);
 
-    if (!isUsCountry(lead.country)) {
+    if (!countryInScope(lead.country)) {
       skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.NON_US }));
       stats.skipped += 1;
       continue;

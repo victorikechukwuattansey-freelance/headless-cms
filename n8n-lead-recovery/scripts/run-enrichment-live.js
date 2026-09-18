@@ -11,15 +11,16 @@
  *
  * Pipeline (mirrors the shipped 16-node workflow intent):
  *   1. PREFLIGHT  — env/config validation + header contracts on Approved
- *                   Outreach (lead_id, country, website, email,
- *                   contact_source_provider, contact_blocked) and the Contact
- *                   Enrichment Log (the 14 canonical columns A–N). Fails with
- *                   the exact missing column names — the operator fixes the
- *                   sheet, never the code.
- *   2. READ       — Approved Outreach (A–W) + Contact Enrichment Log (A–N,
+ *                   Outreach (24 columns A–X, enrichment-owned V/W/X checked
+ *                   positionally) and the Contact Enrichment Log (the 14
+ *                   canonical columns A–N). Fails with the exact missing column
+ *                   names — the operator fixes the sheet, never the code.
+ *   2. READ       — Approved Outreach (A–X) + Contact Enrichment Log (A–N,
  *                   the durable cache).
- *   3. FILTER     — US only, website non-empty/parseable, email empty,
- *                   contact_blocked not TRUE. Exclusion reasons:
+ *   3. FILTER     — country in scope (operator-configurable via
+ *                   ENRICHMENT_COUNTRIES_ALLOW / ENRICHMENT_COUNTRIES_DENY,
+ *                   default US-only; deny wins), website non-empty/parseable,
+ *                   email empty, contact_blocked not TRUE. Exclusion reasons:
  *                   non_us | no_domain | already_enriched | blocked |
  *                   out_of_scope (outside --lead-ids).
  *   4. ENRICH     — enrichment_key = domain::provider; cache lookup
@@ -32,8 +33,8 @@
  *   5. WRITE      — EXECUTE only. Appends new Contact Enrichment Log rows
  *                   (A–N), write-backs cache_hit_count bumps, updates ONLY the
  *                   enrichment-owned Approved Outreach columns V (contact_
- *                   source_provider) and W (contact_blocked). A–U (including
- *                   the formula-owned Q–U handoff columns) are NEVER touched.
+ *                   source_provider), W (contact_blocked), and X (country).
+ *                   A–U (including the handoff-owned columns) are NEVER touched.
  *                   Writes are namespace-guarded: only lead_ids whose namespace
  *                   is TEST-ENRICH-LIVE-<tag> are ever written; anything else
  *                   is reported as would-be and left untouched. There is NO
@@ -128,6 +129,33 @@ function providerForArgs(args, env) {
   return VALID_PROVIDERS.includes(provider) ? provider : null;
 }
 
+function parseCountryList(raw) {
+  const value = String(raw === undefined || raw === null ? '' : raw).trim();
+  if (value === '') return [];
+  return value
+    .split(',')
+    .map((c) => String(c).trim().toUpperCase())
+    .filter(Boolean);
+}
+
+// D-C8 (revised 2026-09-18): country scope is operator-configurable via
+// ENRICHMENT_COUNTRIES_ALLOW (comma-separated ISO-3166 alpha-2, default "US";
+// "*" or empty = allow all) and ENRICHMENT_COUNTRIES_DENY (default none;
+// deny wins), replacing the previous hard-coded US-only filter. Fail-closed:
+// a missing/blank country is never in scope. This policy lives in the runner
+// (src/enrichment-schema.js is frozen and continues to ship US_COUNTRIES /
+// isUsCountry for the built workflows).
+function isCountryInScope(country, { allow, deny } = {}) {
+  const normalized = normalize(country).toUpperCase();
+  if (normalized === '') return false; // fail-closed
+  const allowList = (allow || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean);
+  const denyList = (deny || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean);
+  if (denyList.includes(normalized)) return false;
+  if (allowList.includes('*')) return true;
+  if (allowList.length === 0) return true; // empty allow = allow all
+  return allowList.includes(normalized);
+}
+
 /* ------------------------------------------------------------------ */
 /* Config (env-only, never code)                                       */
 /* ------------------------------------------------------------------ */
@@ -141,6 +169,14 @@ function readConfig(env) {
   const envProvider = String(env.ENRICHMENT_PROVIDER || '').trim().toLowerCase();
   const ttlDaysRaw = Number(env.ENRICHMENT_TTL_DAYS);
   const minScoreRaw = Number(env.ENRICHMENT_MIN_SCORE);
+  const countriesRawAllow =
+    env.ENRICHMENT_COUNTRIES_ALLOW === undefined || env.ENRICHMENT_COUNTRIES_ALLOW === null
+      ? 'US'
+      : String(env.ENRICHMENT_COUNTRIES_ALLOW).trim();
+  const countries = {
+    allow: parseCountryList(countriesRawAllow),
+    deny: parseCountryList(env.ENRICHMENT_COUNTRIES_DENY),
+  };
 
   const missing = [];
   if (!googlesheetId) missing.push('GOOGLE_SHEET_ID');
@@ -170,6 +206,7 @@ function readConfig(env) {
     },
     ttlDays: Number.isFinite(ttlDaysRaw) && ttlDaysRaw > 0 ? ttlDaysRaw : DEFAULT_TTL_DAYS,
     minScore: Number.isFinite(minScoreRaw) && minScoreRaw >= 0 ? minScoreRaw : HUNTER_MIN_SCORE,
+    countries,
     configuredShipAllowed,
   };
 }
@@ -328,7 +365,8 @@ function mismatchDetail(expectedColumns, mismatches) {
 
 function isHeaderRow(row) {
   return String((row && row[0]) || '').trim().toLowerCase() === 'lead_id' ||
-    String((row && row[0]) || '').trim().toLowerCase() === 'enrichment_id';
+    String((row && row[0]) || '').trim().toLowerCase() === 'enrichment_id' ||
+    String((row && row[0]) || '').trim().toLowerCase() === 'approval_id';
 }
 
 /* ------------------------------------------------------------------ */
@@ -416,7 +454,7 @@ function classifyLead(lead, options) {
   if (opts.leadIds && !opts.leadIds.has(leadId)) {
     return { reason: EXCLUSION_REASONS.OUT_OF_SCOPE };
   }
-  if (!opts.isUs) {
+  if (!opts.countryInScope) {
     return { reason: EXCLUSION_REASONS.NON_US };
   }
   if (opts.domain === '') {
@@ -585,7 +623,7 @@ async function runEnrichment(env, args = {}, deps = {}) {
   const classified = approvedRows.map((lead) => ({
     lead,
     classification: classifyLead(lead, {
-      isUs: ['USA', 'US', 'UNITED STATES', 'UNITED STATES OF AMERICA'].includes(normalize(lead.country).toUpperCase()),
+      countryInScope: isCountryInScope(lead.country, config.countries),
       domain: lead.website ? String(lead.website).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] : '',
       leadIds,
     }),
@@ -629,6 +667,7 @@ async function runEnrichment(env, args = {}, deps = {}) {
     ttlDays,
     minScore,
     provider,
+    countryInScope: (country) => isCountryInScope(country, config.countries),
   });
 
   const outLog = contactRun.log || [];
@@ -646,6 +685,7 @@ async function runEnrichment(env, args = {}, deps = {}) {
         now,
         ttlDays,
         minScore,
+        countryInScope: (country) => isCountryInScope(country, config.countries),
       })
     : { enriched: [], skipped: [], failed: [], stats: { total: 0, enriched: 0, skipped: 0, failed: 0, credits_consumed: 0, cache_hits: 0 }, log: outLog };
 
@@ -867,6 +907,10 @@ function buildRunReport({ args = {}, env = {}, outcomes = {}, startedAt, complet
     started_at: startedAt,
     completed_at: completedAt,
     provider: provider || config.provider || DEFAULT_PROVIDER,
+    country_policy: {
+      allow: (config.countries && config.countries.allow) || [],
+      deny: (config.countries && config.countries.deny) || [],
+    },
     namespace,
     sheet: {
       id: config.googlesheetId ? redactSecret(config.googlesheetId) : '',
@@ -977,7 +1021,10 @@ Env (see .env.example):
   AGENTDATA_API_KEY (default provider), HUNTER_API_KEY (when
   ENRICHMENT_PROVIDER=hunter), ENRICHMENT_PROVIDER (default ${DEFAULT_PROVIDER}),
   ENRICHMENT_TTL_DAYS (default ${DEFAULT_TTL_DAYS}),
-  ENRICHMENT_MIN_SCORE (default ${HUNTER_MIN_SCORE})
+  ENRICHMENT_MIN_SCORE (default ${HUNTER_MIN_SCORE}),
+  ENRICHMENT_COUNTRIES_ALLOW (comma-separated ISO-3166 alpha-2, default "US";
+    "*" or empty = allow all),
+  ENRICHMENT_COUNTRIES_DENY (default none; deny wins)
 
 Exit codes: 0 PASS, 1 FAIL, 3 NOT_CONFIGURED.
 `;
@@ -1052,6 +1099,8 @@ const e = {
   readConfig,
   isConfigured,
   providerForArgs,
+  parseCountryList,
+  isCountryInScope,
   namespaceForArgs,
   defaultRunToken,
   isNamespacedLead,

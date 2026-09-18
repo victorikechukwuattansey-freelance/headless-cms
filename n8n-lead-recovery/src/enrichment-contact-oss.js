@@ -96,6 +96,8 @@ async function enrichContactOss(options) {
   const leads = opts.leads || [];
   const resolver = typeof opts.resolver === 'function' ? opts.resolver : null;
   const now = normalize(opts.now);
+  const countryInScope =
+    typeof opts.countryInScope === 'function' ? opts.countryInScope : isUsCountry;
 
   const stats = {
     total: leads.length,
@@ -115,7 +117,7 @@ async function enrichContactOss(options) {
     const lead = rawLead || {};
     const domain = normalizeDomain(lead.website);
 
-    if (!isUsCountry(lead.country)) {
+    if (!countryInScope(lead.country)) {
       skipped.push(Object.assign({}, lead, { enrichment_skip_reason: SKIP_REASONS.NON_US }));
       stats.skipped += 1;
       continue;

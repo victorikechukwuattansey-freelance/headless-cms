@@ -25,7 +25,7 @@ const ENV_READY = {
   AGENTDATA_API_KEY: 'ad-test-key',
 };
 
-function leadRow({ lead_id, country = 'USA', website = '', email = '', contact_blocked = '' }) {
+function leadRow({ lead_id, country = 'US', website = '', email = '', contact_blocked = '' }) {
   return APPROVED_COLUMNS.map((c) => {
     if (c === 'lead_id') return lead_id;
     if (c === 'country') return country;
@@ -124,21 +124,24 @@ describe('enrichment-live-runner export surface', () => {
   });
 });
 
-describe('Approved column orientation (H.8b.2)', () => {
+describe('Approved column orientation (H.8b.2 → H.8c)', () => {
   const LIVE_APPROVED_HEADER = [
-    'lead_id', 'business_name', 'niche', 'city', 'state', 'country', 'website', 'phone', 'email',
-    'contact_name', 'contact_title', 'email_source', 'email_verified', 'contact_form', 'linkedin_url',
-    'lead_score', 'qualification_status', 'outreach_channel', 'outreach_status', 'approved_at',
-    'notes', 'contact_source_provider', 'contact_blocked',
+    'approval_id', 'lead_id', 'business_name', 'contact_name', 'niche', 'city', 'state',
+    'phone', 'email', 'website', 'verification_source', 'score', 'channel', 'campaign_name',
+    'message_variant', 'approval_stage', 'approved_by', 'approved_at', 'scheduled_date',
+    'status', 'notes', 'contact_source_provider', 'contact_blocked', 'country',
   ];
 
-  it('pins the live sheet orientation: V=contact_source_provider (21), W=contact_blocked (22)', () => {
+  it('pins the live sheet orientation: V=contact_source_provider (21), W=contact_blocked (22), X=country (23)', () => {
     assert.deepEqual(APPROVED_COLUMNS, LIVE_APPROVED_HEADER);
-    assert.equal(APPROVED_COLUMNS.length, 23);
+    assert.equal(APPROVED_COLUMNS.length, 24);
+    assert.equal(APPROVED_COLUMN_INDEX.lead_id, 1);
     assert.equal(APPROVED_COLUMN_INDEX.contact_source_provider, 21);
     assert.equal(APPROVED_COLUMN_INDEX.contact_blocked, 22);
+    assert.equal(APPROVED_COLUMN_INDEX.country, 23);
     assert.equal(APPROVED_COLUMNS[21], 'contact_source_provider');
     assert.equal(APPROVED_COLUMNS[22], 'contact_blocked');
+    assert.equal(APPROVED_COLUMNS[23], 'country');
   });
 
   it('a V/W-swapped Approved header fails the D check positionally', async () => {
@@ -263,6 +266,18 @@ describe('readConfig', () => {
     assert.equal(c.ttlDays, 90);
     assert.equal(c.minScore, 72);
   });
+
+  it('defaults country policy to US-only when no vars are set', () => {
+    const c = R.readConfig(ENV_READY);
+    assert.deepEqual(c.countries, { allow: ['US'], deny: [] });
+  });
+
+  it('parses allow/deny into normalized lists; empty or * allow all; deny wins', () => {
+    assert.deepEqual(R.readConfig({ ...ENV_READY, ENRICHMENT_COUNTRIES_ALLOW: 'us, CA , mx' }).countries, { allow: ['US', 'CA', 'MX'], deny: [] });
+    assert.deepEqual(R.readConfig({ ...ENV_READY, ENRICHMENT_COUNTRIES_ALLOW: '*' }).countries, { allow: ['*'], deny: [] });
+    assert.deepEqual(R.readConfig({ ...ENV_READY, ENRICHMENT_COUNTRIES_ALLOW: '' }).countries, { allow: [], deny: [] });
+    assert.deepEqual(R.readConfig({ ...ENV_READY, ENRICHMENT_COUNTRIES_ALLOW: 'US', ENRICHMENT_COUNTRIES_DENY: 'ca, MX' }).countries, { allow: ['US'], deny: ['CA', 'MX'] });
+  });
 });
 
 describe('namespace helpers', () => {
@@ -292,12 +307,46 @@ describe('namespace helpers', () => {
 describe('classifyLead', () => {
   it('labels every exclusion reason in priority order', () => {
     const lead = { lead_id: 'a', country: 'US', website: 'x.com', email: '', contact_blocked: '' };
-    assert.equal(R.classifyLead(lead, { isUs: true, domain: 'x.com' }).reason, null);
-    assert.equal(R.classifyLead(lead, { isUs: false, domain: 'x.com' }).reason, 'non_us');
-    assert.equal(R.classifyLead(lead, { isUs: true, domain: '' }).reason, 'no_domain');
-    assert.equal(R.classifyLead({ ...lead, email: 'x@x.com' }, { isUs: true, domain: 'x.com' }).reason, 'already_enriched');
-    assert.equal(R.classifyLead({ ...lead, contact_blocked: 'TRUE' }, { isUs: true, domain: 'x.com' }).reason, 'blocked');
-    assert.equal(R.classifyLead(lead, { isUs: true, domain: 'x.com', leadIds: new Set(['other']) }).reason, 'out_of_scope');
+    assert.equal(R.classifyLead(lead, { countryInScope: true, domain: 'x.com' }).reason, null);
+    assert.equal(R.classifyLead(lead, { countryInScope: false, domain: 'x.com' }).reason, 'non_us');
+    assert.equal(R.classifyLead(lead, { countryInScope: true, domain: '' }).reason, 'no_domain');
+    assert.equal(R.classifyLead({ ...lead, email: 'x@x.com' }, { countryInScope: true, domain: 'x.com' }).reason, 'already_enriched');
+    assert.equal(R.classifyLead({ ...lead, contact_blocked: 'TRUE' }, { countryInScope: true, domain: 'x.com' }).reason, 'blocked');
+    assert.equal(R.classifyLead(lead, { countryInScope: true, domain: 'x.com', leadIds: new Set(['other']) }).reason, 'out_of_scope');
+  });
+});
+
+describe('isCountryInScope (H.8c country policy)', () => {
+  const scope = (country, allow, deny) => R.isCountryInScope(country, { allow, deny: deny || [] });
+
+  it('fail-closes on a missing or blank country', () => {
+    assert.equal(scope('', ['US']), false);
+    assert.equal(scope(undefined, ['US']), false);
+    assert.equal(scope(null, ['US']), false);
+    assert.equal(scope('   ', ['*']), false);
+  });
+
+  it('default allow list admits the listed countries case-insensitively', () => {
+    assert.equal(scope('us', ['US']), true);
+    assert.equal(scope('USA', ['US']), false);   // exact alpha-2 match, no aliasing
+    assert.equal(scope('CA', ['US', 'CA']), true);
+    assert.equal(scope('MX', ['US']), false);
+  });
+
+  it('deny always wins, even when allow contains the country', () => {
+    assert.equal(scope('US', ['US'], ['US']), false);
+    assert.equal(scope('CA', ['US', 'CA'], ['CA']), false);
+  });
+
+  it('empty allow list = allow all; "*" = allow all', () => {
+    assert.equal(scope('FR', []), true);
+    assert.equal(scope('FR', ['*']), true);
+    assert.equal(scope('FR', ['US', '*']), true);
+  });
+
+  it('survives messy values: mixed case, whitespace, deny listed trimmed', () => {
+    assert.equal(scope(' ca ', ['US', 'ca']), true);
+    assert.equal(scope('ca', ['CA'], [' ca ']), false);
   });
 });
 
@@ -489,6 +538,38 @@ describe('dry-run pipeline (no --execute)', () => {
     assert.equal(out.status, 'PASS');
     assert.equal(out.report.stats.eligible, 1);
     assert.equal(out.report.stats.excluded.out_of_scope, 1);
+  });
+
+  it('reads country from column X: US default admits US, excludes Canada', async () => {
+    const mock = makeMock([
+      leadRow({ lead_id: `${NS}-001`, country: 'US', website: 'https://us.example' }),
+      leadRow({ lead_id: `${NS}-002`, country: 'Canada', website: 'https://ca.example' }),
+    ]);
+    const dir = tmpDir();
+    const { d } = buildDeps({ byDomain: { 'us.example': emailResult('us@us.example') }, client: mock });
+    const out = await R.runEnrichment(ENV_READY, { namespace: NS, reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    assert.equal(out.report.stats.eligible, 1);
+    assert.equal(out.report.stats.excluded.non_us, 1);
+    assert.equal(out.report.outcomes.enriched.length, 1);
+    assert.equal(out.report.outcomes.enriched[0].lead_id, `${NS}-001`);
+    assert.deepEqual(out.report.country_policy, { allow: ['US'], deny: [] });
+  });
+
+  it('reads country from column X: allow=CA admits Canada, excludes US', async () => {
+    const mock = makeMock([
+      leadRow({ lead_id: `${NS}-001`, country: 'US', website: 'https://us.example' }),
+      leadRow({ lead_id: `${NS}-002`, country: 'CA', website: 'https://ca.example' }),
+    ]);
+    const dir = tmpDir();
+    const env = { ...ENV_READY, ENRICHMENT_COUNTRIES_ALLOW: 'CA' };
+    const { d } = buildDeps({ byDomain: { 'ca.example': emailResult('ca@ca.example') }, client: mock });
+    const out = await R.runEnrichment(env, { namespace: NS, reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    assert.equal(out.report.stats.eligible, 1);
+    assert.equal(out.report.stats.excluded.non_us, 1);
+    assert.equal(out.report.outcomes.enriched[0].lead_id, `${NS}-002`);
+    assert.deepEqual(out.report.country_policy, { allow: ['CA'], deny: [] });
   });
 
   it('cache hit consumes no credits and bumps the hit count (dry)', async () => {

@@ -13,8 +13,8 @@
         {
           "lead_id": "TEST-RECON-001",
           "business_name": "Bluebird Bakery",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-01T09:00:00.000Z"
+          "approved_at": "2026-09-01T09:00:00.000Z",
+          "status": "not_ready"
         }
       ],
       "outreach": [],
@@ -45,8 +45,8 @@
         {
           "lead_id": "TEST-RECON-002",
           "business_name": "Cedar Lane Landscaping",
-          "outreach_status": "contacted",
-          "approved_at": "2026-09-01T10:00:00.000Z"
+          "approved_at": "2026-09-01T10:00:00.000Z",
+          "status": "contacted"
         }
       ],
       "outreach": [
@@ -87,8 +87,8 @@
         {
           "lead_id": "TEST-RECON-003",
           "business_name": "Driftwood Dental",
-          "outreach_status": "contacted",
-          "approved_at": "2026-09-01T11:00:00.000Z"
+          "approved_at": "2026-09-01T11:00:00.000Z",
+          "status": "contacted"
         }
       ],
       "outreach": [
@@ -173,8 +173,8 @@
         {
           "lead_id": "TEST-RECON-005",
           "business_name": "Bramble & Co",
-          "outreach_status": "not_ready",
-          "approved_at": ""
+          "approved_at": "",
+          "status": "not_ready"
         }
       ],
       "outreach": [],
@@ -205,8 +205,8 @@
         {
           "lead_id": "TEST-RECON-006",
           "business_name": "Falcon Fire & Safety",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-01T14:00:00.000Z"
+          "approved_at": "2026-09-01T14:00:00.000Z",
+          "status": "not_ready"
         }
       ],
       "outreach": [
@@ -245,8 +245,8 @@
         {
           "lead_id": "TEST-RECON-007",
           "business_name": "Copper Hill Hardware",
-          "outreach_status": "contacted",
-          "approved_at": "2026-09-01T15:00:00.000Z"
+          "approved_at": "2026-09-01T15:00:00.000Z",
+          "status": "contacted"
         }
       ],
       "outreach": [],
@@ -277,8 +277,8 @@
         {
           "lead_id": "TEST-RECON-008",
           "business_name": "Lakeview Wellness",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-01T16:00:00.000Z"
+          "approved_at": "2026-09-01T16:00:00.000Z",
+          "status": "not_ready"
         }
       ],
       "outreach": [
@@ -344,44 +344,44 @@
         {
           "lead_id": "TEST-RECON-001",
           "business_name": "Bluebird Bakery",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-01T09:00:00.000Z"
+          "approved_at": "2026-09-01T09:00:00.000Z",
+          "status": "not_ready"
         },
         {
           "lead_id": "TEST-RECON-002",
           "business_name": "Cedar Lane Landscaping",
-          "outreach_status": "contacted",
-          "approved_at": "2026-09-01T10:00:00.000Z"
+          "approved_at": "2026-09-01T10:00:00.000Z",
+          "status": "contacted"
         },
         {
           "lead_id": "TEST-RECON-003",
           "business_name": "Driftwood Dental",
-          "outreach_status": "contacted",
-          "approved_at": "2026-09-01T11:00:00.000Z"
+          "approved_at": "2026-09-01T11:00:00.000Z",
+          "status": "contacted"
         },
         {
           "lead_id": "TEST-RECON-005",
           "business_name": "Bramble & Co",
-          "outreach_status": "not_ready",
-          "approved_at": ""
+          "approved_at": "",
+          "status": "not_ready"
         },
         {
           "lead_id": "TEST-RECON-006",
           "business_name": "Falcon Fire & Safety",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-01T14:00:00.000Z"
+          "approved_at": "2026-09-01T14:00:00.000Z",
+          "status": "not_ready"
         },
         {
           "lead_id": "TEST-RECON-007",
           "business_name": "Copper Hill Hardware",
-          "outreach_status": "contacted",
-          "approved_at": "2026-09-01T15:00:00.000Z"
+          "approved_at": "2026-09-01T15:00:00.000Z",
+          "status": "contacted"
         },
         {
           "lead_id": "TEST-RECON-008",
           "business_name": "Lakeview Wellness",
-          "outreach_status": "not_ready",
-          "approved_at": "2026-09-01T16:00:00.000Z"
+          "approved_at": "2026-09-01T16:00:00.000Z",
+          "status": "not_ready"
         }
       ],
       "outreach": [
