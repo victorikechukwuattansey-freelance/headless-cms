@@ -35,6 +35,8 @@
     "response-interpret:phase-6-5:test": "node --test tests/response-interpretation-phase-6-5.test.js",
     "enrichment:build": "node scripts/build-enrichment-workflow.js",
     "enrichment:test": "node --test tests/enrichment-contact-engine.test.js tests/enrichment-workflow-build.test.js",
+    "enrichment:live:test": "node --test tests/enrichment-live-runner.test.js",
+    "enrichment:run": "node scripts/run-enrichment-live.js",
     "enrichment:security": "node scripts/security-check.js"
   },
   "engines": {
