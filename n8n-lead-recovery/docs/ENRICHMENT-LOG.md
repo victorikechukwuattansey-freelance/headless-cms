@@ -131,3 +131,135 @@ enrichment-owned columns on Approved Outreach plus append rows on the log tab.
 - The frozen-artifact manifest (`R-ENRICH-1`) pins the sha256 of every
   enrichment source, fixture, and the shipped workflow; `node
   scripts/verify-frozen.js` re-asserts the enrollment trend at each freeze.
+
+---
+
+# Phase H.8b — Engine-direct live runner
+
+`scripts/run-enrichment-live.js` executes the SHIPPED contact-enrichment engines
+(`src/enrichment-contact.js` + `src/enrichment-contact-oss.js`) engine-direct
+against the production sheet — no workflow runner involved. It shares every code
+path with the workflow only through those frozen engines and the shared column
+contracts, so results stay byte-consistent with what the n8n build would do.
+
+## Behaviour
+
+- **Default mode is DRY_RUN**: read-only. Nothing is written without
+  `--execute`, and there is deliberately no `--allow-production-writes`.
+- **Namespace guard, always enforced on writes.** With `--execute`, log rows,
+  cache-hit write-backs, and Approved Outreach V/W cells are written ONLY for
+  `lead_id`s under `TEST-ENRICH-LIVE-<tag>` (`^TEST-ENRICH-LIVE-[0-9a-f]{8,32}-`).
+  Non-namespaced production leads are enriched and reported as `would-append`
+  /`would-update` but never written.
+- **Approved Outreach writes are V/W only** (`contact_blocked` = V,
+  `contact_source_provider` = W — the last two columns, owned by enrichment).
+  Columns A–U are never written.
+- **Log writes are append-only on A–N** plus `cache_hit_count` write-back on M.
+
+## CLI
+
+```
+node scripts/run-enrichment-live.js [flags]     # or: npm run enrichment:run --
+  --execute            allow namespaced writes (append log, bump M, update V/W)
+  --limit=<N>          max eligible leads to enrich (default 5)
+  --lead-ids=<id>,<id> restrict scope to these lead_ids
+  --provider=<name>    agentdata | hunter (default ENRICHMENT_PROVIDER or agentdata)
+  --namespace=<prefix> test namespace (default TEST-ENRICH-LIVE-<hex tag>)
+  --reports-dir=<dir>  report output directory
+  --no-interactive     never prompt
+  --help
+```
+
+Env (see `.env.example`): `GOOGLE_SHEET_ID`, `GOOGLE_ACCESS_TOKEN` or
+`GOOGLE_SERVICE_ACCOUNT_JSON`, `AGENTDATA_API_KEY` (default provider),
+`HUNTER_API_KEY` (when `ENRICHMENT_PROVIDER=hunter`), `ENRICHMENT_PROVIDER`,
+`ENRICHMENT_TTL_DAYS` (60), `ENRICHMENT_MIN_SCORE` (50).
+
+Exit codes: **0 PASS, 1 FAIL, 3 NOT_CONFIGURED**.
+
+## Preflight checks
+
+`B config present` · `C sheet auth` · `D Approved Outreach columns` ·
+`E Contact Enrichment Log columns` (exact-missing-column list on failure) ·
+`F provider` · `G <provider key>` · `H namespace well-formed` (informational —
+an adversarial namespace only refuses to execute). Any non-informational failure
+aborts before any read/enrich/write.
+
+## Determinism & safety evidence
+
+- `tests/enrichment-live-runner.test.js` (46 tests, offline) pins: config
+  resolution, namespace helpers, classification priority, preflight pass/fail,
+  dry-run pipeline (exclusions, credits, cache-hit no-provider-call,
+  determinism), execute pipeline (log append, OSS fallback, manual block,
+  V/W-only writes on `!V4`/`!W2..W4`, production-lead guard, cache-hit M
+  write-back), `updateValues` bearer cells, OSS resolvers, diff helpers,
+  redaction (no secrets/PII in reports), exit codes, and the security-gate
+  literal scan. Run via `npm run enrichment:live:test`.
+- Fixed in the runner this phase: the placeholder tail (runner now loads), three
+  `writeRunReport` wrapper defects on FAIL / NOT_CONFIGURED / sheet-read-fail
+  paths (now write the redacted report), and the CLI entrypoint now exits with
+  `main`'s code instead of always 0.
+- Reports land as `ENRICH-LIVE-<tag>-<hex>-enrichment-live.json` (redacted; no
+  secrets, private keys, or raw emails).
+
+## Phase H.8b.1 - Preflight observability fix
+
+- Symptom: with GOOGLE_SHEET_ID / GOOGLE_ACCESS_TOKEN / AGENTDATA_API_KEY set
+  and ENRICHMENT_PROVIDER=agentdata, the runner exited FAIL at preflight in
+  <1ms with failure_info: ["preflight failed"] and no per-check detail.
+- Root cause (runner defect): runEnrichment ran preflight BEFORE the Sheets
+  surface was built (the client was created after the preflight FAIL branch).
+  With no deps.client, check "D/E sheet reads" always pushed
+  "no Sheets client available" -> hard FAIL -> exit before any network call.
+  The environment being configured was irrelevant; the check could never pass
+  in CLI mode.
+- Fix:
+  - The Sheets surface is now built BEFORE preflight (only when config is
+    CONFIGURED) and handed to preflight via a deps clone {client, clientError};
+    a client-construction failure is captured as clientError and surfaces as
+    the "D/E sheet reads" detail instead of aborting.
+  - Every preflight check is named and reported: report gains preflight_detail
+    (array of {name, ok, informational, detail}) - the only new public field.
+  - failure_info now carries the specific failing check, e.g.
+    preflight failed: D/E sheet reads (ENOENT: ...).
+  - Check "F provider" now names the offending value when invalid
+    (provider "<value>" invalid; must be one of agentdata|hunter).
+- Tests: 6 added (per-check shape, named FAIL for a bad provider, report
+  failure_info naming the check, missing-column FAIL naming, PASS reports carry
+  preflight_detail, client-construction failure named as D/E). Runner suite:
+  52/52. Whole suite: 1194/1194.
+- Gates: npm test 1194 pass; verify:frozen 24/24 PASS; enrichment:security
+  exit 0 (GREEN).
+- No workflow / schema / engine / manifest changes. No --execute.
+
+## Phase H.8b.2 - V/W orientation fix + positional preflight
+
+- Problem: `src/schema.js` shipped `APPROVED_COLUMNS` with the last two entries
+  reversed vs the live sheet (shipped V=contact_blocked / W=contact_source_provider;
+  live V=contact_source_provider / W=contact_blocked, operator-verified via Sheets
+  API). The engine-direct runner write-backs Approved V/W positionally through the
+  schema constant, so `--execute` would have misplaced both enrichment fields.
+- Fix: swapped the last two entries of `APPROVED_COLUMNS` in `src/schema.js`
+  (index 21=contact_source_provider / V, index 22=contact_blocked / W).
+  `APPROVED_COLUMN_INDEX` derives from the array and updated automatically.
+  `src/schema.js` is NOT in the 24-artifact frozen manifest; no frozen file,
+  engine (`src/enrichment-contact*.js` are field-name based), or workflow was
+  touched.
+- Preflight: `missingColumnsFor` (presence-only) replaced with positional
+  checks — `columnLetter`, `positionalMismatches`, `mismatchDetail`. D now
+  validates all 23 Approved columns in position (swap / rename / wrong-slot all
+  FAIL with per-column detail, e.g. `V is "contact_blocked", expected
+  "contact_source_provider"`); E validates all 14 log columns the same way.
+  `PREFLIGHT_APPROVED_COLUMNS` export retained (superseded internally).
+- Tests: 5 added — independent literal pin of the live Approved header order,
+  V/W-swap FAIL, renamed-column FAIL, wrong-position FAIL, and an execute run
+  proving provider→V / blocked→W only (TRUE never lands on V). Fixed 3
+  orientation pins that encoded the reverse (execute refs, namespace provider,
+  cache-hit provider write). Runner suite: 57/57. Whole suite: 1199/1199.
+- Gates: npm test 1199 pass; verify:frozen 24/24 PASS; enrichment:security
+  exit 0 (GREEN). CLI dry run (no env): NOT_CONFIGURED, exit 3.
+- Open item (operator): confirm on the live sheet that Approved V/W are the
+  correct enrichment-owned columns and the Contact Enrichment Log is still
+  empty before any `--execute`. Nothing was migrated; the frozen workflow
+  writes both fields by name, so the correction is runner-only.
+- No workflow / frozen artifact / engine / manifest changes. No --execute.
