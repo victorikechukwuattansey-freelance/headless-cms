@@ -302,10 +302,28 @@ function headerObject(row) {
   return out;
 }
 
-function missingColumnsFor(grid, expectedColumns) {
+function columnLetter(index) {
+  return String.fromCharCode(65 + Number(index));
+}
+
+function positionalMismatches(grid, expectedColumns) {
   const header = grid && grid.length > 0 ? grid[0] : [];
-  const headerNames = headerObject(header);
-  return (expectedColumns || []).filter((name) => !headerNames.includes(String(name).trim().toLowerCase()));
+  const mismatches = [];
+  (expectedColumns || []).forEach((expected, index) => {
+    const actual = String(header[index] || '').trim().toLowerCase();
+    if (actual !== String(expected).trim().toLowerCase()) {
+      mismatches.push({ letter: columnLetter(index), index, expected: String(expected), actual: actual || '(empty)' });
+    }
+  });
+  return mismatches;
+}
+
+function mismatchDetail(expectedColumns, mismatches) {
+  if (mismatches.length === 0) {
+    return `${expectedColumns.length}/${expectedColumns.length} columns in expected positions`;
+  }
+  const shown = mismatches.slice(0, 5).map((m) => `${m.letter} is "${m.actual}", expected "${m.expected}"`).join('; ');
+  return mismatches.length > 5 ? `${shown} (+${mismatches.length - 5} more)` : `${shown}`;
 }
 
 function isHeaderRow(row) {
@@ -437,17 +455,17 @@ async function preflight(env, args = {}, deps = {}) {
     try {
       const approvedGrid = await client.listRows(APPROVED_TAB);
       const logGrid = await client.listRows(LOG_TAB);
-      const missingApproved = missingColumnsFor(approvedGrid, PREFLIGHT_APPROVED_COLUMNS);
-      const missingLog = missingColumnsFor(logGrid, ENRICHMENT_LOG_COLUMNS);
+      const approvedMismatch = positionalMismatches(approvedGrid, APPROVED_COLUMNS);
+      const logMismatch = positionalMismatches(logGrid, ENRICHMENT_LOG_COLUMNS);
       checks.push({
         label: 'D Approved Outreach columns',
-        ok: missingApproved.length === 0,
-        detail: missingApproved.length ? `MISSING: ${missingApproved.join(', ')}` : `${PREFLIGHT_APPROVED_COLUMNS.length}/${PREFLIGHT_APPROVED_COLUMNS.length} columns present`,
+        ok: approvedMismatch.length === 0,
+        detail: mismatchDetail(APPROVED_COLUMNS, approvedMismatch),
       });
       checks.push({
         label: 'E Contact Enrichment Log columns',
-        ok: missingLog.length === 0,
-        detail: missingLog.length ? `MISSING: ${missingLog.join(', ')}` : `${ENRICHMENT_LOG_COLUMNS.length}/${ENRICHMENT_LOG_COLUMNS.length} columns present`,
+        ok: logMismatch.length === 0,
+        detail: mismatchDetail(ENRICHMENT_LOG_COLUMNS, logMismatch),
       });
     } catch (err) {
       checks.push({ label: 'D/E sheet reads', ok: false, detail: err.message });

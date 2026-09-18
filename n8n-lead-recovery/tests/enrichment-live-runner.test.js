@@ -124,6 +124,66 @@ describe('enrichment-live-runner export surface', () => {
   });
 });
 
+describe('Approved column orientation (H.8b.2)', () => {
+  const LIVE_APPROVED_HEADER = [
+    'lead_id', 'business_name', 'niche', 'city', 'state', 'country', 'website', 'phone', 'email',
+    'contact_name', 'contact_title', 'email_source', 'email_verified', 'contact_form', 'linkedin_url',
+    'lead_score', 'qualification_status', 'outreach_channel', 'outreach_status', 'approved_at',
+    'notes', 'contact_source_provider', 'contact_blocked',
+  ];
+
+  it('pins the live sheet orientation: V=contact_source_provider (21), W=contact_blocked (22)', () => {
+    assert.deepEqual(APPROVED_COLUMNS, LIVE_APPROVED_HEADER);
+    assert.equal(APPROVED_COLUMNS.length, 23);
+    assert.equal(APPROVED_COLUMN_INDEX.contact_source_provider, 21);
+    assert.equal(APPROVED_COLUMN_INDEX.contact_blocked, 22);
+    assert.equal(APPROVED_COLUMNS[21], 'contact_source_provider');
+    assert.equal(APPROVED_COLUMNS[22], 'contact_blocked');
+  });
+
+  it('a V/W-swapped Approved header fails the D check positionally', async () => {
+    const swapped = LIVE_APPROVED_HEADER.slice();
+    swapped[21] = 'contact_blocked';
+    swapped[22] = 'contact_source_provider';
+    const mock = new MockSheets();
+    mock.addTab(R.APPROVED_TAB, [swapped, leadRow({ lead_id: `${NS}-001` })]);
+    mock.addTab(R.LOG_TAB, logGrid([]));
+    const r = await R.preflight(ENV_READY, { namespace: NS }, { client: mock });
+    assert.equal(r.status, 'FAIL');
+    const d = r.checks.find((c) => c.label === 'D Approved Outreach columns');
+    assert.equal(d.ok, false);
+    assert.ok(d.detail.includes('V') && d.detail.includes('contact_source_provider'), d.detail);
+    assert.ok(d.detail.includes('W') && d.detail.includes('contact_blocked'), d.detail);
+  });
+
+  it('a renamed enrichment-owned column fails the D check and names the position', async () => {
+    const renamed = LIVE_APPROVED_HEADER.slice();
+    renamed[22] = 'blocked_flag';
+    const mock = new MockSheets();
+    mock.addTab(R.APPROVED_TAB, [renamed, leadRow({ lead_id: `${NS}-001` })]);
+    mock.addTab(R.LOG_TAB, logGrid([]));
+    const r = await R.preflight(ENV_READY, { namespace: NS }, { client: mock });
+    assert.equal(r.status, 'FAIL');
+    const d = r.checks.find((c) => c.label === 'D Approved Outreach columns');
+    assert.equal(d.ok, false);
+    assert.ok(d.detail.includes('W') && d.detail.includes('blocked_flag'), d.detail);
+  });
+
+  it('an enrichment column in the wrong position fails the D check', async () => {
+    const shifted = LIVE_APPROVED_HEADER.slice();
+    shifted.splice(21, 1);               // drop V-ish column, leaving W at the wrong slot
+    shifted.splice(21, 0, 'contact_blocked'); // now W carries the blocked value in V's place
+    const mock = new MockSheets();
+    mock.addTab(R.APPROVED_TAB, [shifted, leadRow({ lead_id: `${NS}-001` })]);
+    mock.addTab(R.LOG_TAB, logGrid([]));
+    const r = await R.preflight(ENV_READY, { namespace: NS }, { client: mock });
+    assert.equal(r.status, 'FAIL');
+    const d = r.checks.find((c) => c.label === 'D Approved Outreach columns');
+    assert.equal(d.ok, false);
+    assert.ok(d.detail.includes('contact_blocked'), d.detail);
+  });
+});
+
 describe('parseArgs', () => {
   it('applies defaults and parses every flag', () => {
     const a = R.parseArgs([]);
@@ -518,17 +578,49 @@ describe('execute pipeline (--execute)', () => {
     assert.equal(byLead[`${NS}-002`].email_filled, true);
     assert.equal(byLead[`${NS}-003`].email_filled, false);
 
-    // V/W cell updates: provider (W) for all three, blocked (V) for the manual block only
+    // V/W cell updates: provider (V) for all three, blocked (W) for the manual block only
     assert.equal(r.approved_outreach_updated_vw, 4);
     assert.equal(r.approved_outreach_would_update_vw, 4);
     const putUrls = calls.map((c) => c.url);
     const refs = putUrls.map((u) => (u.match(/!([A-Z])(\d+)/) || [])[0]).sort();
-    assert.deepEqual(refs, ['!V4', '!W2', '!W3', '!W4']);
+    assert.deepEqual(refs, ['!V2', '!V3', '!V4', '!W4']);
     for (const u of putUrls) {
       assert.ok(u.includes('Approved'), u);
       assert.ok(!/(!([A-U])\d)/.test(u), `never writes A-U on Approved Outreach: ${u}`);
     }
     for (const c of calls) assert.equal(c.method, 'PUT');
+  });
+
+  it('writes provider to V and blocked to W, matching the live sheet columns', async () => {
+    const mock = makeMock([
+      leadRow({ lead_id: `${NS}-001`, website: 'https://acme.example' }),
+      leadRow({ lead_id: `${NS}-002`, website: 'https://gamma.example' }),
+    ]);
+    const empty = () => ({ ok: true, emails: [], source: 'agentdata', creditsUsed: 1 });
+    const resolver = async (domain) => {
+      if (domain === 'gamma.example') return { emails: [], blocked: true, notes: 'oss_no_results' };
+      return { emails: [], blocked: false, notes: '' };
+    };
+    const { transport, calls } = captureTransport();
+    const dir = tmpDir();
+    const { d } = buildDeps({
+      byDomain: { 'acme.example': emailResult('j@acme.example'), 'gamma.example': empty() },
+      resolver,
+      client: mock,
+      transport,
+    });
+    const out = await R.runEnrichment(ENV_READY, { namespace: NS, execute: true, reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    const byRef = {};
+    for (const c of calls) {
+      const m = c.url.match(/!([A-Z])(\d+)/);
+      byRef[`${m[1]}${m[2]}`] = JSON.parse(c.body).values[0][0];
+    }
+    assert.equal(byRef.V2, 'agentdata'); // row 2: acme provider on contact_source_provider (V)
+    assert.equal(byRef.V3, 'manual');    // row 3: gamma OSS block still stamps provider on V
+    assert.equal(byRef.W3, 'TRUE');      // row 3: gamma blocked flag on contact_blocked (W)
+    assert.ok(!('W2' in byRef), 'provider-only rows never touch W');
+    assert.ok(!Object.values(byRef).includes('TRUE') || byRef.W3 === 'TRUE', 'TRUE is only ever written to W');
   });
 
   it('never writes non-namespaced production leads', async () => {
@@ -554,7 +646,7 @@ describe('execute pipeline (--execute)', () => {
     assert.equal(r.approved_outreach_would_update_vw, 2);
     const urls = calls.map((c) => c.url);
     assert.equal(urls.length, 1);
-    assert.ok(urls[0].includes('!W2'), urls[0]); // provider cell (contact_source_provider = W)
+    assert.ok(urls[0].includes('!V2'), urls[0]); // provider cell (contact_source_provider = V)
   });
 
   it('write-backs cache hit counts on the log tab only', async () => {
@@ -573,10 +665,10 @@ describe('execute pipeline (--execute)', () => {
     assert.equal(bump.length, 1); // cache_hit_count column is the log M column
     assert.ok(bump[0].includes('Contact'), bump[0]);
     // cache-hit leads are enriched from cache with provider set, so the provider
-    // cell (W) is still written for the namespaced lead — never any A-U columns
+    // cell (V) is still written for the namespaced lead — never any A-U columns
     const vwUrls = urls.filter((u) => u.includes('Approved'));
     assert.equal(vwUrls.length, 1);
-    assert.ok(vwUrls[0].includes('!W2'), vwUrls[0]);
+    assert.ok(vwUrls[0].includes('!V2'), vwUrls[0]);
   });
 });
 
