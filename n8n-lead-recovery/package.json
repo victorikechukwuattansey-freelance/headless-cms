@@ -37,6 +37,8 @@
     "enrichment:test": "node --test tests/enrichment-contact-engine.test.js tests/enrichment-workflow-build.test.js",
     "enrichment:live:test": "node --test tests/enrichment-live-runner.test.js",
     "enrichment:run": "node scripts/run-enrichment-live.js",
+    "enrichment:business:test": "node --test tests/business-enrichment-live-runner.test.js",
+    "enrichment:business:run": "node scripts/run-business-enrichment-live.js",
     "enrichment:security": "node scripts/security-check.js"
   },
   "engines": {

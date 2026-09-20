@@ -288,8 +288,11 @@ aborts before any read/enrich/write.
   stale-fixture fixes.
 - Country policy (D-C8, decided by operator): runner-side configurable policy =
   `ENRICHMENT_COUNTRIES_ALLOW` (default "US"; "*" or empty = all) and
-  `ENRICHMENT_COUNTRIES_DENY` (wins). `isCountryInScope` does EXACT ISO-3166
-  alpha-2 matching, no aliasing (pinned by test). Missing/blank country fails
+  `ENRICHMENT_COUNTRIES_DENY` (wins). `isCountryInScope` matches ISO-3166
+  alpha-2 codes, with an H.9.2 normalization layer that maps common variants
+  ("USA", "UNITED STATES", "U.S.A.", "UK", "CANADA", …) to their alpha-2
+  equivalent on both the input and the allow/deny lists before comparing.
+  Missing/blank country fails
   closed.
 - Frozen-engine seam (APPROVED re-baseline, dated 2026-09-18):
   `src/enrichment-contact.js` and `src/enrichment-contact-oss.js` gained an
@@ -314,3 +317,206 @@ aborts before any read/enrich/write.
 - Open item (operator): confirm Approved V/W orientation + write surface on the
   live sheet before any `--execute`. Nothing was migrated; no `--execute` run.
 - No commit made (uncommitted working tree per workspace convention).
+
+---
+
+# Phase H.9 — Business Enrichment V1 engine-direct live runner
+
+`scripts/run-business-enrichment-live.js` executes the SHIPPED business-half
+engine (`src/enrichment-business.js`, Prompt H.2) engine-direct against the
+production spreadsheet's **Verified Leads** tab — no n8n workflow, no fixtures.
+Business identity comes from a local Overture Places parquet index
+(`fixtures/overture-austin.parquet`, 84,445 places, release 2026-08-19.0; any
+path via `--overture` / `OVERTURE_PARQUET_PATH`).
+
+**H.9.1 (production write scope).** The runner now accepts
+`--scope=<test|production>` (default `test`). Production writes require a
+second, independent acknowledgment — `BIZ_ENRICH_ALLOW_PRODUCTION=1` in the
+environment — and the run **REFUSES** (stage `REFUSED`, exit 1) without it,
+before any connection is made. No `--allow-production-writes` flag was added;
+there is no single-flag production path. "Runner behaviour" + CLI below
+document the full scope model, stage labels (`NO_ELIGIBLE`, `REFUSED`), and
+the new report fields (`requested_scope`, `effective_scope`,
+`production_confirmed`). Tests:
+`tests/business-enrichment-live-runner.test.js`.
+
+## Engine interface audit (H.9 §1)
+
+- `enrichBusinessLeads({ leads = [], index = [], now, runId = '' })` — a single
+  options object. **`index` is a LIST (plain array)** of Overture places
+  (`gers_id, primary_name, website, phone, city, state_code, country,
+  operating_status, confidence`); the engine normalizes each candidate
+  (`normalizePhone`/`normalizeDomain`/`normalizeName`/`normalizeState`/
+  `operatingStatusOf`) and sorts it by `gersId` ascending. `now` is injected;
+  **`runId` is accepted but ignored**. Output `{ enriched, unmatched, stats }`
+  with arrays sorted by `lead_id` ascending (tie by `gers_id`).
+- Match priority: **phone** (11-digit leading-1 collapse) → **website**
+  (scheme/www/path stripped) → **name+city+state** (exact 0.7 / Levenshtein
+  ≤ 2 → 0.4). Confidence 1.0 / 1.0 / 0.7 / 0.4.
+- Fill-empty-only enrichment: never clobbers provider data. The four
+  enrichment fields are stamped on every processed lead; the runner only
+  materializes the **matched** ones on the sheet (unmatched stays blank so it
+  can be retried).
+
+## Runner behaviour
+
+- **Default mode is DRY_RUN**: read-only, nothing written without `--execute`.
+- **Write scope (H.9.1).** The runner distinguishes `--scope=test` (default)
+  from `--scope=production`. Test scope is namespace-guarded exactly as in
+  H.9: only `TEST-ENRICH-LIVE-<tag>-` lead_ids are ever changed. Production
+  scope writes every matched lead in scope, but only when
+  `BIZ_ENRICH_ALLOW_PRODUCTION=1` is present in the environment — a
+  production `--execute --scope=production` without that env var **REFUSES**
+  (stage `REFUSED`, exit 1) before any connection is made. There is still no
+  single `--allow-production-writes` flag; production requires two independent
+  acknowledgments. In DRY_RUN mode `--scope` is reported
+  (`requested_scope`) but never acts (`effective_scope` = `dry_run`).
+- **Preflight checks** (A–E): config present · sheet auth · Verified Leads
+  columns (**28 columns A1:AB1 checked positionally**; Y/Z/AA/AB must be
+  `enrichment_business_status/confidence/gers_id/last_run` — a swap, rename,
+  or missing column FAILs naming the letter) · Overture parquet readable probe
+  · namespace well-formed (informational — an adversarial namespace only
+  refuses to execute). The operator fixes the sheet; the code never bends.
+- **Filter**: eligible = Y empty AND at least one match key (phone | website |
+  name+city+state). Exclusions: `already_enriched` | `no_match_key` |
+  `out_of_scope` (outside `--lead-ids`). `--limit` slices the deterministic
+  lead_id-ordered scope (default 5).
+- **Index build**: one pass over the parquet projection
+  (`id, names.primary, confidence, phones, websites, addresses[1].region/
+  locality/country, operating_status` — no `categories`, matching the shipped
+  loader), BigInt→Number, sorted by `gers_id` ascending so identical inputs
+  produce identical results.
+- **Write (EXECUTE only)**: a **single bounded** `values.update` PUT of
+  `'Verified Leads'!Y2:AB<lastRow>` (`valueInputOption=USER_ENTERED`). Rows in
+  scope that matched get Y/Z/AA/AB; unmatched and non-scope rows — including a
+  pre-enriched production row between scoped rows — are preserved verbatim.
+  **Never A–X, never Q–U** (formula-owned columns). Stage labels: `PASS`
+  (a change was materialized) · `NO_ELIGIBLE` (execute ran but no lead in
+  scope changed — no `TEST-ENRICH-LIVE` lead was matched/written in test
+  scope, or nothing matched in production scope) · `FAIL` (write error or, in
+  test scope, an adversarial namespace) · `REFUSED` (production requested but
+  unconfirmed). DRY_RUN mode reports `DRY_RUN` (would-write, nothing written)
+  regardless of `--scope`.
+- **Report**: `reports/BIZ-ENRICH-LIVE-<run_id>.json`, fully redacted (no
+  tokens, keys, or raw business PII beyond lead_id + match metadata); sheet id
+  masked `6…4`. New H.9.1 fields: `requested_scope` (test | production),
+  `effective_scope` (dry_run — meaning not executed — | test | production),
+  `production_confirmed` (bool, whether `BIZ_ENRICH_ALLOW_PRODUCTION=1` was
+  present). Exit codes: **0 PASS, 1 FAIL, 3 NOT_CONFIGURED**.
+
+## CLI
+
+```
+node scripts/run-business-enrichment-live.js [flags]   # or: npm run enrichment:business:run
+  --execute            allow the single Y2:AB<lastRow> write
+  --scope=<test|production>
+                       write scope in --execute mode (default "test").
+                       test: only TEST-ENRICH-LIVE-<tag>- lead_ids change.
+                       production: every matched lead in scope is written, but
+                       only when BIZ_ENRICH_ALLOW_PRODUCTION=1 is present —
+                       the run REFUSES (exit 1) without it. Dry runs report
+                       --scope but never write.
+  --limit=<N>          max eligible leads (default 5)
+  --lead-ids=<id>,<id> restrict scope
+  --overture=<path>    Overture parquet path (default fixtures/overture-austin.parquet)
+  --namespace=<prefix> test namespace (default TEST-ENRICH-LIVE-<hex tag>)
+  --reports-dir=<dir>  report output directory
+  --no-interactive | --help
+```
+
+Env (see `.env.example`): `GOOGLE_SHEET_ID`, `GOOGLE_ACCESS_TOKEN` or
+`GOOGLE_SERVICE_ACCOUNT_JSON`, `OVERTURE_PARQUET_PATH` (optional),
+`BIZ_ENRICH_ALLOW_PRODUCTION=1` (required to confirm `--scope=production` in
+`--execute` mode).
+
+## Determinism & safety evidence
+
+- `tests/business-enrichment-live-runner.test.js` (offline, no network/DuckDB)
+  pins: export surface + canonical constants, parseArgs, config resolution,
+  namespace helpers, index building (BigInt ids, `addresses[1]`, sorted
+  gers_id), classification + the match-key report mirror (including the
+  phone-present-without-match → website fallthrough), preflight pass/fail
+  (missing AB1, AA/AB swap, empty grid, unreadable parquet, informational
+  namespace), dry-run pipeline (exclusions, per-lead y/z/aa, writes nothing,
+  no transport calls), `--lead-ids`, `--limit`, determinism, redaction,
+  buildWriteBlock preserve semantics, execute pipeline (single Y2:AB5 PUT,
+  only Y/Z/AA/AB, production rows preserved verbatim, 12 would-write / 8
+  wrote cell counts), production-only execute (DRY_RUN stage, no PUT),
+  adversarial-namespace refusal, report failure_info naming the check, exit
+  codes, CLI wiring (--help, NOT_CONFIGURED exit 3), and the security-gate
+  literal scan. Run via `npm run enrichment:business:test`.
+- Fixed vs the first pass: `matchKeyFor` now mirrors the engine's priority
+  exactly (phone-non-match falls through to website); `would_write` / `wrote` /
+  `cells_changed` are consistently cell counts (3 matched leads → 12
+  would-write; 2 namespaced → 8 wrote).
+- Gates: `enrichment:business:test`, `npm test` (whole-suite regression), and
+  `enrichment:security` (exit 0, GREEN).
+- No workflow / schema / engine / manifest changes. **No `--execute` was run**;
+  the D2 formula-owned Verified Leads columns and all shipped artifacts are
+  untouched this phase.
+
+## Phase H.9.3 — Live runner: transport fallback + per-lead outcomes buckets
+
+- Scope: this phase fixed the **live runner only** — `scripts/enrichment-live-runner.js`
+  (NOT frozen, NOT in the manifest). The problem: with production `deps = {}`
+  the runner passed `transport: undefined` down the client chain, so every live
+  `domainSearch` threw `AGENTDATA_TRANSPORT_UNAVAILABLE` → the sheet accumulated
+  `failed 1 / credits_consumed 0 / result_email empty` rows. The frozen client
+  (`src/enrichment-contact-client.js`) and root `ENRICHMENT-LOG.md` contract are
+  untouched.
+- `liveProviderTransport` (module-level, runner ~365): a fetch-based transport
+  mirroring the client's `fetchTransport(url, options) => Promise<{ status, body }>`
+  contract — omits empty headers, `body = await response.json().catch(() => null)`.
+  Used when the runner is built without an injected client transport, so a bare
+  production run now reaches the real provider instead of throwing.
+- `buildRunOutcomes` (runner ~911): merges `enrichedRows` / `skippedRows` /
+  `failedRows` into a single per-lead surface, each entry carrying `lead_id`
+  (`String`-sorted ascending) and its provenance:
+  - enriched → `{ result_email, result_verified, email_source,
+    wrote_vw: false }` (the write-loop sets `wrote_vw: true` only for
+    enriched-and-VW-matched leads);
+  - skipped → `{ enrichment_skip_reason }`; failed → `{ enrichment_failure_reason }`.
+  `result_email` is redacted behind `<redacted>` in report outputs (existing
+  `SENSITIVE_KEY_RE`), while `result_verified` is unaffected.
+- Export surface additions (nothing removed): `liveProviderTransport` (383),
+  `buildRunOutcomes` (1183/1191). Runner test `tests/enrichment-live-runner.test.js`
+  (NOT frozen) grew to cover the transport contract, the outcomes-buckets unit,
+  and the default-live-transport fallback.
+- Multiple live-runner tests were added; the frozen client + frozen test file
+  are byte-identical. All gates green (see below). **No `--execute` was run**
+  (live dry-run `NOT_CONFIGURED` — no Google/AgentData credentials here).
+
+## Phase H.9.3 — Live runner: transport fallback + per-lead outcomes buckets
+
+- Real defect (production, `scripts/run-enrichment-live.js`, NOT frozen, NOT in
+  manifest): the live runner injected `transport: undefined` into every call.
+  The runner built `liveProviderTransport` only via `deps`; with production
+  `deps = {}` the fallback path passed `transport: undefined`, so every
+  `domainSearch` threw `AGENTDATA_TRANSPORT_UNAVAILABLE` → `failed 1 /
+  credits_consumed 0 / result_email empty` rows across the Verified Leads
+  sheet. Root cause: the fallback wiring never reached the live path.
+- Fix: fallback at ~697 — any `transport` that is not a function is replaced by
+  the module-level `liveProviderTransport` (~365), which mirrors the client's
+  `fetchTransport(url, options) => Promise<{status, body}>` contract, omits
+  empty headers, and sets `body = await response.json().catch(() => null)`.
+  Wired as `liveProviderTransport(url, { transport })` in `deps` (~1183/1191).
+- `buildRunOutcomes` (~911, used ~697, export ~1191) now merges
+  `enrichedRows` / `skippedRows` / `failedRows` into one surface, sorted by
+  `String(lead_id).localeCompare(...)` ascending. Enriched entries carry
+  `email_source` (`lead.email_source || lead.contact_source_provider ||
+  provider`), `result_email`, `result_verified` (`TRUE` when
+  `email_verified==='Y'`), `wrote_vw: false` baseline (write-loop mutation at
+  ~775-777 preserved); skipped `{ enrichment_skip_reason }`; failed
+  `{ enrichment_failure_reason }`. `result_email` is redacted by
+  `SENSITIVE_KEY_RE` → `<redacted>` in reports; `result_verified` unaffected.
+- Export-surface additions only: `liveProviderTransport`, `buildRunOutcomes`
+  (nothing removed; frozen column contract `ENRICHMENT-LOG.md` untouched).
+- Tests: 6 added to `tests/enrichment-live-runner.test.js` (110-111 export
+  list; contract test 670; buildRunOutcomes unit 641; default-live-transport
+  fallback 676-705 — runner built without `clientWrapper`, with `deps.client`
+  mock + transport + resolver + `sleep: async()=>{}`). Live-runner suite: 76/76.
+- Gates: `enrichment:live:test` 76/76; `npm test` 1276/1276 (was 1270);
+  `enrichment:verify:frozen` 25/25 PASS; `enrichment:security` exit 0 GREEN.
+- Live dry-run stays `NOT_CONFIGURED` (no Google/AgentData credentials in this
+  environment) — **no `--execute` run**. Frozen runner client and frozen test
+  untouched; only the non-frozen runner + its test changed this phase.
