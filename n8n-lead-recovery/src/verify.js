@@ -45,7 +45,8 @@ function gridHeaderMatches(grid, expected) {
 
 function analyzeGrid(grid, expectedColumns) {
   const headerOk = gridHeaderMatches(grid, expectedColumns);
-  const body = (grid || []).slice(1).filter((row) => row && row.length && normalize(row[0]) !== '');
+  const isBlankRow = (row) => !row || row.length === 0 || row.every((cell) => normalize(cell) === '');
+  const body = (grid || []).slice(1).filter((row) => !isBlankRow(row));
   const rows = body.map((row) => ({
     raw: row,
     obj: rowToObject(row, expectedColumns),
@@ -176,27 +177,15 @@ function buildReport({ fixtures, approvedGrid, verifiedGrid, outreachRows, clean
         mappingDetails.push(`${id}.${field}`);
       }
     }
-    if (!same(entry.obj.lead_score, verified.score)) {
+    if (!same(entry.obj.score, verified.score)) {
       mappingOk = false;
-      mappingDetails.push(`${id}.lead_score`);
-    }
-    if (!same(entry.obj.qualification_status, verified.qualification_status)) {
-      mappingOk = false;
-      mappingDetails.push(`${id}.qualification_status`);
+      mappingDetails.push(`${id}.score`);
     }
     for (const field of DEFAULT_EMPTY_FIELDS) {
       if (normalize(entry.obj[field]) !== '') {
         mappingOk = false;
         mappingDetails.push(`${id}.${field}`);
       }
-    }
-    if (normalize(entry.obj.outreach_status) !== 'not_ready') {
-      mappingOk = false;
-      mappingDetails.push(`${id}.outreach_status`);
-    }
-    if (normalize(entry.obj.outreach_channel) !== '') {
-      mappingOk = false;
-      mappingDetails.push(`${id}.outreach_channel`);
     }
     if (normalize(entry.obj.approved_at) === '') {
       mappingOk = false;

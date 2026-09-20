@@ -65,15 +65,12 @@ function buildApprovedRow(entry) {
     phone: entry.phone || '',
     email: entry.email || '',
     contact_name: entry.contact_name || '',
-    contact_title: entry.contact_title || '',
-    email_source: entry.email_source || '',
-    email_verified: entry.email_verified || '',
-    contact_form: entry.contact_form || '',
-    linkedin_url: entry.linkedin_url || '',
-    lead_score: entry.lead_score === undefined ? '' : String(entry.lead_score),
-    qualification_status: entry.qualification_status || '',
-    outreach_channel: entry.outreach_channel || '',
-    outreach_status: entry.outreach_status || 'not_ready',
+    score: entry.score === undefined
+      ? (entry.lead_score === undefined ? '' : String(entry.lead_score))
+      : String(entry.score),
+    status: entry.status === undefined
+      ? (entry.outreach_status || 'not_ready')
+      : (entry.status || 'not_ready'),
     approved_at: entry.approved_at || '',
     notes: entry.notes || '',
   };

@@ -11,7 +11,7 @@ const { OUTREACH_COLUMNS } = require('./reconcile');
  *   - queue: exactly one planning record per approved lead_id (identity = lead_id)
  *   - readiness: READY | NOT_READY | BLOCKED
  *   - available_channel: email | call | none
- *   - priority rank (lead_score desc, then approved_at asc, then lead_id)
+ *   - priority rank (score desc, then approved_at asc, then lead_id)
  *   - outreach history (count, last sent_at, latest channel/outcome)
  *   - exceptions: orphans, malformed approvals, malformed outreach
  *
@@ -21,14 +21,19 @@ const { OUTREACH_COLUMNS } = require('./reconcile');
  *   - The queue is a projection only: READY means "sufficient information for a
  *     future execution step", never "outreach was sent". Only Outreach Log can
  *     establish actual outreach activity.
- *   - Readiness vocabulary (queue-level, distinct from Approved outreach_status):
+ *   - Readiness vocabulary (queue-level, distinct from Approved status):
  *     READY | NOT_READY | BLOCKED. BLOCKED is used only for the one canonical
  *     blocking condition in the repository's status vocabulary: `suppressed`.
- *   - Channel determination (Outreach Log channel vocabulary: email | call):
- *       1. non-empty email_verified              -> email
- *       2. phone with >= 7 digits                -> call
- *       3. otherwise                             -> none (NOT_READY)
- *     Verified email is only established by `email_verified`. contact_form is NOT
+ *   - Channel determination (Approved `channel` column is authoritative when set,
+ *     then inference fallback when it is empty):
+ *       1. Approved `channel` = 'email'  -> email  (requires a non-empty email)
+ *       2. Approved `channel` = 'call'   -> call   (requires a usable phone)
+ *       3. channel empty -> inference:
+ *            a. non-empty email_verified        -> email (legacy evidence field)
+ *            b. phone with >= 7 digits          -> call
+ *            c. otherwise                       -> none (NOT_READY)
+ *     Verified email is only established by `email_verified` (legacy, no longer on
+ *     the live Approved sheet) or by the Approved `channel` column. contact_form is NOT
  *     treated as an outreach channel (no repository evidence).
  *   - Outreach Log rows imply history only when both lead_id and sent_at are
  *     present. Malformed rows cannot imply activity.
@@ -48,8 +53,7 @@ const QUEUE_FIELDS = [
   'city',
   'state',
   'country',
-  'lead_score',
-  'qualification_status',
+  'score',
   'available_channel',
   'readiness_status',
   'priority',
@@ -129,7 +133,7 @@ function isUsablePhone(record) {
 }
 
 function isSuppressed(record) {
-  return normalize(record.outreach_status) === 'suppressed';
+  return normalize(record.status) === 'suppressed';
 }
 
 /**
@@ -140,6 +144,19 @@ function isSuppressed(record) {
 function readinessFor(record) {
   if (isSuppressed(record)) {
     return { available_channel: CHANNEL.NONE, readiness_status: READINESS.BLOCKED, reason: 'suppressed' };
+  }
+  const requested = normalize(record.channel);
+  if (requested === 'email') {
+    if (normalize(record.email) !== '') {
+      return { available_channel: CHANNEL.EMAIL, readiness_status: READINESS.READY, reason: 'channel email with address' };
+    }
+    return { available_channel: CHANNEL.NONE, readiness_status: READINESS.NOT_READY, reason: 'channel email but no email address' };
+  }
+  if (requested === 'call') {
+    if (isUsablePhone(record)) {
+      return { available_channel: CHANNEL.CALL, readiness_status: READINESS.READY, reason: 'channel call with usable phone' };
+    }
+    return { available_channel: CHANNEL.NONE, readiness_status: READINESS.NOT_READY, reason: 'channel call but phone not usable' };
   }
   if (isVerifiedEmail(record)) {
     return { available_channel: CHANNEL.EMAIL, readiness_status: READINESS.READY, reason: 'verified email available' };
@@ -162,7 +179,7 @@ function buildApprovalIndex(rows) {
     const leadId = normalize(row.lead_id);
     const approvedAt = normalize(row.approved_at);
     if (!leadId || !approvedAt) {
-      malformed.push({ lead_id: leadId, business_name: normalize(row.business_name), outreach_status: normalize(row.outreach_status), approved_at: approvedAt });
+      malformed.push({ lead_id: leadId, business_name: normalize(row.business_name), status: normalize(row.status), approved_at: approvedAt });
       return;
     }
     if (index.has(leadId)) {
@@ -234,7 +251,7 @@ function findOrphans(historyIndex, approvalIndex) {
 }
 
 function sortLeads(a, b) {
-  const scoreDiff = parseScore(b.row.lead_score) - parseScore(a.row.lead_score);
+  const scoreDiff = parseScore(b.row.score) - parseScore(a.row.score);
   if (scoreDiff !== 0) return scoreDiff;
   if (a.approvedAt < b.approvedAt) return -1;
   if (a.approvedAt > b.approvedAt) return 1;
@@ -259,8 +276,7 @@ function buildQueue(approvalIndex, historyIndex, queuedAt) {
       city: normalize(row.city),
       state: normalize(row.state),
       country: normalize(row.country),
-      lead_score: normalize(row.lead_score),
-      qualification_status: normalize(row.qualification_status),
+      score: normalize(row.score),
       available_channel: readiness.available_channel,
       readiness_status: readiness.readiness_status,
       priority: i + 1,
@@ -314,7 +330,7 @@ function buildExceptions({ runId, orphans, malformedApprovals, malformedOutreach
       run_id: runId,
       lead_id: m.lead_id,
       business_name: m.business_name,
-      approved_status: m.outreach_status,
+      approved_status: m.status,
       exception_type: EXCEPTION_TYPE.MALFORMED_APPROVAL,
       severity: SEVERITY.ERROR,
       details: 'approved row missing lead_id or approved_at',

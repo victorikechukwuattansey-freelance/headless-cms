@@ -16,6 +16,7 @@ const { GoogleSheetsClient, GoogleSheetsError } = require('../src/google-sheets-
 
 const APPROVED_TAB = 'Approved Outreach';
 const OUTREACH_TAB = 'Outreach Log';
+const APPROVED_LEAD_COL = APPROVED_COLUMNS.indexOf('lead_id');
 
 const DEFAULT_SCENARIO = 'TEST-EXEC-001';
 const DEFAULT_MODE = 'DRY_RUN';
@@ -129,7 +130,7 @@ async function seed(env, client, args) {
   assertLiveableScenario(scenario);
 
   const approvedGrid = await client.listRows(APPROVED_TAB);
-  const approvedIds = new Set(approvedGrid.map((r) => String(r[0] ?? '').trim()).filter(Boolean));
+  const approvedIds = new Set(approvedGrid.map((r) => String(r[APPROVED_LEAD_COL] ?? '').trim()).filter(Boolean));
   const approvedToAppend = scenario.approvedRows
     .filter((r) => !approvedIds.has(r.lead_id))
     .map((r) => APPROVED_COLUMNS.map((c) => (r[c] === undefined || r[c] === null ? '' : String(r[c]))));
@@ -164,7 +165,7 @@ function executionScoped({ approvedRows, outreachRows, mode, provider, messageVa
 async function runLocal(client, args) {
   const scenario = loadExecutionFixtures().find((f) => f.id === args.scenario);
   const messageVariants = scenario ? scenario.message_variants : {};
-  const approvedRows = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, 0).map((r) => r.obj);
+  const approvedRows = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, APPROVED_LEAD_COL).map((r) => r.obj);
   const outreachRows = rowsForNamespace(await client.listRows(OUTREACH_TAB), OUTREACH_COLUMNS, 1).map((r) => r.obj);
   const report = await executionScoped({ approvedRows, outreachRows, mode: args.mode, provider: args.provider, messageVariants });
 
@@ -324,7 +325,7 @@ async function buildVerifyOutcome({ approvedGrid, outreachGrid, scenario, mode, 
     });
   }
 
-  const approved = rowsForNamespace(approvedGrid, APPROVED_COLUMNS, 0);
+  const approved = rowsForNamespace(approvedGrid, APPROVED_COLUMNS, APPROVED_LEAD_COL);
   const outreach = rowsForNamespace(outreachGrid, OUTREACH_COLUMNS, 1);
   const actualRun = await executionScoped({
     approvedRows: approved.map((r) => r.obj),
@@ -409,7 +410,7 @@ function printOutcome(outcome, title) {
 }
 
 async function cleanup(env, client, args) {
-  const approved = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, 0);
+  const approved = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, APPROVED_LEAD_COL);
   const outreach = rowsForNamespace(await client.listRows(OUTREACH_TAB), OUTREACH_COLUMNS, 1);
   for (const row of [...approved, ...outreach]) assertNamespacedExecution(row.leadId);
   const total = approved.length + outreach.length;
@@ -425,7 +426,7 @@ async function cleanup(env, client, args) {
   await client.deleteRows(APPROVED_TAB, approved.map((r) => r.index));
   await client.deleteRows(OUTREACH_TAB, outreach.map((r) => r.index));
 
-  const after = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, 0).length
+  const after = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, APPROVED_LEAD_COL).length
     + rowsForNamespace(await client.listRows(OUTREACH_TAB), OUTREACH_COLUMNS, 1).length;
   if (after !== 0) {
     console.error(`[cleanup] FAIL: ${after} TEST-EXEC rows remain after delete.`);
@@ -436,7 +437,7 @@ async function cleanup(env, client, args) {
 }
 
 async function verifyFinal(client) {
-  const approved = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, 0);
+  const approved = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, APPROVED_LEAD_COL);
   const outreach = rowsForNamespace(await client.listRows(OUTREACH_TAB), OUTREACH_COLUMNS, 1);
   const total = approved.length + outreach.length;
   const ok = total === 0;

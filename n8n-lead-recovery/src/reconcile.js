@@ -133,7 +133,7 @@ function buildApprovedIndex(approvedObjects) {
       malformed.push({
         lead_id: leadId,
         business_name: normalize(row.business_name),
-        outreach_status: normalize(row.outreach_status),
+        status: normalize(row.status),
         approved_at: approvedAt,
         reason: leadId ? 'missing approved_at' : 'missing lead_id',
         index: i,
@@ -155,9 +155,7 @@ function buildApprovedIndex(approvedObjects) {
       lead_id: leadId,
       business_name: normalize(row.business_name),
       niche: normalize(row.niche),
-      qualification_status: normalize(row.qualification_status),
-      outreach_channel: normalize(row.outreach_channel),
-      outreach_status: normalize(row.outreach_status),
+      status: normalize(row.status),
       approved_at: approvedAt,
       index: i,
       row,
@@ -267,7 +265,7 @@ function classifyApprovals(approvedIndex, outreachIndex) {
       first_sent_at: oEntry ? oEntry.first_sent_at : '',
       latest_sent_at: oEntry ? oEntry.latest_sent_at : '',
       channels: oEntry ? oEntry.channels : [],
-      outreach_status: entry.outreach_status,
+      status: entry.status,
     });
   }
   results.sort(sortByLeadId);
@@ -280,18 +278,18 @@ function findStatusMismatches(approvedIndex, outreachIndex) {
     const oEntry = outreachIndex.get(entry.lead_id);
     const outreachCount = oEntry ? oEntry.count : 0;
     const hasActivity = outreachCount > 0;
-    const status = entry.outreach_status;
+    const status = entry.status;
     let reason = '';
     if (STATUS_POST_SEND.has(status) && !hasActivity) {
-      reason = `outreach_status "${status}" implies outreach activity but none is logged in Outreach Log`;
+      reason = `status "${status}" implies outreach activity but none is logged in Outreach Log`;
     } else if (hasActivity && STATUS_PRE_SEND.has(status)) {
-      reason = `outreach activity is logged in Outreach Log while outreach_status remains "${status}"`;
+      reason = `outreach activity is logged in Outreach Log while status remains "${status}"`;
     }
     if (!reason) continue;
     mismatches.push({
       lead_id: entry.lead_id,
       business_name: entry.business_name,
-      outreach_status: status,
+      status,
       outreach_count: outreachCount,
       first_sent_at: oEntry ? oEntry.first_sent_at : '',
       latest_sent_at: oEntry ? oEntry.latest_sent_at : '',
@@ -321,7 +319,7 @@ function findOrphans(outreachIndex, approvedIndex) {
 function countNonCanonicalStatuses(approvedIndex) {
   let n = 0;
   for (const entry of approvedIndex.values()) {
-    if (!KNOWN_STATUS_SET.has(entry.outreach_status)) n += 1;
+    if (!KNOWN_STATUS_SET.has(entry.status)) n += 1;
   }
   return n;
 }
@@ -356,7 +354,7 @@ function buildExceptions({ runId, detectedAt, mismatches, orphans, malformedAppr
       business_name: m.business_name,
       exception_type: EXCEPTION_TYPE.STATUS_MISMATCH,
       severity: SEVERITY.WARNING,
-      approved_status: m.outreach_status,
+      approved_status: m.status,
       outreach_count: m.outreach_count,
       first_sent_at: m.first_sent_at,
       latest_sent_at: m.latest_sent_at,
@@ -404,7 +402,7 @@ function buildExceptions({ runId, detectedAt, mismatches, orphans, malformedAppr
       business_name: m.business_name,
       exception_type: EXCEPTION_TYPE.MALFORMED_APPROVAL,
       severity: SEVERITY.ERROR,
-      approved_status: m.outreach_status || '',
+      approved_status: m.status || '',
       outreach_count: 0,
       first_sent_at: '',
       latest_sent_at: '',
