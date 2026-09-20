@@ -29,7 +29,11 @@
  *                   >=200ms pacing) else zero-credit OSS fallback (injected
  *                   resolver; @absolutejs/enrich findEmail discovery-only when
  *                   a contact name exists; otherwise oss_unavailable / no-name
- *                   envelopes that never fabricate an accepted email).
+ *                   envelopes — a lead with no contact name is BLOCKED
+ *                   (blocked: true, notes: oss_no_name), never a fabricated
+ *                   accepted email; a name that resolves to nothing stays NOT
+ *                   blocked (blocked: false, notes: oss_no_results). Neither
+ *                   path ever fabricates an accepted email).
  *   5. WRITE      — EXECUTE only. Appends new Contact Enrichment Log rows
  *                   (A–N), write-backs cache_hit_count bumps, updates ONLY the
  *                   enrichment-owned Approved Outreach columns V (contact_
@@ -118,6 +122,34 @@ function namespaceForArgs(args) {
   return `${TEST_NAMESPACE_PREFIX}-${defaultRunToken()}`;
 }
 
+const VALID_SCOPES = new Set(['test', 'production']);
+
+function scopeForArgs(args) {
+  const requested = String((args && args.scope) || 'test').trim().toLowerCase();
+  if (!VALID_SCOPES.has(requested)) {
+    throw new Error(`unknown scope "${requested}" (valid: ${[...VALID_SCOPES].join('|')})`);
+  }
+  return requested;
+}
+
+const COUNTRY_ALIASES = new Map([
+  ['USA', 'US'],
+  ['UNITED STATES', 'US'],
+  ['UNITED STATES OF AMERICA', 'US'],
+  ['U.S.A.', 'US'],
+  ['U.S.', 'US'],
+  ['UK', 'GB'],
+  ['UNITED KINGDOM', 'GB'],
+  ['GREAT BRITAIN', 'GB'],
+  ['CANADA', 'CA'],
+]);
+
+function normalizeCountry(value) {
+  const v = String(value || '').trim().toUpperCase();
+  if (v === '') return '';
+  return COUNTRY_ALIASES.get(v) || v;
+}
+
 function isNamespacedLead(leadId) {
   return NAMESPACED_LEAD_REGEX.test(String(leadId).trim());
 }
@@ -134,7 +166,7 @@ function parseCountryList(raw) {
   if (value === '') return [];
   return value
     .split(',')
-    .map((c) => String(c).trim().toUpperCase())
+    .map((c) => normalizeCountry(c))
     .filter(Boolean);
 }
 
@@ -142,14 +174,16 @@ function parseCountryList(raw) {
 // ENRICHMENT_COUNTRIES_ALLOW (comma-separated ISO-3166 alpha-2, default "US";
 // "*" or empty = allow all) and ENRICHMENT_COUNTRIES_DENY (default none;
 // deny wins), replacing the previous hard-coded US-only filter. Fail-closed:
-// a missing/blank country is never in scope. This policy lives in the runner
+// a missing/blank country is never in scope. H.9.2: input and allow/deny
+// entries are normalized via normalizeCountry (US/UK/CANADA aliases to their
+// alpha-2 codes) before comparison. This policy lives in the runner
 // (src/enrichment-schema.js is frozen and continues to ship US_COUNTRIES /
 // isUsCountry for the built workflows).
 function isCountryInScope(country, { allow, deny } = {}) {
-  const normalized = normalize(country).toUpperCase();
+  const normalized = normalizeCountry(country);
   if (normalized === '') return false; // fail-closed
-  const allowList = (allow || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean);
-  const denyList = (deny || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean);
+  const allowList = (allow || []).map((c) => normalizeCountry(c)).filter(Boolean);
+  const denyList = (deny || []).map((c) => normalizeCountry(c)).filter(Boolean);
   if (denyList.includes(normalized)) return false;
   if (allowList.includes('*')) return true;
   if (allowList.length === 0) return true; // empty allow = allow all
@@ -401,7 +435,7 @@ function resolveOssEmail(pkg, domain, lead, options) {
     return { envelopes: [], blocked: true, notes: 'oss_unavailable' };
   }
   if (!fullName) {
-    return { envelopes: [], blocked: false, notes: 'oss_no_name' };
+    return { envelopes: [], blocked: true, notes: 'oss_no_name' };
   }
   let result = null;
   try {
@@ -560,6 +594,19 @@ async function runEnrichment(env, args = {}, deps = {}) {
   const outcomes = { stages: {}, failures: [] };
   const ns = namespaceForArgs(args);
   const provider = providerForArgs(args, env) || config.provider;
+
+  const requestedScope = scopeForArgs(args);
+  const productionConfirmed = String((env && env.BIZ_ENRICH_ALLOW_PRODUCTION) || '').trim() === '1';
+
+  /* REFUSED guard runs FIRST — before any client init, sheet read, or write —
+     so a requested-but-unconfirmed production write never touches the network. */
+  if (args.execute && requestedScope === 'production' && !productionConfirmed) {
+    outcomes.stages.write = 'REFUSED';
+    outcomes.failures.push('refusing production write: set BIZ_ENRICH_ALLOW_PRODUCTION=1 to confirm');
+    const report = buildRunReport({ args, env, outcomes, startedAt, completedAt: new Date().toISOString(), ns, provider });
+    writeRunReport(report.redacted, args);
+    return { status: 'FAIL', stages: outcomes.stages, report: report.redacted };
+  }
 
   /* Build the Sheets surface BEFORE preflight so check D/E verifies the real
      headers instead of always failing with "no Sheets client available". */
@@ -769,7 +816,8 @@ async function runEnrichment(env, args = {}, deps = {}) {
   };
 
   outcomes.stages.enrich = 'PASS';
-  outcomes.stages.write = args.execute ? (writeOutcome.appended || writeOutcome.bumped || writeOutcome.updated_vw ? 'PASS' : 'DRY_RUN') : 'DRY_RUN';
+  const wrote = Boolean(writeOutcome.appended || writeOutcome.bumped || writeOutcome.updated_vw);
+  outcomes.stages.write = !args.execute ? 'DRY_RUN' : wrote ? 'PASS' : 'NO_ELIGIBLE';
   outcomes.stages.report = 'PASS';
 
   const runId = `ENRICH-LIVE-${ns.replace(/^TEST-ENRICH-LIVE-/, '')}-${Math.round(new Date().getTime() / 1000).toString(16)}`;
@@ -900,10 +948,14 @@ function buildRunReport({ args = {}, env = {}, outcomes = {}, startedAt, complet
   const config = readConfig(env || args.env || {});
   const namespace = ns || namespaceForArgs(args);
   const run_id = runId || `ENRICH-LIVE-${namespace.replace(/^TEST-ENRICH-LIVE-/, '')}-${Math.round(new Date(startedAt || Date.now()).getTime() / 1000).toString(16)}`;
+  const requestedScope = scopeForArgs(args);
   const report = {
     artifact: 'Contact Enrichment V1 — engine-direct live runner (H.8b)',
     run_id,
     mode: args.execute ? 'EXECUTE' : 'DRY_RUN',
+    requested_scope: requestedScope,
+    effective_scope: args.execute ? requestedScope : 'dry_run',
+    production_confirmed: String((env || args.env || {}).BIZ_ENRICH_ALLOW_PRODUCTION || '').trim() === '1',
     started_at: startedAt,
     completed_at: completedAt,
     provider: provider || config.provider || DEFAULT_PROVIDER,
@@ -976,6 +1028,7 @@ function parseArgs(argv) {
     provider: '',
     namespace: '',
     reportsDir: DEFAULT_REPORTS_DIR,
+    scope: 'test',
   };
   for (const arg of argv || []) {
     if (arg === '--execute') args.execute = true;
@@ -988,6 +1041,7 @@ function parseArgs(argv) {
       args.leadIds = arg.split('=')[1].split(',').map((id) => id.trim()).filter(Boolean);
     } else if (arg.startsWith('--provider=')) args.provider = arg.split('=')[1].trim();
     else if (arg.startsWith('--namespace=')) args.namespace = arg.split('=')[1].trim();
+    else if (arg.startsWith('--scope=')) args.scope = arg.split('=')[1].trim();
     else if (arg.startsWith('--reports-dir=')) args.reportsDir = arg.split('=')[1].trim();
   }
   return args;
@@ -1004,9 +1058,16 @@ Default mode is DRY_RUN: read-only, nothing written without --execute.
 Flags:
   --execute              allow actual spreadsheet writes (append log rows,
                          cache-hit write-back, Approved Outreach V/W updates).
-                         Writes are NAMESPACE-GUARDED: only lead_ids under
-                         TEST-ENRICH-LIVE-<tag> are ever written; there is NO
-                         --allow-production-writes.
+                         Writes are NAMESPACE-GUARDED in test scope: only
+                         lead_ids under TEST-ENRICH-LIVE-<tag> are ever written.
+  --scope=<test|production>
+                         write scope in --execute mode (default "test").
+                         test: only lead_ids under TEST-ENRICH-LIVE-<tag>- are
+                         ever written (original namespace guard).
+                         production: writes are allowed, but only when
+                         BIZ_ENRICH_ALLOW_PRODUCTION=1 is present in the
+                         environment (the run REFUSES otherwise). In DRY_RUN
+                         mode --scope is reported but no write happens.
   --limit=<N>            max eligible leads to enrich (default ${DEFAULT_LIMIT})
   --lead-ids=<id>,<id>   restrict to these lead_ids (others => out_of_scope)
   --provider=<name>      agentdata | hunter (default: ENRICHMENT_PROVIDER or
@@ -1024,7 +1085,8 @@ Env (see .env.example):
   ENRICHMENT_MIN_SCORE (default ${HUNTER_MIN_SCORE}),
   ENRICHMENT_COUNTRIES_ALLOW (comma-separated ISO-3166 alpha-2, default "US";
     "*" or empty = allow all),
-  ENRICHMENT_COUNTRIES_DENY (default none; deny wins)
+  ENRICHMENT_COUNTRIES_DENY (default none; deny wins),
+  BIZ_ENRICH_ALLOW_PRODUCTION (required to confirm --scope=production writes)
 
 Exit codes: 0 PASS, 1 FAIL, 3 NOT_CONFIGURED.
 `;
@@ -1090,6 +1152,7 @@ const e = {
   TEST_NAMESPACE_PREFIX,
   TEST_NAMESPACE_REGEX,
   NAMESPACED_LEAD_REGEX,
+  VALID_SCOPES,
   EXCLUSION_REASONS,
   PREFLIGHT_APPROVED_COLUMNS,
   ENRICHMENT_LOG_COLUMNS,
@@ -1101,9 +1164,11 @@ const e = {
   providerForArgs,
   parseCountryList,
   isCountryInScope,
+  normalizeCountry,
   namespaceForArgs,
   defaultRunToken,
   isNamespacedLead,
+  scopeForArgs,
   // client surface
   clientFor,
   surfaceFor,
