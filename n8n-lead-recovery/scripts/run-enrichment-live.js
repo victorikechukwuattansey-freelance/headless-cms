@@ -803,13 +803,16 @@ async function runEnrichment(env, args = {}, deps = {}) {
 
   const vwCells = approvedVwCells(approvedRows, enrichedRows, scope);
 
+  const effectiveScope = args.execute ? requestedScope : 'dry_run';
+  const inWriteScope = (leadId) => (effectiveScope === 'production' ? true : isNamespacedLead(leadId));
+
   if (args.execute) {
     writeAttempted = true;
     if (!nsStartsWithTestNs(ns) && nsDoesNotExistConfig(ns)) {
       outcomes.failures.push(`namespace ${ns} not in ${TEST_NAMESPACE_PREFIX}-<tag> form; refuse to execute`);
     } else {
-      const safeLogRows = appendRows.filter((r) => isNamespacedLead(r.lead_id));
-      const safeBumpCells = bumpCells.filter((c) => isNamespacedLead(c.lead_id));
+      const safeLogRows = appendRows.filter((r) => inWriteScope(r.lead_id));
+      const safeBumpCells = bumpCells.filter((c) => inWriteScope(c.lead_id));
       for (const r of safeLogRows) {
         await client.appendRows(LOG_TAB, [objectToRow(r, ENRICHMENT_LOG_COLUMNS)].map((row) => row));
         writeOutcome.appended += 1;
@@ -819,7 +822,7 @@ async function runEnrichment(env, args = {}, deps = {}) {
         await client.updateCells(LOG_TAB, cells);
         writeOutcome.bumped += cells.length;
       }
-      const safeVw = vwCells.filter((c) => isNamespacedLead(c.lead_id));
+      const safeVw = vwCells.filter((c) => inWriteScope(c.lead_id));
       if (safeVw.length) {
         await client.updateCells(APPROVED_TAB, safeVw.map((c) => ({ dataRow: c.dataRow, colIndex: c.colIndex, value: c.value })));
         writeOutcome.updated_vw += safeVw.length;

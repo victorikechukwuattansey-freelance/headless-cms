@@ -1261,6 +1261,116 @@ describe('H.9.4 — write scope guard, write labels, and report fields', () => {
   });
 });
 
+describe('H.9.4c — scope-aware write filter', () => {
+  it('test scope + --execute keeps the isNamespacedLead filter (production lead skipped)', async () => {
+    const mock = makeMock([
+      leadRow({ lead_id: `${NS}-001`, website: 'https://acme.example' }),
+      leadRow({ lead_id: 'FSQ-PHONE-001', website: 'https://real.example' }),
+    ]);
+    const { transport, calls } = captureTransport();
+    const dir = tmpDir();
+    const { d } = buildDeps({
+      byDomain: { 'acme.example': emailResult('j@acme.example'), 'real.example': emailResult('r@real.example') },
+      client: mock,
+      transport,
+    });
+    const out = await R.runEnrichment(ENV_READY, { namespace: NS, execute: true, scope: 'test', reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    const r = out.report;
+    assert.equal(r.effective_scope, 'test');
+    assert.equal(r.log_rows_appended, 1); // only the namespaced acme row appended
+    assert.equal(r.log_rows_would_append, 2);
+    assert.equal(r.approved_outreach_updated_vw, 1);
+    assert.equal(r.approved_outreach_would_update_vw, 2);
+    const logLeadIds = mock.listRows(R.LOG_TAB).slice(1).map((row) => String(row[2]));
+    assert.deepEqual(logLeadIds, [`${NS}-001`]);
+    const urls = calls.map((c) => c.url);
+    assert.equal(urls.length, 1);
+    assert.ok(urls[0].includes('!V2'), urls[0]);
+  });
+
+  it('production scope + --execute + confirmed env writes production lead_ids', async () => {
+    const mock = makeMock([
+      leadRow({ lead_id: 'FSQ-PHONE-001', website: 'https://acme.example' }),
+      leadRow({ lead_id: 'FSQ-PHONE-002', website: 'https://beta.example' }),
+    ]);
+    const { transport, calls } = captureTransport();
+    const dir = tmpDir();
+    const { d } = buildDeps({
+      byDomain: { 'acme.example': emailResult('j@acme.example'), 'beta.example': emailResult('k@beta.example') },
+      client: mock,
+      transport,
+    });
+    const out = await R.runEnrichment({ ...ENV_READY, BIZ_ENRICH_ALLOW_PRODUCTION: '1' }, { namespace: NS, execute: true, scope: 'production', reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    assert.equal(out.stages.write, 'PASS');
+    const r = out.report;
+    assert.equal(r.production_confirmed, true);
+    const logRows = mock.listRows(R.LOG_TAB).slice(1);
+    assert.equal(logRows.length, 2);
+    const keys = logRows.map((row) => String(row[1]));
+    assert.ok(keys.includes('acme.example::agentdata'), keys);
+    assert.ok(keys.includes('beta.example::agentdata'), keys);
+    const logLeadIds = logRows.map((row) => String(row[2]));
+    assert.deepEqual(logLeadIds.sort(), ['FSQ-PHONE-001', 'FSQ-PHONE-002']);
+    assert.ok(calls.some((c) => c.url.includes('!V')), 'V cells written for production leads');
+  });
+
+  it('production scope + --execute writes BOTH test and production lead_ids; count == eligible', async () => {
+    const mock = makeMock([
+      leadRow({ lead_id: 'FSQ-PHONE-001', website: 'https://acme.example' }),
+      leadRow({ lead_id: `${NS}-002`, website: 'https://beta.example' }),
+    ]);
+    const { transport, calls } = captureTransport();
+    const dir = tmpDir();
+    const { d } = buildDeps({
+      byDomain: { 'acme.example': emailResult('j@acme.example'), 'beta.example': emailResult('k@beta.example') },
+      client: mock,
+      transport,
+    });
+    const out = await R.runEnrichment({ ...ENV_READY, BIZ_ENRICH_ALLOW_PRODUCTION: '1' }, { namespace: NS, execute: true, scope: 'production', reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    const r = out.report;
+    assert.equal(r.stats.eligible, 2);
+    assert.equal(r.log_rows_appended, 2, 'write count equals the total eligible lead count');
+    assert.equal(r.log_rows_appended, r.stats.eligible);
+    assert.equal(r.approved_outreach_updated_vw, 2);
+    const logLeadIds = mock.listRows(R.LOG_TAB).slice(1).map((row) => String(row[2]));
+    assert.deepEqual(logLeadIds.sort(), ['FSQ-PHONE-001', `${NS}-002`]);
+    const namespacedWrites = calls.filter((c) => c.url.includes('Approved'));
+    assert.ok(namespacedWrites.length > 0, 'both leads flow through the write block');
+  });
+
+  it('H.9.4c regression — 3 production leads in production scope are all written (was empty pre-fix)', async () => {
+    const mock = makeMock([
+      leadRow({ lead_id: 'FSQ-PHONE-011', website: 'https://acme.example' }),
+      leadRow({ lead_id: 'FSQ-PHONE-012', website: 'https://beta.example' }),
+      leadRow({ lead_id: 'FSQ-PHONE-013', website: 'https://gamma.example' }),
+    ]);
+    const { transport, calls } = captureTransport();
+    const dir = tmpDir();
+    const { d } = buildDeps({
+      byDomain: {
+        'acme.example': emailResult('a@acme.example'),
+        'beta.example': emailResult('b@beta.example'),
+        'gamma.example': emailResult('c@gamma.example'),
+      },
+      client: mock,
+      transport,
+    });
+    const out = await R.runEnrichment({ ...ENV_READY, BIZ_ENRICH_ALLOW_PRODUCTION: '1' }, { namespace: NS, execute: true, scope: 'production', reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    const r = out.report;
+    assert.equal(r.write_attempted, true);
+    assert.ok(r.log_rows_appended > 0, 'write block must not be empty (production scope)');
+    assert.equal(r.log_rows_appended, 3, 'all three production log rows appended');
+    assert.equal(r.approved_outreach_updated_vw, 3, 'all three V cells updated');
+    // appends are local to the mock; transport sees only the V/W PUT cells
+    assert.equal(calls.length, 3, 'one V update per production lead');
+    for (const c of calls) assert.equal(c.method, 'PUT');
+  });
+});
+
 describe('Phase 5 security-gate literal scan', () => {
   it('runner source has no random ids or secret-looking literals', () => {
     const src = fs.readFileSync(path.join(REPO_ROOT, 'scripts', 'run-enrichment-live.js'), 'utf8');
