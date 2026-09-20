@@ -1002,6 +1002,83 @@ describe('Dedup & Prepare Verified (aggregation)', () => {
     assert.equal(items.length, 1);
     assert.equal(items[0].json._noNewVerified, true);
   });
+
+  /*
+   * R9 pairedItem lineage contract.
+   *
+   * `Dedup & Prepare Verified` receives MULTIPLE items and returns NEW items
+   * with an UNEQUAL count (it drops duplicates and skips keyless rows). n8n's
+   * automatic item linking cannot guess this mapping, so a Code node MUST set
+   * `pairedItem` or the thread breaks — the live symptom was
+   * `$('Set Status Running').item` in `Update Status Completed` throwing
+   * "Paired item data for item from node 'Dedup & Prepare Verified' is
+   * unavailable." These tests pin the exact index each emitted item links to.
+   */
+  it('emits pairedItem pointing each verified row at the input index that produced it', () => {
+    const { items } = runDedup(
+      [
+        { json: { business_name: 'A', dedupe_key: 'phone:1' } },
+        { json: { business_name: 'B', dedupe_key: '' } },
+        { json: { business_name: 'C', dedupe_key: 'phone:1' } },
+        { json: { business_name: 'D', dedupe_key: 'phone:2' } },
+      ],
+      [],
+    );
+
+    assert.deepEqual(items.map((i) => i.json.business_name), ['A', 'D']);
+    assert.deepEqual(
+      items.map((i) => i.pairedItem),
+      [{ item: 0 }, { item: 3 }],
+      'each verified row must link back to its own source input index',
+    );
+  });
+
+  it('keeps the surviving cross-provider duplicate linked to the first emitted input (FSQ wins)', () => {
+    const fx = F['TEST-PF-DEDUP-001'];
+    const fsq = rawLeads(run('Process FSQ', {
+      inputItems: [{ json: fx.foursquare_response }],
+      nodeData: { 'Build FSQ API Query': [{ json: fx.search_input }] },
+    }).items);
+    const gpl = rawLeads(run('Process GPL', {
+      inputItems: [{ json: fx.gpl_envelope }],
+      nodeData: { 'Build GPL API Query': [{ json: fx.search_input }] },
+    }).items);
+
+    const inputItems = [...fsq.map((json) => ({ json })), ...gpl.map((json) => ({ json }))];
+    const { items } = runDedup(inputItems, []);
+
+    const dupe = items.find((i) => i.json.dedupe_key === fx.expected.cross_provider_dupe_key);
+    assert.equal(dupe.json.source, 'FOURSQUARE');
+    const expectedIndex = inputItems.findIndex(
+      (i) => i.json.dedupe_key === fx.expected.cross_provider_dupe_key,
+    );
+    assert.equal(dupe.pairedItem.item, expectedIndex, 'surviving duplicate links to its first occurrence');
+  });
+
+  it('links the _noNewVerified sentinel to input index 0 when inputs exist', () => {
+    const { items } = runDedup(
+      [
+        { json: { business_name: 'B', dedupe_key: 'website:existing.com' } },
+        { json: { business_name: 'C', dedupe_key: 'website:other.com' } },
+      ],
+      ['website:existing.com', 'website:other.com'],
+    );
+
+    assert.equal(items.length, 1);
+    assert.equal(items[0].json._noNewVerified, true);
+    assert.deepEqual(items[0].pairedItem, { item: 0 }, 'sentinel must keep a resolvable thread');
+  });
+
+  it('omits pairedItem on the sentinel only when Dedup received no input items', () => {
+    const { items } = runDedup([], []);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].json._noNewVerified, true);
+    assert.equal(
+      items[0].pairedItem,
+      undefined,
+      'no input items exist to link to in the degenerate alwaysOutputData case',
+    );
+  });
 });
 
 describe('Prompt A.12 single canonical phone normalization (R8)', () => {

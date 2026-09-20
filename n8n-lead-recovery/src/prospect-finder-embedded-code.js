@@ -25,8 +25,15 @@
  *  dedupe keys collide for US numbers. Replaces the C-B phone-key `+`-keeping
  *  branch. `Cache Dedup Keys` and `Process GPL` deliberately keep their `+`
  *  form (A.12 scope); the cross-run/GPL key interplay is documented in
- *  reports/PROSPECT-FINDER-A12-PHONE-NORMALIZATION-REPORT.md. Current artifact
- *  SHA-256 is computed by the builder.
+ *  reports/PROSPECT-FINDER-A12-PHONE-NORMALIZATION-REPORT.md. Revised for R9
+ *  (pairedItem lineage fix): `Dedup & Prepare Verified` now sets `pairedItem`
+ *  on every emitted item — verified rows link to the input index that produced
+ *  them, and the `_noNewVerified` sentinel links to input index 0 when any
+ *  input exists. n8n cannot auto-link a Code node's new, unequal-count output,
+ *  so the missing `pairedItem` broke `$('Set Status Running').item` in
+ *  `Update Status Completed` ("Paired item data ... is unavailable"). No dedupe
+ *  business logic, field, or topology change. Current artifact SHA-256 is
+ *  computed by the builder.
  */
 
 const CANONICAL_PHONE_NORMALIZER = [
@@ -125,7 +132,8 @@ const CODE_BY_NODE = {
     "const verified = [];",
     "const seenThisRun = new Set();",
     "",
-    "for (const item of items) {",
+    "for (let index = 0; index < items.length; index++) {",
+    "  const item = items[index];",
     "  const lead = item.json;",
     "",
     "  const key = String(lead.dedupe_key || '').trim();",
@@ -160,17 +168,30 @@ const CODE_BY_NODE = {
     "      dedupe_key: key,",
     "      verified_at: new Date().toISOString(),",
     "      manual_review_notes: ''",
-    "    }",
+    "    },",
+    "    // n8n item linking: link this output to the input item it came from.",
+    "    // A Code node returning new, unequal-count items must set pairedItem,",
+    "    // otherwise $('...').item downstream loses the thread (Paired item data",
+    "    // ... is unavailable).",
+    "    pairedItem: { item: index }",
     "  });",
     "}",
     "",
     "if (verified.length === 0) {",
-    "  return [{",
+    "  const sentinel = {",
     "    json: {",
     "      _noNewVerified: true,",
     "      _message: 'All leads already exist in Verified Leads'",
     "    }",
-    "  }];",
+    "  };",
+    "",
+    "  // Every input of one loop iteration traces to the same upstream item, so",
+    "  // index 0 keeps $('Set Status Running').item resolvable downstream.",
+    "  if (items.length > 0) {",
+    "    sentinel.pairedItem = { item: 0 };",
+    "  }",
+    "",
+    "  return [sentinel];",
     "}",
     "",
     "return verified;",
