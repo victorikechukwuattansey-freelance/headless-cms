@@ -588,6 +588,43 @@ function resolutionForLead(rows, leadId) {
   return null;
 }
 
+async function liveProviderTransport(url, options) {
+  // fetch transport matching the client's frozen contract:
+  //   (url, options) => Promise<{ status, body }>
+  // omit empty headers entirely; body = await response.json().catch(() => null)
+  const opts = options || {};
+  const headers = opts.headers || {};
+  const response = await fetch(url, Object.keys(headers).length > 0 ? { headers } : undefined);
+  const body = await response.json().catch(() => null);
+  return { status: response.status, body };
+}
+
+function buildRunOutcomes({ enrichedRows = [], skippedRows = [], failedRows = [], provider = '' } = {}) {
+  // Merge the three engine buckets into one per_lead_outcomes array, each
+  // entry redaction-safe: result_email is later '<redacted>' by redact().
+  const enriched = (enrichedRows || []).map((lead) => ({
+    lead_id: String(lead.lead_id || ''),
+    outcome: 'enriched',
+    email_source: String(lead.email_source || lead.contact_source_provider || provider || ''),
+    result_email: lead.email || '',
+    result_verified: String(lead.email_verified || '').toUpperCase() === 'Y' ? 'TRUE' : 'FALSE',
+    wrote_vw: false,
+  }));
+  const skipped = (skippedRows || []).map((lead) => ({
+    lead_id: String(lead.lead_id || ''),
+    outcome: 'skipped',
+    enrichment_skip_reason: lead.enrichment_skip_reason || '',
+  }));
+  const failed = (failedRows || []).map((lead) => ({
+    lead_id: String(lead.lead_id || ''),
+    outcome: 'failed',
+    enrichment_failure_reason: lead.enrichment_failure_reason || '',
+  }));
+  return enriched
+    .concat(skipped, failed)
+    .sort((a, b) => String(a.lead_id || '').localeCompare(String(b.lead_id || '')));
+}
+
 async function runEnrichment(env, args = {}, deps = {}) {
   const config = readConfig(env);
   const startedAt = new Date().toISOString();
@@ -700,7 +737,7 @@ async function runEnrichment(env, args = {}, deps = {}) {
     contactClient = createContactClient({
       provider,
       apiKey,
-      transport: typeof transport === 'function' ? transport : undefined,
+      transport: typeof transport === 'function' ? transport : liveProviderTransport,
       sleep: deps && deps.sleep,
       clock: deps && deps.clock,
     });
@@ -752,15 +789,7 @@ async function runEnrichment(env, args = {}, deps = {}) {
   const bumpCells = diffCacheBumps(logRows, finalLog, client);
   const appendRows = diffNewLogRows(logRows, finalLog);
 
-  const perLeadOutcomes = enrichedRows.map((lead) => ({
-    lead_id: String(lead.lead_id || ''),
-    domain: lead.website || '',
-    provider: lead.contact_source_provider || provider,
-    escaped: false,
-    blocked: normalize(lead.contact_blocked).toUpperCase() === 'TRUE',
-    wrote_vw: false,
-    note: '',
-  }));
+  const perLeadOutcomes = buildRunOutcomes({ enrichedRows, skippedRows, failedRows, provider });
 
   const reportRows = buildReportRows({
     enrichedRows,
@@ -1174,6 +1203,7 @@ const e = {
   surfaceFor,
   updateValues,
   _tokenForAuth,
+  liveProviderTransport,
   // oss resolver
   loadEnrichPackage,
   resolverFor,
@@ -1185,6 +1215,7 @@ const e = {
   diffNewLogRows,
   approvedVwCells,
   sortByLeadId,
+  buildRunOutcomes,
   // phases
   preflight,
   runEnrichment,

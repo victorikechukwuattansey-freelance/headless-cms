@@ -107,8 +107,8 @@ describe('enrichment-live-runner export surface', () => {
   it('exposes the expected runner API', () => {
     for (const name of [
       'readConfig', 'isConfigured', 'providerForArgs', 'namespaceForArgs', 'defaultRunToken', 'isNamespacedLead',
-      'clientFor', 'surfaceFor', 'updateValues', '_tokenForAuth', 'loadEnrichPackage', 'resolverFor', 'resolveOssEmail',
-      'classifyLead', 'buildReportRows', 'diffCacheBumps', 'diffNewLogRows', 'approvedVwCells', 'sortByLeadId',
+      'clientFor', 'surfaceFor', 'updateValues', '_tokenForAuth', 'liveProviderTransport', 'loadEnrichPackage', 'resolverFor', 'resolveOssEmail',
+      'classifyLead', 'buildReportRows', 'buildRunOutcomes', 'diffCacheBumps', 'diffNewLogRows', 'approvedVwCells', 'sortByLeadId',
       'preflight', 'runEnrichment', 'run', 'redact', 'buildRunReport', 'writeRunReport', 'overallStatusOf',
       'parseArgs', 'usage', 'exitCodeForStatus', 'main',
     ]) assert.equal(typeof R[name], 'function', `${name} exported as function`);
@@ -328,9 +328,38 @@ describe('isCountryInScope (H.8c country policy)', () => {
 
   it('default allow list admits the listed countries case-insensitively', () => {
     assert.equal(scope('us', ['US']), true);
-    assert.equal(scope('USA', ['US']), false);   // exact alpha-2 match, no aliasing
     assert.equal(scope('CA', ['US', 'CA']), true);
     assert.equal(scope('MX', ['US']), false);
+  });
+
+  it('H.9.2 normalizes common variants to their alpha-2 equivalent before matching', () => {
+    assert.equal(scope('USA', ['US']), true);
+    assert.equal(scope('united states', ['US']), true);
+    assert.equal(scope('UNITED STATES OF AMERICA', ['US']), true);
+    assert.equal(scope('  USA  ', ['US']), true);
+    assert.equal(scope('U.S.A.', ['US']), true);
+    assert.equal(scope('U.S.', ['US']), true);
+    assert.equal(scope('UK', ['GB']), true);
+    assert.equal(scope('CANADA', ['US', 'CA']), true);
+  });
+
+  it('variants do not leak into unrelated markets', () => {
+    assert.equal(scope('Canada', ['US']), false);   // aliased to CA, not in allow
+    assert.equal(scope('Canada', ['US', 'CA']), true);
+    assert.equal(scope('UNITED STATES', ['CA']), false);
+  });
+
+  it('H.9.2 normalizes deny entries and applies them to aliased input', () => {
+    assert.equal(scope('USA', ['US', 'CA'], ['USA']), false);
+    assert.equal(scope('UK', ['GB', 'US'], ['UNITED KINGDOM']), false);
+    assert.equal(scope('GB', ['GB', 'US'], ['uk']), false);
+  });
+
+  it('valid alpha-2 codes keep their existing behaviour', () => {
+    assert.equal(scope('US', ['US']), true);
+    assert.equal(scope('CA', ['CA']), true);
+    assert.equal(scope('GB', ['GB']), true);
+    assert.equal(scope('FR', ['US']), false);
   });
 
   it('deny always wins, even when allow contains the country', () => {
@@ -608,6 +637,150 @@ describe('dry-run pipeline (no --execute)', () => {
   });
 });
 
+describe('H.9.3 — live transport default + per_lead_outcomes buckets', () => {
+  it('buildRunOutcomes merges enriched/skipped/failed buckets sorted by lead_id, redaction-safe keys', () => {
+    const rows = R.buildRunOutcomes({
+      enrichedRows: [
+        { lead_id: `${NS}-002`, email_source: 'oss', email: 's@beta.example', email_verified: 'Y', contact_source_provider: 'oss' },
+        { lead_id: `${NS}-001`, email_source: 'agentdata', email: 'john@acme.example', email_verified: '', contact_source_provider: 'agentdata' },
+      ],
+      skippedRows: [{ lead_id: `${NS}-003`, enrichment_skip_reason: 'no_domain' }],
+      failedRows: [{ lead_id: `${NS}-004`, enrichment_failure_reason: 'AgentData: rate limited' }],
+      provider: 'agentdata',
+    });
+    assert.deepEqual(rows.map((r) => r.lead_id), [`${NS}-001`, `${NS}-002`, `${NS}-003`, `${NS}-004`]);
+    assert.equal(rows[0].outcome, 'enriched');
+    assert.equal(rows[0].email_source, 'agentdata');
+    assert.equal(rows[0].result_email, 'john@acme.example');
+    assert.equal(rows[0].result_verified, 'FALSE');
+    assert.equal(rows[0].wrote_vw, false);
+    assert.equal(rows[1].outcome, 'enriched');
+    assert.equal(rows[1].email_source, 'oss');
+    assert.equal(rows[1].result_email, 's@beta.example');
+    assert.equal(rows[1].result_verified, 'TRUE');
+    assert.equal(rows[2].outcome, 'skipped');
+    assert.equal(rows[2].enrichment_skip_reason, 'no_domain');
+    assert.equal(rows[3].outcome, 'failed');
+    assert.equal(rows[3].enrichment_failure_reason, 'AgentData: rate limited');
+    assert.ok(!('wrote_vw' in rows[2]), 'skipped entries carry no write-stage flags');
+    assert.ok(!('wrote_vw' in rows[3]), 'failed entries carry no write-stage flags');
+    assert.ok(['lead_id', 'outcome', 'email_source', 'result_email', 'result_verified'].every((k) => k in rows[0]));
+  });
+
+  it('liveProviderTransport mirrors the client fetchTransport contract', async () => {
+    const calls = [];
+    const original = global.fetch;
+    global.fetch = async (url, init) => {
+      calls.push({ url, init });
+      return { status: 404, json: async () => ({ ok: false }) };
+    };
+    try {
+      const out = await R.liveProviderTransport('https://agentdata/api', { headers: { Authorization: 'Bearer k' } });
+      assert.deepEqual(out, { status: 404, body: { ok: false } });
+    } finally {
+      global.fetch = original;
+    }
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'https://agentdata/api');
+    assert.deepEqual(calls[0].init.headers, { Authorization: 'Bearer k' });
+  });
+
+  it('liveProviderTransport omits empty headers entirely', async () => {
+    const original = global.fetch;
+    global.fetch = async (url, init) => ({ status: 200, json: async () => ({ ok: true }) });
+    try {
+      const out = await R.liveProviderTransport('https://agentdata/api', {});
+      assert.equal(out.status, 200);
+    } finally {
+      global.fetch = original;
+    }
+  });
+
+  it('the fallback contact client (no clientWrapper) reaches the provider over an injected transport; 404 is an empty result, not a failure', async () => {
+    const mock = makeMock([leadRow({ lead_id: `${NS}-001`, website: 'https://acme.example' })]);
+    const calls = [];
+    const transport = async (url, opts = {}) => {
+      calls.push({ url, headers: opts.headers || {} });
+      return { status: 404, body: {} };
+    };
+    const resolver = async () => ({ emails: [], blocked: false, notes: '' });
+    const dir = tmpDir();
+    const d = {
+      client: mock,
+      now: NOW,
+      transport,
+      resolver,
+      sleep: async () => {},
+      clock: () => Date.now(),
+      authConfig: { auth: { mode: 'token' }, googlesheetId: SPREADSHEET_ID },
+    };
+    const out = await R.runEnrichment(ENV_READY, { namespace: NS, reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    assert.equal(out.stages.enrich, 'PASS');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].headers.Authorization, 'Bearer ad-test-key');
+    const r = out.report;
+    assert.equal(r.stats.failed, 0);
+    assert.equal(r.stats.credits_consumed, 0);
+    assert.equal(r.outcomes.enriched.length, 1);
+    assert.equal(r.outcomes.enriched[0].lead_id, `${NS}-001`);
+    assert.equal(r.outcomes.enriched[0].email_filled, false);
+    const outcome = r.per_lead_outcomes.find((o) => o.lead_id === `${NS}-001`);
+    assert.equal(outcome.outcome, 'enriched');
+    assert.equal(outcome.email_source, 'oss'); // OSS supersedes the provider-empty result
+    assert.equal(outcome.result_email, '<redacted>'); // result_email matches SENSITIVE_KEY_RE
+    assert.equal(outcome.result_verified, 'FALSE');
+    assert.ok(fs.readdirSync(dir).some((f) => f.endsWith('-enrichment-live.json')));
+  });
+
+  it('the fallback contact client defaults to the live fetch transport (root-cause fix), so a 404 yields an empty lead instead of transport-unavailable failure', async () => {
+    const mock = makeMock([leadRow({ lead_id: `${NS}-001`, website: 'https://acme.example' })]);
+    const original = global.fetch;
+    global.fetch = async () => ({ status: 404, body: null, json: async () => ({}) });
+    try {
+      const resolver = async () => ({ emails: [], blocked: false, notes: '' });
+      const dir = tmpDir();
+      const d = {
+        client: mock,
+        now: NOW,
+        resolver,
+        sleep: async () => {},
+        clock: () => Date.now(),
+        authConfig: { auth: { mode: 'token' }, googlesheetId: SPREADSHEET_ID },
+      };
+      const out = await R.runEnrichment(ENV_READY, { namespace: NS, reportsDir: dir }, d);
+      assert.equal(out.status, 'PASS');
+      const r = out.report;
+      assert.equal(r.stats.failed, 0);
+      assert.equal(r.stats.credits_consumed, 0);
+      assert.equal(r.outcomes.enriched.length, 1);
+      assert.ok(!r.failure_info.some((f) => /transport/i.test(String(f))), `no transport failure: ${r.failure_info.join(' | ')}`);
+    } finally {
+      global.fetch = original;
+    }
+  });
+
+  it('per_lead_outcomes reports enriched and failed buckets in a full dry-run pipeline', async () => {
+    const mock = makeMock([
+      leadRow({ lead_id: `${NS}-001`, website: 'https://ok.example' }),
+      leadRow({ lead_id: `${NS}-002`, website: 'https://boom.example' }),
+    ]);
+    const dir = tmpDir();
+    const { d } = buildDeps({
+      byDomain: { 'ok.example': emailResult('j@ok.example'), 'boom.example': { reason: 'AgentData: rate limited' } },
+      client: mock,
+    });
+    const out = await R.runEnrichment(ENV_READY, { namespace: NS, reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    const outcomes = out.report.per_lead_outcomes;
+    assert.deepEqual(outcomes.map((o) => o.lead_id), [`${NS}-001`, `${NS}-002`]);
+    assert.equal(outcomes[0].outcome, 'enriched');
+    assert.equal(outcomes[0].result_verified, 'TRUE');
+    assert.equal(outcomes[1].outcome, 'failed');
+    assert.equal(outcomes[1].enrichment_failure_reason, 'AgentData: rate limited');
+  });
+});
+
 describe('execute pipeline (--execute)', () => {
   it('appends log rows and updates only V/W, via provider + OSS fallback + manual block', async () => {
     const mock = makeMock([
@@ -791,9 +964,9 @@ describe('OSS resolver', () => {
     assert.equal(noFn.blocked, true);
   });
 
-  it('no contact name means no envelopes, never a fabricated address', () => {
+  it('no contact name BLOCKS the lead — never an envelope, never a fabricated address', () => {
     const out = R.resolveOssEmail({ findEmail: () => ({ email: 'a@b.c', confidence: 90 }) }, 'b.c', {});
-    assert.equal(out.blocked, false);
+    assert.equal(out.blocked, true);
     assert.equal(out.notes, 'oss_no_name');
     assert.deepEqual(out.envelopes, []);
   });
@@ -974,6 +1147,117 @@ describe('run() and CLI wiring', () => {
     const r = runCli(['--no-interactive', `--reports-dir=${tmpDir()}`], { GOOGLE_SHEET_ID: SPREADSHEET_ID, GOOGLE_ACCESS_TOKEN: 't' });
     assert.equal(r.code, 3);
     assert.ok(r.out.includes('RESULT: NOT_CONFIGURED'));
+  });
+});
+
+describe('H.9.4 — write scope guard, write labels, and report fields', () => {
+  it('parseArgs: --scope=production sets args.scope', () => {
+    assert.equal(R.parseArgs(['--scope=production']).scope, 'production');
+    assert.equal(R.parseArgs(['--scope=test']).scope, 'test');
+  });
+
+  it('parseArgs: default scope is "test"', () => {
+    assert.equal(R.parseArgs([]).scope, 'test');
+    assert.equal(R.parseArgs(['--execute']).scope, 'test');
+    assert.equal(R.parseArgs(['--reports-dir=/tmp/x']).scope, 'test');
+  });
+
+  it('parseArgs: unknown scope throws via scopeForArgs', () => {
+    const args = R.parseArgs(['--scope=bogus']);
+    assert.throws(() => R.scopeForArgs(args), /unknown scope "bogus" \(valid: test\|production\)/);
+  });
+
+  it('--execute + production + no BIZ_ENRICH_ALLOW_PRODUCTION → REFUSED, exit 1', async () => {
+    const mock = makeMock([leadRow({ lead_id: `${NS}-001`, website: 'https://acme.example' })]);
+    const dir = tmpDir();
+    const { transport, calls } = captureTransport();
+    const { d } = buildDeps({ byDomain: { 'acme.example': emailResult('j@acme.example') }, client: mock, transport });
+    const out = await R.runEnrichment(ENV_READY, { namespace: NS, execute: true, scope: 'production', reportsDir: dir }, d);
+    assert.equal(out.status, 'FAIL');
+    assert.equal(R.exitCodeForStatus(out.status), 1);
+    assert.equal(out.stages.write, 'REFUSED');
+    assert.equal(out.report.mode, 'EXECUTE');
+    assert.equal(out.report.requested_scope, 'production');
+    assert.equal(out.report.effective_scope, 'production');
+    assert.equal(out.report.production_confirmed, false);
+    assert.equal(calls.length, 0, 'guard returns before any transport/sheet call');
+    assert.ok(JSON.stringify(out.report).includes('refusing production write'), 'failure recorded in report');
+    assert.equal(fs.readdirSync(dir).filter((f) => f.endsWith('-enrichment-live.json')).length, 1, 'a report is still written');
+  });
+
+  it('--execute + production + BIZ_ENRICH_ALLOW_PRODUCTION=1 → proceeds', async () => {
+    const mock = makeMock([leadRow({ lead_id: `${NS}-001`, website: 'https://acme.example' })]);
+    const dir = tmpDir();
+    const { transport, calls } = captureTransport();
+    const { d } = buildDeps({ byDomain: { 'acme.example': emailResult('j@acme.example') }, client: mock, transport });
+    const out = await R.runEnrichment({ ...ENV_READY, BIZ_ENRICH_ALLOW_PRODUCTION: '1' }, { namespace: NS, execute: true, scope: 'production', reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    assert.equal(out.stages.write, 'PASS');
+    assert.equal(out.report.requested_scope, 'production');
+    assert.equal(out.report.effective_scope, 'production');
+    assert.equal(out.report.production_confirmed, true);
+    assert.ok(calls.length > 0, 'write reached the Sheets transport');
+  });
+
+  it('--scope=production without --execute → DRY_RUN, effective_scope dry_run', async () => {
+    const mock = makeMock([leadRow({ lead_id: `${NS}-001`, website: 'https://acme.example' })]);
+    const dir = tmpDir();
+    const { transport, calls } = captureTransport();
+    const { d } = buildDeps({ byDomain: { 'acme.example': emailResult('j@acme.example') }, client: mock, transport });
+    const out = await R.runEnrichment(ENV_READY, { namespace: NS, scope: 'production', reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    assert.equal(out.stages.write, 'DRY_RUN');
+    assert.equal(out.report.requested_scope, 'production');
+    assert.equal(out.report.effective_scope, 'dry_run');
+    assert.equal(out.report.production_confirmed, false); // guard never consulted in dry run
+    assert.equal(calls.length, 0);
+  });
+
+  it('--execute with an empty write set → NO_ELIGIBLE', async () => {
+    const mock = makeMock([leadRow({ lead_id: `${NS}-001` })]); // no website → NO_DOMAIN, nothing eligible
+    const dir = tmpDir();
+    const { transport, calls } = captureTransport();
+    const { d } = buildDeps({ client: mock, transport });
+    const out = await R.runEnrichment(ENV_READY, { namespace: NS, execute: true, reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    assert.equal(out.stages.write, 'NO_ELIGIBLE');
+    assert.equal(out.report.effective_scope, 'test');
+    assert.equal(calls.length, 0);
+  });
+
+  it('report fields present and correct on the dry-run happy path, persisted too', async () => {
+    const mock = makeMock([leadRow({ lead_id: `${NS}-001`, website: 'https://acme.example' })]);
+    const dir = tmpDir();
+    const { d } = buildDeps({ byDomain: { 'acme.example': emailResult('j@acme.example') }, client: mock });
+    const out = await R.runEnrichment(ENV_READY, { namespace: NS, reportsDir: dir }, d);
+    assert.equal(out.status, 'PASS');
+    assert.equal(out.report.requested_scope, 'test');
+    assert.equal(out.report.effective_scope, 'dry_run');
+    assert.equal(out.report.production_confirmed, false);
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('-enrichment-live.json'));
+    assert.equal(files.length, 1);
+    const back = JSON.parse(fs.readFileSync(path.join(dir, files[0]), 'utf8'));
+    assert.equal(back.requested_scope, 'test');
+    assert.equal(back.effective_scope, 'dry_run');
+    assert.equal(back.production_confirmed, false);
+  });
+
+  it('CLI --execute --scope=production without confirmation exits 1 (REFUSED)', () => {
+    const runCli = (args, env = {}) => {
+      const extra = { ...env };
+      for (const k of Object.keys(extra)) if (extra[k] === undefined) delete extra[k];
+      try {
+        const out = execFileSync(process.execPath, ['scripts/run-enrichment-live.js', ...args], { cwd: REPO_ROOT, env: { ...process.env, ...extra }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+        return { code: 0, out };
+      } catch (e) {
+        return { code: e.status ?? 2, out: e.stdout ? String(e.stdout) : '' + (e.stderr ? '\n' + String(e.stderr) : '') };
+      }
+    };
+    const dir = tmpDir();
+    const r = runCli(['--execute', '--scope=production', '--no-interactive', `--reports-dir=${dir}`], ENV_READY);
+    assert.equal(r.code, 1);
+    assert.ok(r.out.includes('RESULT: FAIL'), r.out);
+    assert.ok(r.out.includes('write=REFUSED'), r.out);
   });
 });
 
