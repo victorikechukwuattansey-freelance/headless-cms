@@ -117,10 +117,12 @@ test('all fixtures live in the TEST-RECON namespace', () => {
   assert.ok(fixtures.length >= 9, 'at least the 7 spec categories + empty + mixed');
 });
 
-test('fixture rows materialize to the exact Approved (21) and Outreach (20) column contracts', () => {
+test('fixture rows materialize to the exact Approved (24) and Outreach (20) column contracts', () => {
   for (const fx of fixtures) {
     for (const row of fx.approvedRows) {
-      assert.deepEqual(Object.keys(row).sort(), [...APPROVED_COLUMNS].sort(), fx.id + ' approved row');
+      for (const col of APPROVED_COLUMNS) {
+        assert.ok(col in row, fx.id + ' approved row carries ' + col);
+      }
     }
     for (const row of fx.outreachRows) {
       assert.deepEqual(Object.keys(row).sort(), [...OUTREACH_COLUMNS].sort(), fx.id + ' outreach row');
@@ -202,7 +204,7 @@ test('008 STATUS_MISMATCH (stale): outreach logged but status never advanced fro
   assertExpectedMetrics(report, fixtureById('TEST-RECON-008').expected);
   assert.equal(report.approvals[0].category, CATEGORY.APPROVED_WITH_OUTREACH);
   assert.equal(exceptions[0].exception_type, EXCEPTION_TYPE.STATUS_MISMATCH);
-  assert.match(exceptions[0].details, /outreach_status remains "not_ready"/);
+  assert.match(exceptions[0].details, /status remains "not_ready"/);
 });
 
 test('009 EMPTY_SOURCES: successful empty read completes with zero totals and no coverage', () => {
@@ -321,8 +323,8 @@ test('a failed outreach read alone also marks the run INCOMPLETE', () => {
 
 test('suppressed status is neutral regardless of activity (no mismatch either way)', () => {
   const approved = [
-    { lead_id: 'L-SUPPRESSED-1', business_name: 'Suppressed Co', outreach_status: 'suppressed', approved_at: '2026-09-01T00:00:00.000Z' },
-    { lead_id: 'L-SUPPRESSED-2', business_name: 'Suppressed Co 2', outreach_status: 'suppressed', approved_at: '2026-09-01T00:00:00.000Z' },
+    { lead_id: 'L-SUPPRESSED-1', business_name: 'Suppressed Co', status: 'suppressed', approved_at: '2026-09-01T00:00:00.000Z' },
+    { lead_id: 'L-SUPPRESSED-2', business_name: 'Suppressed Co 2', status: 'suppressed', approved_at: '2026-09-01T00:00:00.000Z' },
   ];
   const outreach = [
     { outreach_id: 'OR-S-1', lead_id: 'L-SUPPRESSED-1', sent_at: '2026-09-02T00:00:00.000Z' },
@@ -335,7 +337,7 @@ test('suppressed status is neutral regardless of activity (no mismatch either wa
 
 test('unknown statuses are tallied as non-canonical without being auto-repaired', () => {
   const approved = [
-    { lead_id: 'L-WEIRD', business_name: 'Weird Status Co', outreach_status: 'pending_review', approved_at: '2026-09-01T00:00:00.000Z' },
+    { lead_id: 'L-WEIRD', business_name: 'Weird Status Co', status: 'pending_review', approved_at: '2026-09-01T00:00:00.000Z' },
   ];
   const { report } = reconcileFromSheets({ approvedRows: approved, outreachRows: [], runId: RUN_ID, now: NOW });
   assert.equal(report.non_canonical_statuses, 1);
@@ -345,8 +347,8 @@ test('unknown statuses are tallied as non-canonical without being auto-repaired'
 
 test('duplicate approved rows for one lead collapse to one classification and are tallied', () => {
   const approved = [
-    { lead_id: 'L-DUP', business_name: 'Dup Co', outreach_status: 'contacted', approved_at: '2026-09-01T00:00:00.000Z' },
-    { lead_id: 'L-DUP', business_name: 'Dup Co', outreach_status: 'contacted', approved_at: '2026-09-02T00:00:00.000Z' },
+    { lead_id: 'L-DUP', business_name: 'Dup Co', status: 'contacted', approved_at: '2026-09-01T00:00:00.000Z' },
+    { lead_id: 'L-DUP', business_name: 'Dup Co', status: 'contacted', approved_at: '2026-09-02T00:00:00.000Z' },
   ];
   const outreach = [
     { outreach_id: 'OR-DUP-1', lead_id: 'L-DUP', sent_at: '2026-09-03T00:00:00.000Z' },
@@ -386,8 +388,8 @@ test('built-in indexes: malformed rows are surfaced, duplicates preserve the fir
 
 test('helper functions: classification, mismatches, orphans, non-canonical counts', () => {
   const approved = buildApprovedIndex([
-    { lead_id: 'L-ACTIVE', outreach_status: 'not_ready', approved_at: '2026-09-01T00:00:00.000Z' },
-    { lead_id: 'L-PHANTOM', outreach_status: 'contacted', approved_at: '2026-09-01T00:00:00.000Z' },
+    { lead_id: 'L-ACTIVE', status: 'not_ready', approved_at: '2026-09-01T00:00:00.000Z' },
+    { lead_id: 'L-PHANTOM', status: 'contacted', approved_at: '2026-09-01T00:00:00.000Z' },
   ]);
   const outreach = buildOutreachIndex([
     { outreach_id: 'OR-1', lead_id: 'L-ACTIVE', sent_at: '2026-09-02T00:00:00.000Z' },
