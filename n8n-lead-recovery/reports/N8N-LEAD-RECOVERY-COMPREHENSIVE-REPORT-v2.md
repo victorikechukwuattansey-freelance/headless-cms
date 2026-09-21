@@ -91,6 +91,8 @@ Progress across the suite (honest trajectory): 857/62 (H-B) → 948/83 (2026-09-
 
 No live execution, no external API calls, and no spreadsheet writes were performed this session.
 
+**Verify script ladder (package.json):** `verify:queue` (stage-isolation, live sheet, creds required) · `verify:dry` (execution-boundary DRY_RUN, live sheet, creds required) · `verify:dup` (dedup + malformed-row gate, hermetic, CI-safe). `verify:queue`/`verify:dry` are env-gated (not run this session — no live creds); `verify:dup` is hermetic and CI-safe.
+
 ### Artifact fingerprints
 
 | Artifact | SHA-256 | Bytes | Note |
@@ -119,7 +121,7 @@ Workflow id: Prospect Finder `WcUgtTPiKXPL0BLH` (from the retained v1 report; un
 
 - **Verified Leads (gid=102):** 28 columns. Last four are enrichment-owned: `enrichment_business_status`, `enrichment_confidence`, `enrichment_gers_id`, `enrichment_last_run`.
 - **Approved Outreach:** 24 columns. Handoff owns the first 21 (contract-frozen, asserted by `verify.js` / `src/schema.js`); Enrichment owns the last 3 (live orientation V/W/X = `contact_source_provider`, `contact_blocked`, `country` — H.8b.2 V/W orientation fix).
-- **Outreach Log:** 20 columns (queue/execution/reconcile readers updated for the H.8c renames `cab1430`/`6e11439`).
+- **Outreach Log:** 22 columns, ending `notes` (T), `status` (U), `provider_message_id` (V) — header migration landed `8a6e84b` (`OUTREACH_COLUMNS` extended to 22 in `src/reconcile.js`); queue/execution/reconcile readers also updated for the H.8c renames `cab1430`/`6e11439`).
 - **Contact Enrichment Log** (new tab): columns A–N per `docs/ENRICHMENT-LOG.md` + `src/enrichment-schema.js`: `enrichment_id` = `ENRICH-<fnv1a32-8hex>`, `enrichment_key` = `domain::provider`, `lead_id`, `provider` (`hunter`|`oss`|`manual`), `query_input`, `result_email`, `result_contact_name`, `result_contact_title`, `result_verified` TRUE/FALSE, `credits_consumed`, `enriched_at`, `cache_hit_count`; one row per `(enrichment_key, provider)`, TTL policy + generic-email patterns; dependency-free shared by cache/contact/embedded mirrors.
 - **Qualification formula (frozen, `docs/QUALIFICATION-FORMULA.md`):** Q:U ARRAYFORMULA, 90-point scoring, `score >= 70 → QUALIFIED`, VLOOKUP `target_niche` from `'Search Inputs'!A:B`; D1 = CLOSED; change protocol §7. No enrichment write re-scores (enriched columns live downstream of Q:U).
 - **Enrichment write surface (locked, H.9/H.9.1):** Contact Enrichment Log append + exactly `contact_blocked` / `contact_source_provider` on Approved Outreach (`lead_id` match). Business enrichment touches money columns only via OSS fallback unless production creds are bound.
