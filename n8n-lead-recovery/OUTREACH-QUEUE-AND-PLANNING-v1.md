@@ -15,7 +15,7 @@ The following are authoritative; nothing may contradict them without a visible c
 | Layer | Source |
 |---|---|
 | Approved Outreach schema (21 cols A–U) | `src/schema.js` → `APPROVED_COLUMNS` (shared with Approved Outreach Handoff V1) |
-| Outreach Log schema (20 cols A–T) | Run Reconciliation and Reporting V1 (adopted, spec §3) |
+| Outreach Log schema (22 cols A–V) | Run Reconciliation and Reporting V1 (adopted, spec §3) |
 | Status vocabulary | `src/reconcile.js` → `RECONCILE_STATUSES` (state machine in `workflows/lead-recovery-engine/discovery/`) |
 | Channel vocabulary | Outreach Log `channel` = `email` \| `call` (from reconciliation fixtures/tests and log data; **`contact_form` is NOT a supported channel** — there is no evidence of it in this ledger) |
 | Business rules | Approved Outreach Handoff V1 / Prospecting + Validation V1 — **not modified by this artifact** |

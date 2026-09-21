@@ -39,10 +39,12 @@ The Outreach Log gains **two columns** to make in-flight state explicit and conf
 
 | Column | Placement | Type | Semantics |
 |---|---|---|---|
-| `status` | after `message_variant` | string | `pending` (in-flight attempt) \| `sent` (provider confirmed) \| blank (pre-Phase-6/7 rows, unknown) |
-| `provider_message_id` | after `sent_at` | string | Resend's acked message id, recorded **only** on `sent`; blank/empty otherwise |
+| `status` | column U (after `notes`) | string | `pending` (in-flight attempt) \| `sent` (provider confirmed) \| blank (pre-Phase-6/7 rows, unknown) |
+| `provider_message_id` | column V (after `status`) | string | Resend's acked message id, recorded **only** on `sent`; blank/empty otherwise |
 
-The code-side column list is the single source of truth: `src/reconcile.js` → `OUTREACH_COLUMNS` is extended from 20 to 22 columns (inserting `status` after `message_variant` and `provider_message_id` after `sent_at`). All read-side projections (`buildSentIndex` / sent-scope, reconciliation, response capture join) read through the same column list, so row → object mapping stays positional and consistent. This requires the Outreach Log sheet's header row to be extended with `status` and `provider_message_id` before the first REAL run — the code-side column list in `src/reconcile.js` and the sheet header must match, or read-side column indexing will be off.
+The code-side column list is the single source of truth: `src/reconcile.js` → `OUTREACH_COLUMNS` is extended from 20 to 22 columns (appending `status` at U and `provider_message_id` at V). All read-side projections (`buildSentIndex` / sent-scope, reconciliation, response capture join) read through the same column list, so row → object mapping stays positional and consistent.
+
+Header extension landed in `8a6e84b`. Sheet columns U/V (`status`, `provider_message_id`) present; `OUTREACH_COLUMNS` extended to 22; script fetch ranges updated to `A2:V`; `buildLogRow` emits canonical-empty for both until pending/ack writes land.
 
 ---
 
@@ -78,11 +80,63 @@ The code-side column list is the single source of truth: `src/reconcile.js` → 
 A `ResendAdapter` implements the existing typed provider seam (`src/provider.js`): `{ isConfigured(), execute(channel, payload) }` where `channel === 'email'`. It:
 
 - requires `RESEND_API_KEY` to be set, else reports `NOT_CONFIGURED` (safe default — nothing sends),
-- builds the Resend Send request from the queue/approved-merged payload (email address + explicit `message_variant` as body; nothing fabricated),
+- builds the Resend Send request from the resolver output concatenated with the routing payload (`resolveMessage({ lead, variant })` → `{ from, subject, text, html }` + `buildPayload` routing fields; nothing fabricated),
 - sets `Idempotency-Key: EX-<lead_id>-<channel>`,
 - returns `{ success, provider_status, provider_message_id, error_code, error_message }` per the existing boundary contract.
+- `src/message-body.js` — new module:
+  `resolveMessage({ lead, variant }) → { from, to, subject, text, html }`;
+  template lookup from `templates/<variant>.json`
 
 Call-channel delivery is **out of scope** for this adapter (stays `NOT_CONFIGURED` / no provider).
+
+---
+
+### Message body resolution
+
+A new module — `src/message-body.js` — owns turning a queue item
+into the full email body Resend requires. It sits between
+`buildPayload` and the adapter: `buildPayload` produces the
+routing payload (`to`, `outreach_id`, `lead_id`, `channel`,
+`message_variant`); `resolveMessage` produces the content payload
+(`from`, `subject`, `text`, `html`). The adapter concatenates both.
+
+**Interface:**
+
+```js
+// src/message-body.js
+function resolveMessage({ lead, variant }) {
+  // Returns: { from, to, subject, text, html }
+  // - variant:   defaults to 'cold-outreach-v1' when lead.message_variant is ''
+  // - from:      process.env.RESEND_FROM_EMAIL (adapter fails closed if empty on REAL send)
+  // - to:        lead.email
+  // - subject/text/html: rendered from templates/<variant>.json
+}
+```
+
+**Template layout:** `templates/<variant>.json` containing
+`{ subject, text, html }`, each a string with `{{lead.field}}`
+placeholders. Rendering is `String.replace(/\{\{([\w.]+)\}\}/g, ...)`
+— no template engine. Missing placeholders render empty
+(template-authoring error, not a send-blocking one). Missing
+template file throws (misconfiguration, blocks the run).
+
+**Variant sourcing (decision, 2026-09-21):** the resolver defaults
+to `cold-outreach-v1` when `lead.message_variant` is empty. No
+upstream change to the queue or approval stages. Multi-variant
+support and A/B routing are deferred; the resolver interface
+already accepts a variant name, so the switch can be flipped later
+without re-architecting.
+
+**DRY_RUN behavior:** `resolveMessage` runs in DRY_RUN (it makes
+no network calls). `from` is populated from env if present, left
+empty if not. The adapter is the only place that fails on an empty
+`from`, and only on REAL send. This keeps the DRY_RUN verification
+path free of env-config requirements.
+
+**Deliberately deferred:**
+
+- Multi-variant message-body selection and A/B routing
+  (interface accepts a variant; only `cold-outreach-v1` populated)
 
 ---
 
@@ -109,6 +163,6 @@ Call-channel delivery is **out of scope** for this adapter (stays `NOT_CONFIGURE
 | Area | Status | Note |
 |---|---|---|
 | Provider dependency (Idempotency-Key) | accepted | deliberate, per §3 Interlock |
-| Sheet header migration | required | `status` + `provider_message_id` must be added to the sheet header before the first REAL run (§3) |
+| Sheet header migration | landed | Header extension landed in `8a6e84b`; sheet columns U/V (`status`, `provider_message_id`) present; `OUTREACH_COLUMNS` at 22; `buildLogRow` emits canonical-empty until pending/ack writes land (§3) |
 | Live Resend validation | NOT RUN in this environment | no `RESEND_API_KEY` / live spreadsheet creds; adapter + harness validated offline |
 | Call channel / other providers | unchanged | stays on V1 boundary |

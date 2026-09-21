@@ -39,7 +39,7 @@ No `emailSend`, `twilio`, `whatsapp`, `slack`, `webhook`, or HTTP call-out nodes
 | Source | Schema | How |
 |---|---|---|
 | `Approved Outreach` (col A–U) | `src/schema.js` → `APPROVED_COLUMNS` | Read node `Read Approved Outreach`; queue projection uses `lead_score`, `approved_at`, `outreach_status`, verified-email / phone, `business_name`, `niche`, `city`, `state`, `country`, `qualification_status`, `notes` |
-| `Outreach Log` (col A–T) | Run Reconciliation and Reporting V1 §3 (`OUTREACH_COLUMNS`) | Read node `Read Outreach Log`; history + duplicate suppression by `lead_id`+`channel` with a non-empty `sent_at` |
+| `Outreach Log` (col A–V) | Run Reconciliation and Reporting V1 §3 (`OUTREACH_COLUMNS`) | Read node `Read Outreach Log`; history + duplicate suppression by `lead_id`+`channel` with a non-empty `sent_at` |
 
 Both reads run in parallel and are **read-only**. A read failure (single item carrying `_source_read_error`) produces `EXECUTION_INCOMPLETE` — every metric `null`, never a healthy empty result.
 
@@ -48,7 +48,7 @@ Both reads run in parallel and are **read-only**. A read failure (single item ca
 ## 4. Source of Truth
 
 - **Approved Outreach schema (21 cols):** `src/schema.js` → `APPROVED_COLUMNS`.
-- **Outreach Log schema (20 cols):** Run Reconciliation and Reporting V1 §3 = `['outreach_id','lead_id','business_name','contact_name','channel','email','phone','message_variant','sent_at','follow_up_date','follow_up_number','reply_status','reply_date','pain_admitted','call_booked','call_date','paid_pilot_interest','objection','outcome','notes']`.
+- **Outreach Log schema (22 cols):** Run Reconciliation and Reporting V1 §3 = `['outreach_id','lead_id','business_name','contact_name','channel','email','phone','message_variant','sent_at','follow_up_date','follow_up_number','reply_status','reply_date','pain_admitted','call_booked','call_date','paid_pilot_interest','objection','outcome','notes','status','provider_message_id']`.
 - **Status vocabulary:** `src/reconcile.js` → `RECONCILE_STATUSES` + Outreach Queue & Planning V1 §2 readiness model (READY / NOT_READY / BLOCKED).
 - **Channel vocabulary:** `email` | `call`. `contact_form` is **not** a supported channel.
 - **Execution semantics + report contract:** `src/execution.js` (mirrored verbatim in the embedded node; sync-tested against every fixture).
@@ -70,7 +70,7 @@ Manual Trigger
                 │  output item 0: execution report JSON  (full v1 contract)
                 │  output item 1: { run_id, log_rows, log_rows_written }  (handoff to append)
                 ▼
-        Prepare Outreach Log Write     (Code — projection of log_rows onto the 20-col schema)
+        Prepare Outreach Log Write     (Code — projection of log_rows onto the 22-col schema)
                 ▼
         Write Outreach Log             (googleSheets, APPEND to tab 'Outreach Log', one write)
                 ▼
@@ -81,7 +81,7 @@ Manual Trigger
 
 - **One append surface.** The only googleSheets **write** node in the whole workflow is `Write Outreach Log`. Everything else is read-only or pure projection.
 - **Two output items** from the execute node decouple the `<report>` (contract item 0) from the rows to append (item 1). The workflow test suite asserts the two-item shape and that item 1's `log_rows_written` === report `log_rows_written`.
-- **Append-only projection node.** `Prepare Outreach Log Write` maps each staged log row onto the exact 20-column Outreach Log schema with `''` normalization — no formulas, no headers, no row surgery.
+- **Append-only projection node.** `Prepare Outreach Log Write` maps each staged log row onto the exact 22-column Outreach Log schema with `''` normalization — no formulas, no headers, no row surgery.
 - **Only `READY` work is attempted.** Items that are `BLOCKED`, `NOT_READY`, channel-less, duplicate, or payload-invalid are counted and surfaced but **never** reach the provider.
 - **Manual Trigger only, `active: false`.** No scheduling is added silently; real execution is an explicit, per-run operator decision.
 - **One Code node** keeps the offline test surface small and single-sourced (`src/queue.js` + `src/execution.js` mirrored in `src/embedded-execution.js`; a parity test asserts they never drift).
@@ -97,7 +97,7 @@ Manual Trigger
 | Read Approved Outreach | n8n-nodes-base.googleSheets | READ `Approved Outreach` |
 | Read Outreach Log | n8n-nodes-base.googleSheets | READ `Outreach Log` |
 | Execute Ready Queue | n8n-nodes-base.code | queue fold + execution boundary + inline mock provider |
-| Prepare Outreach Log Write | n8n-nodes-base.code | project staged log rows onto 20-col schema |
+| Prepare Outreach Log Write | n8n-nodes-base.code | project staged log rows onto 22-col schema |
 | Write Outreach Log | n8n-nodes-base.googleSheets | APPEND (the only write) |
 | Execution Complete | n8n-nodes-base.noOp | terminal |
 
@@ -165,7 +165,7 @@ Read failures are distinct from provider failures: any `_source_read_error` → 
 ## 11. Outreach Log Write Rules
 
 - **Single write surface:** only `Write Outreach Log` (APPEND). No updates, deletes, or header writes.
-- **Staged-only:** `Execute Ready Queue` output item 1 carries `{ run_id, log_rows, log_rows_written }`; `Prepare Outreach Log Write` projects each row to the 20-column schema (undefined/null → `''`).
+- **Staged-only:** `Execute Ready Queue` output item 1 carries `{ run_id, log_rows, log_rows_written }`; `Prepare Outreach Log Write` projects each row to the 22-column schema (undefined/null → `''`).
 - **Confirmed-only:** `log_rows` contains exactly the `EXECUTION_SUCCEEDED` items. Nothing else.
 - **Idempotent by construction:** a re-run over the same sheet sees committed rows and suppresses them (`DUPLICATE_SUPPRESSED`, `log_rows_written=0`). Duplicate suppression is by `lead_id`+`channel` with a real `sent_at`.
 - **No cross-write:** `outreach_status` on Approved Outreach is never advanced here (reconciliation owns status reporting).
@@ -184,7 +184,7 @@ Read failures are distinct from provider failures: any `_source_read_error` → 
 | `log_rows_written` | int | `log_rows.length` (always 0 in DRY_RUN / failures / incomplete) |
 | `provider_calls` | int | attempts |
 | `results` | array | per-item cards (status/reason/detail/payload/provider_call/sent_at) |
-| `log_rows` | array | staged confirmed rows (20-col contract) |
+| `log_rows` | array | staged confirmed rows (22-col contract) |
 | `exceptions` | array | orphan/malformed ledger exceptions (match queue artifact rules) |
 | `sources` | object | `approved_ok`, `outreach_ok`, `approved_read_error`, `outreach_read_error` |
 

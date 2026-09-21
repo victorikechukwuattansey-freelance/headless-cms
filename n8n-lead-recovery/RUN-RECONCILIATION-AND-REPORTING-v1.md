@@ -15,11 +15,11 @@ The following are authoritative; nothing may contradict them without a visible c
 | Layer | Source |
 |---|---|
 | Approved Outreach schema (21 cols A–U) | `src/schema.js` → `APPROVED_COLUMNS` (shared with Approved Outreach Handoff V1) |
-| Outreach Log schema (20 cols A–T) | **This artifact, spec §3.** No canonical schema exists in the repo or vault; this artifact adopts and documents the spec schema. Successors must reuse it, not invent another. |
+| Outreach Log schema (22 cols A–V) | **This artifact, spec §3.** No canonical schema exists in the repo or vault; this artifact adopts and documents the spec schema. Successors must reuse it, not invent another. |
 | Status vocabulary | `src/reconcile.js` → `RECONCILE_STATUSES` (mirrors the `workflows/lead-recovery-engine/discovery/` state machine; production handoff currently only writes `not_ready`) |
 | Business rules | Approved Outreach Handoff V1 / Prospecting + Validation V1 — **not modified by this artifact** |
 
-**The Outreach Log schema (columns A–T):**
+**The Outreach Log schema (columns A–V):**
 
 | # | Column | # | Column |
 |---|---|---|---|
@@ -33,6 +33,7 @@ The following are authoritative; nothing may contradict them without a visible c
 | H | `message_variant` | R | `objection` |
 | I | `sent_at` | S | `outcome` |
 | J | `follow_up_date` | T | `notes` |
+| U | `status` | V | `provider_message_id` |
 
 ---
 
