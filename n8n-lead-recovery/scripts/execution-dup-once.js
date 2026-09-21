@@ -53,7 +53,10 @@ const approvedRows = [
 ];
 
 // The dedup trigger. REQUIRES both lead_id and sent_at — buildSentIndex drops
-// any row missing either. channel must match the queue item's available_channel.
+// any row missing either. This example provides a confirmed row, so it
+// suppresses. (A row with a known lead_id but no sent_at would hold the lead
+// LOG_INCONSISTENT instead; see the malformed case below.) channel must match
+// the queue item's available_channel.
 const outreachRows = [
   {
     lead_id: LEAD_1,
@@ -153,6 +156,78 @@ const outreachRows = [
 
   console.log(
     "OK: dup-suppression verified — 1 DUPLICATE, 2 DRY_RUN, 0 sent, 0 logged.",
+  );
+
+  // --- malformed-row case: identity-known row with empty sent_at is held ---
+  // Same 3-lead shape; LEAD_1's outreach row is malformed (lead_id present,
+  // sent_at ""). Fail-closed: held LOG_INCONSISTENT, never sent, never deduped.
+  const malformedResult = await executeFromSheets({
+    approvedRows,
+    outreachRows: [
+      {
+        lead_id: LEAD_1,
+        channel: "call",
+        sent_at: "",
+        outreach_id: `EX-${LEAD_1}-call`,
+      },
+    ],
+    mode: MODE.DRY_RUN,
+    provider: null,
+    runId: "EXEC-MALFORMED-" + Date.now(),
+    now: new Date().toISOString(),
+  });
+
+  const mr = malformedResult.report || {};
+  const mresults = malformedResult.results || [];
+
+  console.log("--- per-lead outcomes (malformed-row case) ---");
+  for (const x of mresults) {
+    console.log(
+      JSON.stringify({
+        lead_id: x.lead_id,
+        status: x.status,
+        reason: x.reason,
+        detail: x.detail,
+      }),
+    );
+  }
+
+  if (mr.queue_total !== 3) fail(`malformed queue_total = ${mr.queue_total}, expected 3`);
+  if (mr.ambiguous_log_rows !== 1) fail(`ambiguous_log_rows = ${mr.ambiguous_log_rows}, expected 1`);
+  if (mr.duplicate_suppressed !== 0)
+    fail(`malformed duplicate_suppressed = ${mr.duplicate_suppressed}, expected 0`);
+  if (mr.executed_attempted !== 0)
+    fail(`malformed executed_attempted = ${mr.executed_attempted}`);
+  if (mr.executed_succeeded !== 0)
+    fail(`malformed executed_succeeded = ${mr.executed_succeeded}`);
+  if (mr.executed_skipped !== 3)
+    fail(`malformed executed_skipped = ${mr.executed_skipped}, expected 3`);
+  if (mr.log_rows_written !== 0) fail(`malformed log_rows_written = ${mr.log_rows_written}`);
+  if (mr.provider_calls !== 0) fail(`malformed provider_calls = ${mr.provider_calls}`);
+
+  const mAccounted =
+    mr.executed_attempted +
+    mr.executed_skipped +
+    mr.executed_rejected +
+    mr.duplicate_suppressed;
+  if (mAccounted !== mr.queue_total) {
+    fail(`malformed buckets sum to ${mAccounted}, queue_total = ${mr.queue_total}`);
+  }
+
+  const held = mresults.filter((x) => x.reason === "LOG_INCONSISTENT");
+  if (held.length !== 1) fail(`LOG_INCONSISTENT results = ${held.length}, expected 1`);
+  if (held[0].lead_id !== LEAD_1)
+    fail(`LOG_INCONSISTENT lead_id = ${held[0].lead_id}, expected ${LEAD_1}`);
+  if (held[0].status !== "EXECUTION_SKIPPED")
+    fail(`LOG_INCONSISTENT status = ${held[0].status}, expected EXECUTION_SKIPPED`);
+  if (held[0].provider_call !== null)
+    fail(`LOG_INCONSISTENT reached provider: ${JSON.stringify(held[0].provider_call)}`);
+
+  const mDry = mresults.filter((x) => x.reason === "DRY_RUN");
+  if (mDry.length !== 2) fail(`malformed DRY_RUN results = ${mDry.length}, expected 2`);
+
+  console.log(
+    "OK: malformed-row fail-closed verified — 1 LOG_INCONSISTENT (held), 2 DRY_RUN, 0 sent, 0 logged.",
   );
 })().catch((err) => {
   console.error("FAILED:", err && err.stack ? err.stack : err);

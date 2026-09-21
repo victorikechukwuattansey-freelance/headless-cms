@@ -27,7 +27,10 @@ const { NOT_CONFIGURED_PROVIDER } = require('./provider');
  *     Reject, never silently drop.
  *   - Idempotency identity is (lead_id, channel): an existing Outreach Log row
  *     with a non-empty sent_at for the same identity suppresses a repeat attempt
- *     (DUPLICATE_SUPPRESSED). No reliance on random UUIDs.
+ *     (DUPLICATE_SUPPRESSED). A row with a known lead identity but no sent_at
+ *     holds the lead (LOG_INCONSISTENT) until the outreach log is reconciled; a
+ *     row with no lead_id is unattributable and never suppresses. No reliance on
+ *     random UUIDs.
  *   - outreach_id is a stable identity EX-<lead_id>-<channel>, staged only when
  *     the log row is actually written.
  *   - sent_at is the run timestamp of the run that received provider confirmation;
@@ -60,6 +63,7 @@ const REASON = {
   INVALID_PAYLOAD: 'INVALID_PAYLOAD',
   DRY_RUN: 'DRY_RUN',
   DUPLICATE: 'DUPLICATE',
+  LOG_INCONSISTENT: 'LOG_INCONSISTENT',
   PROVIDER_FAILURE: 'PROVIDER_FAILURE',
   PROVIDER_NOT_CONFIGURED: 'PROVIDER_NOT_CONFIGURED',
   EXECUTION_SUCCESS: 'EXECUTION_SUCCESS',
@@ -77,6 +81,7 @@ const REPORT_FIELDS = [
   'executed_skipped',
   'executed_rejected',
   'duplicate_suppressed',
+  'ambiguous_log_rows',
   'log_rows_written',
   'provider_calls',
 ];
@@ -88,8 +93,11 @@ function outreachIdFor(leadId, channel) {
 /**
  * Index committed Outreach Log rows by the (lead_id, channel) idempotency key.
  * A row suppresses only when it actually implies an attempt (lead_id + sent_at
- * present). Malformed rows never suppress. Channel "" keys never collide with a
- * real channel so an empty-channel row cannot accidentally block an email/call.
+ * present). Identity-known malformed rows (lead_id present, sent_at empty) are
+ * held LOG_INCONSISTENT by the gate, not dropped silently. Rows with no lead_id
+ * are unattributable and surfaced by the queue layer, never suppressing.
+ * Channel "" keys never collide with a real channel so an empty-channel row
+ * cannot accidentally block an email/call.
  */
 function buildSentIndex(outreachRows) {
   const index = new Map();
@@ -102,6 +110,41 @@ function buildSentIndex(outreachRows) {
     index.set(`${leadId}\u0000${channel}`, { lead_id: leadId, channel, sent_at: sentAt });
   });
   return index;
+}
+
+/**
+ * Classify Outreach Log rows into the three-bucket sent scope used by the gate:
+ *   - confirmed: rows with lead_id + sent_at present (identical to buildSentIndex).
+ *   - ambiguous: identity-known malformed rows (lead_id present, sent_at empty) —
+ *     the lead is held LOG_INCONSISTENT until the outreach log is reconciled.
+ *   - pending:   rows with a known identity that are explicitly in flight
+ *     (status === 'pending'). Always returned as an empty Map in this artifact;
+ *     Doc 1 (Resend pending/ack cycle) populates it later.
+ * Unattributable rows (no lead_id) fall out of all three buckets and never
+ * suppress or hold; the queue layer surfaces them as MALFORMED_OUTREACH.
+ */
+function buildSentScope(outreachRows) {
+  const confirmed = new Map();
+  const ambiguous = new Map();
+  const pending = new Map();
+  (outreachRows || []).forEach((obj) => {
+    const row = obj || {};
+    const leadId = normalize(row.lead_id);
+    const sentAt = normalize(row.sent_at);
+    const status = normalize(row.status);
+    if (!leadId) return;
+    const channel = normalize(row.channel);
+    if (sentAt) {
+      confirmed.set(`${leadId}\u0000${channel}`, { lead_id: leadId, channel, sent_at: sentAt });
+      return;
+    }
+    if (status === 'pending') {
+      pending.set(`${leadId}\u0000${channel}`, { lead_id: leadId, channel, status });
+      return;
+    }
+    ambiguous.set(`${leadId}\u0000${channel}`, { lead_id: leadId, channel });
+  });
+  return { confirmed, pending, ambiguous };
 }
 
 /**
@@ -225,9 +268,15 @@ function logRowToArray(row) {
 
 /**
  * Projection-level gates applied per READY candidate, in order:
- * readiness -> channel support -> idempotency -> payload -> mode.
+ * readiness -> channel support -> idempotency -> malformed-row hold -> payload -> mode.
+ *
+ * @param {object} item          Queue-merged candidate.
+ * @param {Map}    sentIndex     Confirmed-only identity index (buildSentIndex).
+ * @param {Map}    [ambiguous]   Identity-known malformed rows (buildSentScope).
+ *                               Defaults to empty so callers that never opt into
+ *                               fail-closed behavior keep their current contract.
  */
-function gateExecution(item, sentIndex) {
+function gateExecution(item, sentIndex, ambiguous = new Map()) {
   if (item.readiness_status === READINESS.BLOCKED) {
     return { ok: false, status: EXECUTION_STATUS.SKIPPED, reason: REASON.BLOCKED, detail: 'blocked: suppressed lead; no execution' };
   }
@@ -239,6 +288,9 @@ function gateExecution(item, sentIndex) {
   }
   if (sentIndex.has(`${item.lead_id}\u0000${item.available_channel}`)) {
     return { ok: false, status: EXECUTION_STATUS.DUPLICATE_SUPPRESSED, reason: REASON.DUPLICATE, detail: 'existing committed outreach log row for lead_id+channel; suppressed' };
+  }
+  if (ambiguous.has(`${item.lead_id}\u0000${item.available_channel}`)) {
+    return { ok: false, status: EXECUTION_STATUS.SKIPPED, reason: REASON.LOG_INCONSISTENT, detail: 'outreach log row for lead_id+channel holds no sent_at; held for reconciliation' };
   }
   return { ok: true };
 }
@@ -262,7 +314,7 @@ function resultCard(item, partial) {
   );
 }
 
-function computeMetrics({ approvedRows, queue, results, logRows, attempts }) {
+function computeMetrics({ approvedRows, queue, results, logRows, attempts, ambiguousCount }) {
   return {
     approved_total: (approvedRows || []).length,
     queue_total: (queue || []).length,
@@ -273,6 +325,7 @@ function computeMetrics({ approvedRows, queue, results, logRows, attempts }) {
     executed_skipped: results.filter((r) => r.status === EXECUTION_STATUS.SKIPPED).length,
     executed_rejected: results.filter((r) => r.status === EXECUTION_STATUS.REJECTED).length,
     duplicate_suppressed: results.filter((r) => r.status === EXECUTION_STATUS.DUPLICATE_SUPPRESSED).length,
+    ambiguous_log_rows: ambiguousCount,
     log_rows_written: (logRows || []).length,
     provider_calls: attempts,
   };
@@ -360,7 +413,8 @@ async function executeFromSheets({
   const queue = queueResult.queue;
   const exceptions = queueResult.exceptions;
 
-  const sentIndex = buildSentIndex(outreachRows);
+  const sentScope = buildSentScope(outreachRows);
+  const sentIndex = sentScope.confirmed;
   const merged = mergeQueueWithApproved(queue, approvedRows, messageVariants);
 
   const executionId = finalRunId;
@@ -369,7 +423,7 @@ async function executeFromSheets({
   let attempts = 0;
 
   for (const item of merged) {
-    const gate = gateExecution(item, sentIndex);
+    const gate = gateExecution(item, sentIndex, sentScope.ambiguous);
     if (!gate.ok) {
       results.push(resultCard(item, { status: gate.status, reason: gate.reason, detail: gate.detail }));
       continue;
@@ -432,7 +486,7 @@ async function executeFromSheets({
     }
   }
 
-  const metrics = computeMetrics({ approvedRows, queue, results, logRows, attempts });
+  const metrics = computeMetrics({ approvedRows, queue, results, logRows, attempts, ambiguousCount: sentScope.ambiguous.size });
 
   const report = {
     run_id: finalRunId,
@@ -462,6 +516,7 @@ module.exports = {
   PROVIDER_THREW,
   outreachIdFor,
   buildSentIndex,
+  buildSentScope,
   mergeQueueWithApproved,
   validatePayload,
   buildPayload,

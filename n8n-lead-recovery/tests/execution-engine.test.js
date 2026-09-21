@@ -15,6 +15,7 @@ const {
   REPORT_FIELDS,
   outreachIdFor,
   buildSentIndex,
+  buildSentScope,
   mergeQueueWithApproved,
   validatePayload,
   buildPayload,
@@ -104,6 +105,7 @@ test('module contract: vocabulary and schema symbols are stable', () => {
     'DUPLICATE',
     'EXECUTION_SUCCESS',
     'INVALID_PAYLOAD',
+    'LOG_INCONSISTENT',
     'NOT_READY',
     'NO_CHANNEL',
     'PROVIDER_FAILURE',
@@ -113,7 +115,7 @@ test('module contract: vocabulary and schema symbols are stable', () => {
   assert.ok(REPORT_FIELDS.includes('log_rows_written'));
   assert.ok(REPORT_FIELDS.includes('provider_calls'));
   assert.ok(REPORT_FIELDS.includes('executed_attempted'));
-  for (const fn of [buildSentIndex, mergeQueueWithApproved, validatePayload, buildPayload, buildLogRow, gateExecution, incompleteExecution, executeFromSheets]) {
+  for (const fn of [buildSentIndex, buildSentScope, mergeQueueWithApproved, validatePayload, buildPayload, buildLogRow, gateExecution, incompleteExecution, executeFromSheets]) {
     assert.equal(typeof fn, 'function');
   }
 });
@@ -419,7 +421,7 @@ test('validatePayload: email needs email+variant; call needs phone', () => {
   assert.equal(validatePayload(Object.assign({}, call, { phone: '' })).ok, false);
 });
 
-test('gateExecution: empty sent_at can never suppress; suppressed leads block', () => {
+test('gateExecution: empty sent_at holds LOG_INCONSISTENT; confirmed rows suppress; suppressed leads block', () => {
   const sent = buildSentIndex([
     { lead_id: 'TEST-EXEC-300', channel: 'email', sent_at: '2026-09-01T00:00:00.000Z' },
     { lead_id: 'TEST-EXEC-301', channel: 'email', sent_at: '' },
@@ -427,9 +429,21 @@ test('gateExecution: empty sent_at can never suppress; suppressed leads block', 
   ]);
   assert.ok(sent.has('TEST-EXEC-300\u0000email'));
   assert.equal(sent.size, 1, 'only committed rows index');
+  const ambiguous = buildSentScope([
+    { lead_id: 'TEST-EXEC-300', channel: 'email', sent_at: '2026-09-01T00:00:00.000Z' },
+    { lead_id: 'TEST-EXEC-301', channel: 'email', sent_at: '' },
+    { lead_id: 'TEST-EXEC-302', channel: 'email' },
+  ]).ambiguous;
+  assert.ok(ambiguous.has('TEST-EXEC-301\u0000email'));
+  assert.ok(ambiguous.has('TEST-EXEC-302\u0000email'));
+  assert.equal(ambiguous.size, 2, 'identity-known malformed rows held (301 + 302)');
   const ready = { lead_id: 'TEST-EXEC-300', readiness_status: 'READY', available_channel: 'email', reason: '' };
   assert.equal(gateExecution(ready, sent).ok, false);
-  assert.equal(gateExecution(Object.assign({}, ready, { lead_id: 'TEST-EXEC-301' }), sent).ok, true, 'uncommitted row cannot suppress');
+  const held = gateExecution(Object.assign({}, ready, { lead_id: 'TEST-EXEC-301' }), sent, ambiguous);
+  assert.equal(held.ok, false, 'malformed row holds, never executes');
+  assert.equal(held.status, EXECUTION_STATUS.SKIPPED, 'hold uses SKIPPED bucket (bucket conservation)');
+  assert.equal(held.reason, REASON.LOG_INCONSISTENT);
+  assert.equal(gateExecution(Object.assign({}, ready, { lead_id: 'TEST-EXEC-301' }), sent).ok, true, 'no ambiguous index: fail-open preserved for non-opted callers');
   const blocked = { lead_id: 'TEST-EXEC-400', readiness_status: 'BLOCKED', available_channel: 'none' };
   const gate = gateExecution(blocked, sent);
   assert.equal(gate.ok, false);
