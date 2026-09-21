@@ -450,6 +450,57 @@ test('gateExecution: empty sent_at holds LOG_INCONSISTENT; confirmed rows suppre
   assert.equal(gate.reason, REASON.BLOCKED);
 });
 
+test('buildSentScope: status === pending with empty sent_at lands in pending, not ambiguous', () => {
+  const scope = buildSentScope([
+    { lead_id: 'TEST-EXEC-310', channel: 'email', status: 'pending', sent_at: '' },
+  ]);
+  assert.equal(scope.confirmed.size, 0);
+  assert.ok(scope.pending.has('TEST-EXEC-310\u0000email'));
+  assert.equal(scope.pending.get('TEST-EXEC-310\u0000email').status, 'pending');
+  assert.equal(scope.ambiguous.size, 0);
+});
+
+test('buildSentScope: row with both sent_at and status === pending is confirmed (precedence confirmed > pending)', () => {
+  const scope = buildSentScope([
+    { lead_id: 'TEST-EXEC-311', channel: 'email', status: 'pending', sent_at: '2026-09-01T00:00:00.000Z' },
+  ]);
+  assert.ok(scope.confirmed.has('TEST-EXEC-311\u0000email'));
+  assert.equal(scope.pending.size, 0, 'sent_at wins over pending status');
+  assert.equal(scope.ambiguous.size, 0);
+});
+
+test('gateExecution: pending match returns { ok: true, pending_retry: true }', () => {
+  const pending = buildSentScope([
+    { lead_id: 'TEST-EXEC-312', channel: 'email', status: 'pending', sent_at: '' },
+  ]).pending;
+  const ready = { lead_id: 'TEST-EXEC-312', readiness_status: 'READY', available_channel: 'email', reason: '' };
+  const gate = gateExecution(ready, buildSentIndex([]), new Map(), pending);
+  assert.equal(gate.ok, true);
+  assert.equal(gate.pending_retry, true);
+});
+
+test('gateExecution: pending branch wins over ambiguous for the same key', () => {
+  const scope = buildSentScope([
+    { lead_id: 'TEST-EXEC-313', channel: 'email', status: 'pending', sent_at: '' },
+    { lead_id: 'TEST-EXEC-313', channel: 'email', sent_at: '' },
+  ]);
+  const ready = { lead_id: 'TEST-EXEC-313', readiness_status: 'READY', available_channel: 'email', reason: '' };
+  const gate = gateExecution(ready, buildSentIndex([]), scope.ambiguous, scope.pending);
+  assert.equal(gate.ok, true, 'pending branch sits above the LOG_INCONSISTENT hold');
+  assert.equal(gate.pending_retry, true);
+});
+
+test('gateExecution: pending arg default keeps existing LOG_INCONSISTENT behavior', () => {
+  const ambiguous = buildSentScope([
+    { lead_id: 'TEST-EXEC-314', channel: 'email', sent_at: '' },
+  ]).ambiguous;
+  const ready = { lead_id: 'TEST-EXEC-314', readiness_status: 'READY', available_channel: 'email', reason: '' };
+  const held = gateExecution(ready, buildSentIndex([]), ambiguous);
+  assert.equal(held.ok, false);
+  assert.equal(held.reason, REASON.LOG_INCONSISTENT);
+  assert.equal(held.pending_retry, undefined, 'no pending flag on held rows');
+});
+
 test('log row array projection uses the canonical OUTREACH_COLUMNS order', async () => {
   const fx = fixtureById('TEST-EXEC-002');
   const { report } = await runRows(fx, { provider: providerFor(fx.run.provider) });

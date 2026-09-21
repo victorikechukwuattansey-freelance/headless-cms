@@ -113,13 +113,15 @@ function buildSentIndex(outreachRows) {
 }
 
 /**
- * Classify Outreach Log rows into the three-bucket sent scope used by the gate:
+ * Classify Outreach Log rows into the three-bucket sent scope used by the gate.
+ * Per-row precedence is confirmed > pending > ambiguous:
  *   - confirmed: rows with lead_id + sent_at present (identical to buildSentIndex).
- *   - ambiguous: identity-known malformed rows (lead_id present, sent_at empty) —
- *     the lead is held LOG_INCONSISTENT until the outreach log is reconciled.
- *   - pending:   rows with a known identity that are explicitly in flight
- *     (status === 'pending'). Always returned as an empty Map in this artifact;
- *     Doc 1 (Resend pending/ack cycle) populates it later.
+ *   - pending:   rows with lead_id + status === 'pending' and empty sent_at —
+ *     explicitly in flight (Resend pending/ack cycle); a re-attempt is allowed.
+ *   - ambiguous: identity-known malformed rows (lead_id present, sent_at empty,
+ *     status !== 'pending') — the lead is held LOG_INCONSISTENT.
+ * A row that is both status === 'pending' and sent_at non-empty is malformed;
+ * sent_at wins (confirmed) because a real sent_at is stronger evidence.
  * Unattributable rows (no lead_id) fall out of all three buckets and never
  * suppress or hold; the queue layer surfaces them as MALFORMED_OUTREACH.
  */
@@ -270,15 +272,35 @@ function logRowToArray(row) {
 
 /**
  * Projection-level gates applied per READY candidate, in order:
- * readiness -> channel support -> idempotency -> malformed-row hold -> payload -> mode.
+ * readiness -> channel support -> confirmed dedup -> pending re-attempt -> malformed-row hold -> payload -> mode.
+ *
+ * Branch order (values preserved from Doc 2; pending inserted between dedup and
+ * the malformed-row hold):
+ *   1. readiness BLOCKED / NOT_READY  -> skip
+ *   2. unsupported channel            -> reject
+ *   3. confirmed send (sent bucket)   -> DUPLICATE_SUPPRESSED
+ *   4. pending row (pending bucket)   -> { ok: true, pending_retry: true }
+ *   5. ambiguous log row              -> LOG_INCONSISTENT hold
+ *   6. fall through                   -> { ok: true }
+ *
+ * Rationale for placement: a confirmed send wins over a pending row (already sent),
+ * but buildSentScope precedence (confirmed > pending > ambiguous) prevents a row
+ * from being in both buckets anyway. Pending sits above ambiguous so a lead with
+ * both an in-flight pending row and a stray malformed row is treated as a
+ * re-attempt (optimistic: we started sending, metadata may still arrive via ack)
+ * rather than being held for reconciliation.
  *
  * @param {object} item          Queue-merged candidate.
  * @param {Map}    sentIndex     Confirmed-only identity index (buildSentIndex).
  * @param {Map}    [ambiguous]   Identity-known malformed rows (buildSentScope).
  *                               Defaults to empty so callers that never opt into
  *                               fail-closed behavior keep their current contract.
+ * @param {Map}    [pending]     In-flight rows, status === 'pending' (buildSentScope).
+ *                               Defaults to empty so existing callers keep their
+ *                               current contract; the executor passes the bucket
+ *                               to label re-attempts.
  */
-function gateExecution(item, sentIndex, ambiguous = new Map()) {
+function gateExecution(item, sentIndex, ambiguous = new Map(), pending = new Map()) {
   if (item.readiness_status === READINESS.BLOCKED) {
     return { ok: false, status: EXECUTION_STATUS.SKIPPED, reason: REASON.BLOCKED, detail: 'blocked: suppressed lead; no execution' };
   }
@@ -290,6 +312,9 @@ function gateExecution(item, sentIndex, ambiguous = new Map()) {
   }
   if (sentIndex.has(`${item.lead_id}\u0000${item.available_channel}`)) {
     return { ok: false, status: EXECUTION_STATUS.DUPLICATE_SUPPRESSED, reason: REASON.DUPLICATE, detail: 'existing committed outreach log row for lead_id+channel; suppressed' };
+  }
+  if (pending.has(`${item.lead_id}\u0000${item.available_channel}`)) {
+    return { ok: true, pending_retry: true };
   }
   if (ambiguous.has(`${item.lead_id}\u0000${item.available_channel}`)) {
     return { ok: false, status: EXECUTION_STATUS.SKIPPED, reason: REASON.LOG_INCONSISTENT, detail: 'outreach log row for lead_id+channel holds no sent_at; held for reconciliation' };

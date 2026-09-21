@@ -47,6 +47,29 @@ function quotedRange(tabName, rangeSuffix = 'A1:AZ') {
   return `'${escapedTab}'!${rangeSuffix}`;
 }
 
+/**
+ * 0-based column index -> spreadsheet column letters: 0 -> A, 25 -> Z,
+ * 26 -> AA, 701 -> ZZ, 702 -> AAA.
+ */
+function columnLetter(index) {
+  let n = index;
+  let out = '';
+  while (n >= 0) {
+    out = String.fromCharCode((n % 26) + 65) + out;
+    n = Math.floor(n / 26) - 1;
+  }
+  return out;
+}
+
+/**
+ * Compose a single-row cell range like 'U7:V7' from a 1-based row number and
+ * two inclusive 0-based column indices. startColIndex/endColIndex are column
+ * LETTER positions (0 -> A), matching OUTREACH_COLUMNS array indices.
+ */
+function cellRange(rowOneBased, startColIndex, endColIndex = startColIndex) {
+  return `${columnLetter(startColIndex)}${rowOneBased}:${columnLetter(endColIndex)}${rowOneBased}`;
+}
+
 function normalizeSpreadsheetId(spreadsheetId) {
   const value = String(spreadsheetId == null ? '' : spreadsheetId).trim();
   if (!value) {
@@ -152,6 +175,23 @@ class GoogleSheetsClient {
     return json;
   }
 
+  /**
+   * Write a single row to an in-place cell range via values.update
+   * (PUT /values/{range}?valueInputOption=USER_ENTERED). rangeSuffix is a cell
+   * range like 'U7:V7' or 'A7:V7' — never a whole-tab range. Returns the parsed
+   * API response so the caller can inspect updatedRange/updatedRows (e.g. for the
+   * Resend ack-update that flips a pending row to sent, Doc 1E part 2).
+   */
+  async updateRow(tabName, rangeSuffix, values) {
+    const json = await this._request({
+      method: 'PUT',
+      url: `${SHEETS_API}/${this.spreadsheetId}/values/${encodeURIComponent(quotedRange(tabName, rangeSuffix))}?valueInputOption=USER_ENTERED`,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [values] }),
+    });
+    return json;
+  }
+
   async getSheetId(tabName) {
     const json = await this._request({
       url: `${SHEETS_API}/${this.spreadsheetId}?fields=sheets.properties(sheetId,title)`,
@@ -180,4 +220,4 @@ class GoogleSheetsClient {
   }
 }
 
-module.exports = { GoogleSheetsClient, GoogleSheetsError, mintJwt, base64Url, quotedRange, normalizeSpreadsheetId };
+module.exports = { GoogleSheetsClient, GoogleSheetsError, mintJwt, base64Url, quotedRange, columnLetter, cellRange, normalizeSpreadsheetId };
