@@ -62,7 +62,7 @@ function deepFreeze(value) {
 /* Model contract                                                      */
 /* ------------------------------------------------------------------ */
 
-test('Outreach Log schema matches the v1 contract (20 columns A-T)', () => {
+test('Outreach Log schema matches the v1 contract (22 columns A-V)', () => {
   assert.deepEqual(OUTREACH_COLUMNS, [
     'outreach_id',
     'lead_id',
@@ -84,8 +84,10 @@ test('Outreach Log schema matches the v1 contract (20 columns A-T)', () => {
     'objection',
     'outcome',
     'notes',
+    'status',
+    'provider_message_id',
   ]);
-  assert.equal(OUTREACH_COLUMNS.length, 20);
+  assert.equal(OUTREACH_COLUMNS.length, 22);
 });
 
 test('status vocabulary covers the canonical pre/post/suppressed statuses', () => {

@@ -259,6 +259,8 @@ function buildLogRow({ item, runAt }) {
     objection: '',
     outcome: '',
     notes: '',
+    status: '',
+    provider_message_id: '',
   };
 }
 

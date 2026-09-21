@@ -42,6 +42,8 @@ const OUTREACH_COLUMNS = [
   'objection',
   'outcome',
   'notes',
+  'status',
+  'provider_message_id',
 ];
 
 const RECONCILE_STATUSES = [

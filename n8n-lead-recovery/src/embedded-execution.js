@@ -19,7 +19,7 @@ const OUTREACH_COLUMNS_EMBEDDED = [
   'outreach_id', 'lead_id', 'business_name', 'contact_name', 'channel', 'email',
   'phone', 'message_variant', 'sent_at', 'follow_up_date', 'follow_up_number',
   'reply_status', 'reply_date', 'pain_admitted', 'call_booked', 'call_date',
-  'paid_pilot_interest', 'objection', 'outcome', 'notes',
+  'paid_pilot_interest', 'objection', 'outcome', 'notes', 'status', 'provider_message_id',
 ];
 
 const initModeCode = [
@@ -303,6 +303,8 @@ const executeCode = [
   "  objection: '',",
   "  outcome: '',",
   "  notes: '',",
+  "  status: '',",
+  "  provider_message_id: '',",
   '});',
   '',
   'const gate = (item, index, ambiguous) => {',

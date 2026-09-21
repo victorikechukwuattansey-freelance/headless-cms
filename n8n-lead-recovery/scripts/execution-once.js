@@ -36,7 +36,7 @@ const {
     rows.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i] ?? ""])));
 
   const approvedRaw = await fetchRange("'Approved Outreach'!A2:X");
-  const outreachRaw = await fetchRange("'Outreach Log'!A2:T");
+  const outreachRaw = await fetchRange("'Outreach Log'!A2:V");
 
   console.log("[debug] approvedRaw rows:", approvedRaw.length);
   console.log("[debug] outreachRaw rows:", outreachRaw.length);
