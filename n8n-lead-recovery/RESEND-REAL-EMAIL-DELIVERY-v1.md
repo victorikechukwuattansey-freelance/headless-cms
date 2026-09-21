@@ -46,7 +46,7 @@ The code-side column list is the single source of truth: `src/reconcile.js` → 
 
 ---
 
-> **Interlock with the malformed-row rule (Doc 2).** The `status` column is what distinguishes a legitimate in-flight pending row from a malformed row. The gate sees two rows that look identical on `lead_id` + `sent_at` alone:
+> **Interlock with the malformed-row rule (Doc 2 — `MALFORMED-ROW-FAIL-CLOSED-v1.md`).** The `status` column is what distinguishes a legitimate in-flight pending row from a malformed row. The gate sees two rows that look identical on `lead_id` + `sent_at` alone:
 >
 > | Row state | `lead_id` | `sent_at` | `status` | Gate action |
 > |---|---|---|---|---|
@@ -59,7 +59,7 @@ The code-side column list is the single source of truth: `src/reconcile.js` → 
 >
 > **Explicit choice on pending-retry:** re-attempting a pending row trusts Resend's `Idempotency-Key` for at-most-once delivery. This is a deliberate reliance on a provider guarantee, not an accident. The alternative — holding pending rows as `LOG_INCONSISTENT` too — is stricter but converts every crash mid-run into a manual reconciliation. The design accepts the provider dependency because idempotency keys exist precisely for this case.
 >
-> **Implementation order:** Doc 2 (malformed-row fix) lands first, because it changes the dedup gate's contract. Doc 1 (Resend adapter + pending/ack + `updateRow` primitive) builds on the resulting three-bucket `buildSentScope`. Reversing the order means rebasing Doc 1's gate changes onto a moving target.
+> **Implementation order:** Doc 2 (`MALFORMED-ROW-FAIL-CLOSED-v1.md`, malformed-row fix) lands first, because it changes the dedup gate's contract. Doc 1 (Resend adapter + pending/ack + `updateRow` primitive) builds on the resulting three-bucket `buildSentScope`. Reversing the order means rebasing Doc 1's gate changes onto a moving target.
 
 ---
 
