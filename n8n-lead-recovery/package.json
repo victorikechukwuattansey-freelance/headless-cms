@@ -6,6 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "test": "node --test \"tests/*.test.js\"",
+    "verify:dry": "node scripts/execution-once.js",
+    "verify:dup": "node scripts/execution-dup-once.js",
     "harness": "node scripts/run-live-harness.js",
     "harness:fixture-workflow": "node scripts/build-fixture-workflow.js",
     "reconcile:live": "node scripts/run-reconciliation-live.js",
