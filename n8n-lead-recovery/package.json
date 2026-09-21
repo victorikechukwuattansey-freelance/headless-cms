@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "test": "node --test \"tests/*.test.js\"",
+    "verify:queue": "node scripts/queue-once.js",
     "verify:dry": "node scripts/execution-once.js",
     "verify:dup": "node scripts/execution-dup-once.js",
     "harness": "node scripts/run-live-harness.js",
