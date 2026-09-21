@@ -34,7 +34,7 @@ Answer "is every captured response traceable to a confirmed outbound attempt, an
 | `matched` | capture attempt flag (unspecified → treated as false) |
 | `notes` | operator notes |
 
-**History source — Outreach Log (20 columns, from Run Reconciliation and Reporting V1):** `OUTREACH_COLUMNS` in `src/reconcile.js` — only `outreach_id`, `lead_id`, `channel`, `sent_at` participate in reconciliation.
+**History source — Outreach Log (22 columns, from Run Reconciliation and Reporting V1):** `OUTREACH_COLUMNS` in `src/reconcile.js` — only `outreach_id`, `lead_id`, `channel`, `sent_at` participate in reconciliation.
 
 **Canonical id:** `outreach_id` must match `^EX-(.+)-(email|call)$`. The echoed response `outreach_id` is the primary identity; when it is present the second captured `email`/`call` channel segment must agree with the durable response `channel`.
 

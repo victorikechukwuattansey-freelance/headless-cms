@@ -35,7 +35,7 @@ recommendation** — all emitted as a read-only report.
   documented but explicitly **deferred** because it breaks the repository's
   determinism guarantee.
 - The contract deliberately **does not elongate any frozen schema**: Response
-  Log (12 cols) and Outreach Log (20 cols) are untouched; interpretation output
+  Log (12 cols) and Outreach Log (22 cols) are untouched; interpretation output
   is a report artifact only.
 - The seam from Reconcile is tight: Interpretation **consumes** reconciliation
   cards (it never re-derives identity) and **joins** them to the Response Log
@@ -90,8 +90,8 @@ silently changed by Interpretation.
 - `outreach_id = EX-<lead_id>-<channel>` when resolved; UNMATCHED rows carry empty `lead_id`/`outreach_id`.
 - **`response_text` is present here and nowhere downstream.** Reconcile deliberately drops it (`normalizeResponseRows` excludes `response_text`, `provider_message_id`, `source`).
 
-**Outreach Log (20 cols)** — sole writer: Outreach Execution & Delivery V1
-`outreach_id | lead_id | business_name | contact_name | channel | email | phone | message_variant | sent_at | follow_up_date | follow_up_number | reply_status | reply_date | pain_admitted | call_booked | call_date | paid_pilot_interest | objection | outcome | notes`
+**Outreach Log (22 cols)** — sole writer: Outreach Execution & Delivery V1
+`outreach_id | lead_id | business_name | contact_name | channel | email | phone | message_variant | sent_at | follow_up_date | follow_up_number | reply_status | reply_date | pain_admitted | call_booked | call_date | paid_pilot_interest | objection | outcome | notes | status | provider_message_id`
 
 - Only `outreach_id`, `lead_id`, `channel`, `sent_at` participate in reconciliation.
 - `reply_status` is **never** proof of a send; only non-empty `sent_at` is proof.
@@ -442,7 +442,7 @@ Namespace **`TEST-RESP-INT-\d+`** (regex `/^TEST-RESP-INT-\d+$/`, loader-guarded
 like `RESP_REGEX`/`RESP_RECON_REGEX`). File: `fixtures/response-interpretation-fixtures.json`.
 
 Each fixture: `{ id, name, note, reorder_of, initialResponseRows (full 12-col
-incl. response_text), initialOutreachRows (full 20-col), optional
+incl. response_text), initialOutreachRows (full 22-col), optional
 reconcileResponseRows / reconcileOutreachRows (default to initial rows; `[]`
 for clean-evidence fixtures), optional responseReadError /
 reconciliationReadError / upstreamIncomplete, expected { full golden report } }`.
