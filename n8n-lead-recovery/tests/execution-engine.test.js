@@ -105,6 +105,7 @@ test('module contract: vocabulary and schema symbols are stable', () => {
     'DUPLICATE',
     'EXECUTION_SUCCESS',
     'INVALID_PAYLOAD',
+    'LOG_APPEND_FAILED',
     'LOG_INCONSISTENT',
     'NOT_READY',
     'NO_CHANNEL',

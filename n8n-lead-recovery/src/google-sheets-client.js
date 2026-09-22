@@ -218,6 +218,12 @@ class GoogleSheetsClient {
     });
     return { updates: json.replies ? json.replies.length : 0 };
   }
+  
 }
 
-module.exports = { GoogleSheetsClient, GoogleSheetsError, mintJwt, base64Url, quotedRange, columnLetter, cellRange, normalizeSpreadsheetId };
+function rowNumberFromRange(range) {
+  const m = String(range || '').match(/![A-Z]+(\d+):/);
+  return m ? Number(m[1]) : 0;
+}
+
+module.exports = { GoogleSheetsClient, GoogleSheetsError, mintJwt, base64Url, quotedRange, columnLetter, cellRange, rowNumberFromRange, normalizeSpreadsheetId };

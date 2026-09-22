@@ -4,6 +4,7 @@ const { APPROVED_COLUMNS, normalize } = require('./schema');
 const { OUTREACH_COLUMNS } = require('./reconcile');
 const { buildQueueFromSheets, READINESS, CHANNEL, SUPPORTED_CHANNELS } = require('./queue');
 const { NOT_CONFIGURED_PROVIDER } = require('./provider');
+const { cellRange, rowNumberFromRange } = require('./google-sheets-client');
 
 /*
  * Outreach-Execution-and-Delivery V1 — conservative execution/delivery boundary.
@@ -64,6 +65,7 @@ const REASON = {
   DRY_RUN: 'DRY_RUN',
   DUPLICATE: 'DUPLICATE',
   LOG_INCONSISTENT: 'LOG_INCONSISTENT',
+  LOG_APPEND_FAILED: 'LOG_APPEND_FAILED',
   PROVIDER_FAILURE: 'PROVIDER_FAILURE',
   PROVIDER_NOT_CONFIGURED: 'PROVIDER_NOT_CONFIGURED',
   EXECUTION_SUCCESS: 'EXECUTION_SUCCESS',
@@ -84,6 +86,11 @@ const REPORT_FIELDS = [
   'ambiguous_log_rows',
   'log_rows_written',
   'provider_calls',
+  'pending_rows_appended',
+  'ack_updates_attempted',
+  'ack_updates_succeeded',
+  'failure_updates_attempted',
+  'log_append_failures',
 ];
 
 function outreachIdFor(leadId, channel) {
@@ -341,7 +348,8 @@ function resultCard(item, partial) {
   );
 }
 
-function computeMetrics({ approvedRows, queue, results, logRows, attempts, ambiguousCount }) {
+function computeMetrics({ approvedRows, queue, results, logRows, attempts, ambiguousCount, writerCounts }) {
+  const w = writerCounts || {};
   return {
     approved_total: (approvedRows || []).length,
     queue_total: (queue || []).length,
@@ -355,6 +363,11 @@ function computeMetrics({ approvedRows, queue, results, logRows, attempts, ambig
     ambiguous_log_rows: ambiguousCount,
     log_rows_written: (logRows || []).length,
     provider_calls: attempts,
+    pending_rows_appended: w.pending_rows_appended || 0,
+    ack_updates_attempted: w.ack_updates_attempted || 0,
+    ack_updates_succeeded: w.ack_updates_succeeded || 0,
+    failure_updates_attempted: w.failure_updates_attempted || 0,
+    log_append_failures: w.log_append_failures || 0,
   };
 }
 
@@ -393,6 +406,17 @@ function incompleteExecution({ runId, runAt, mode, providerLabel, providerConfig
  * @param {string} [opts.outreachError]        Read error for Outreach Log.
  * @param {string} [opts.runId]                Deterministic run id (tests inject).
  * @param {string|number|Date} [opts.now]      Clock injection for run_at/sent_at.
+ * @param {object} [opts.sheetsWriter]         Optional Google Sheets writer. When
+ *                                             present in REAL mode the engine owns
+ *                                             the Outreach Log write: it appends a
+ *                                             pending row (status 'pending') before
+ *                                             calling the provider, then ack-updates
+ *                                             it to 'sent' on provider success or
+ *                                             fail-updates it to 'failed' on provider
+ *                                             failure (Doc 1E part 2). Requires
+ *                                             { appendRows(tab, rows), updateRow(tab, range, values) }.
+ * @param {string} [opts.outreachTabName]      Outreach Log tab name for sheetsWriter.
+ *                                             Defaults to 'Outreach Log'.
  * @returns {Promise<{ report: object, logRows: object[], results: object[] }>}
  */
 async function executeFromSheets({
@@ -405,6 +429,8 @@ async function executeFromSheets({
   outreachError,
   runId,
   now,
+  sheetsWriter,
+  outreachTabName = 'Outreach Log',
 } = {}) {
   const runAt = now ? new Date(now).toISOString() : new Date().toISOString();
   const finalRunId = runId || `${RUN_LABEL}-${runAt.replace(/[^\d]/g, '').slice(0, 14)}`;
@@ -444,13 +470,29 @@ async function executeFromSheets({
   const sentIndex = sentScope.confirmed;
   const merged = mergeQueueWithApproved(queue, approvedRows, messageVariants);
 
+  const writerActive = resolvedMode === MODE.REAL
+    && sheetsWriter
+    && typeof sheetsWriter.appendRows === 'function'
+    && typeof sheetsWriter.updateRow === 'function';
+  const SENT_AT_COL = OUTREACH_COLUMNS.indexOf('sent_at');
+  const STATUS_COL = OUTREACH_COLUMNS.indexOf('status');
+  const PROVIDER_MESSAGE_ID_COL = OUTREACH_COLUMNS.indexOf('provider_message_id');
+  const NOTES_COL = OUTREACH_COLUMNS.indexOf('notes');
+
   const executionId = finalRunId;
   const results = [];
   const logRows = [];
   let attempts = 0;
+  const writerCounts = {
+    pending_rows_appended: 0,
+    ack_updates_attempted: 0,
+    ack_updates_succeeded: 0,
+    failure_updates_attempted: 0,
+    log_append_failures: 0,
+  };
 
   for (const item of merged) {
-    const gate = gateExecution(item, sentIndex, sentScope.ambiguous);
+    const gate = gateExecution(item, sentIndex, sentScope.ambiguous, sentScope.pending);
     if (!gate.ok) {
       results.push(resultCard(item, { status: gate.status, reason: gate.reason, detail: gate.detail }));
       continue;
@@ -479,6 +521,30 @@ async function executeFromSheets({
       continue;
     }
 
+    let appendedRowNumber = 0;
+    if (writerActive) {
+      const pendingRow = buildLogRow({ item, runAt });
+      pendingRow.sent_at = '';
+      pendingRow.status = 'pending';
+      pendingRow.provider_message_id = '';
+      pendingRow.notes = '';
+      let appendResp;
+      try {
+        appendResp = await sheetsWriter.appendRows(outreachTabName, [logRowToArray(pendingRow)]);
+        writerCounts.pending_rows_appended += 1;
+      } catch (err) {
+        writerCounts.log_append_failures += 1;
+        results.push(resultCard(item, {
+          status: EXECUTION_STATUS.FAILED,
+          reason: REASON.LOG_APPEND_FAILED,
+          detail: 'outreach log pending-row append failed; provider not called',
+          payload,
+        }));
+        continue;
+      }
+      appendedRowNumber = rowNumberFromRange(appendResp && appendResp.updates && appendResp.updates.updatedRange);
+    }
+
     attempts += 1;
     let result;
     try {
@@ -489,17 +555,54 @@ async function executeFromSheets({
     const view = providerResultView(result);
 
     if (view.success) {
-      const row = buildLogRow({ item, runAt });
-      logRows.push(row);
-      results.push(resultCard(item, {
-        status: EXECUTION_STATUS.SUCCEEDED,
-        reason: REASON.EXECUTION_SUCCESS,
-        detail: 'provider confirmed the attempt; Outreach Log row staged',
-        payload,
-        provider_call: view,
-        sent_at: runAt,
-      }));
+      if (writerActive) {
+        writerCounts.ack_updates_attempted += 1;
+        let ackOk = true;
+        if (appendedRowNumber > 0) {
+          try {
+            await sheetsWriter.updateRow(outreachTabName, cellRange(appendedRowNumber, SENT_AT_COL, SENT_AT_COL), [runAt]);
+            await sheetsWriter.updateRow(outreachTabName, cellRange(appendedRowNumber, STATUS_COL, PROVIDER_MESSAGE_ID_COL), ['sent', view.provider_message_id]);
+          } catch (err) {
+            ackOk = false;
+          }
+        } else {
+          ackOk = false;
+        }
+        if (ackOk) writerCounts.ack_updates_succeeded += 1;
+        results.push(resultCard(item, {
+          status: EXECUTION_STATUS.SUCCEEDED,
+          reason: REASON.EXECUTION_SUCCESS,
+          detail: ackOk
+            ? 'provider confirmed the attempt; Outreach Log row ack-updated to sent'
+            : 'provider confirmed the attempt; Outreach Log ack-update failed (row may remain pending)',
+          payload,
+          provider_call: view,
+          sent_at: runAt,
+          ...(ackOk ? {} : { ack_update_failed: true }),
+        }));
+      } else {
+        const row = buildLogRow({ item, runAt });
+        logRows.push(row);
+        results.push(resultCard(item, {
+          status: EXECUTION_STATUS.SUCCEEDED,
+          reason: REASON.EXECUTION_SUCCESS,
+          detail: 'provider confirmed the attempt; Outreach Log row staged',
+          payload,
+          provider_call: view,
+          sent_at: runAt,
+        }));
+      }
     } else {
+      if (writerActive && appendedRowNumber > 0) {
+        writerCounts.failure_updates_attempted += 1;
+        const failureNotes = [view.provider_status, view.error_message].filter(Boolean).join(': ').slice(0, 200);
+        try {
+          await sheetsWriter.updateRow(outreachTabName, cellRange(appendedRowNumber, STATUS_COL, STATUS_COL), ['failed']);
+          await sheetsWriter.updateRow(outreachTabName, cellRange(appendedRowNumber, NOTES_COL, NOTES_COL), [failureNotes]);
+        } catch (err) {
+          // failure-ack is best effort; the pending row may need a later ack
+        }
+      }
       const notConfigured = view.error_code === REASON.PROVIDER_NOT_CONFIGURED;
       results.push(resultCard(item, {
         status: EXECUTION_STATUS.FAILED,
@@ -513,7 +616,7 @@ async function executeFromSheets({
     }
   }
 
-  const metrics = computeMetrics({ approvedRows, queue, results, logRows, attempts, ambiguousCount: sentScope.ambiguous.size });
+  const metrics = computeMetrics({ approvedRows, queue, results, logRows, attempts, ambiguousCount: sentScope.ambiguous.size, writerCounts });
 
   const report = {
     run_id: finalRunId,
