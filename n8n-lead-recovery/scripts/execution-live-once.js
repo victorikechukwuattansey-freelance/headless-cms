@@ -19,8 +19,7 @@
  *   - providerFor('REAL') sentinel unset    -> exit 3 (nothing sent)
  */
 
-const fs = require("node:fs");
-const { GoogleSheetsClient, mintJwt } = require("../src/google-sheets-client");
+const { GoogleSheetsClient } = require("../src/google-sheets-client");
 const {
   buildQueueFromSheets,
   APPROVED_COLUMNS,
@@ -96,56 +95,14 @@ function validateEnv() {
   }
 }
 
-async function resolveToken() {
-  if (process.env.GOOGLE_ACCESS_TOKEN) return process.env.GOOGLE_ACCESS_TOKEN;
-  const sa = JSON.parse(
-    fs.readFileSync(process.env.GOOGLE_SERVICE_ACCOUNT_JSON, "utf8"),
-  );
-  if (!sa.client_email || !sa.private_key) {
-    throw new Error(
-      "GOOGLE_SERVICE_ACCOUNT_JSON must contain client_email and private_key",
-    );
-  }
-  const assertion = mintJwt(sa);
-  const r = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
-    }),
-  });
-  if (!r.ok) {
-    throw new Error("Token exchange failed: " + r.status + " " + (await r.text()));
-  }
-  const data = await r.json();
-  if (!data.access_token) {
-    throw new Error("Token exchange returned no access_token");
-  }
-  return data.access_token;
-}
-
-async function readLiveRows() {
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-  const token = await resolveToken();
-  const base = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values`;
-  const headers = { Authorization: `Bearer ${token}` };
-
-  const fetchRange = async (range) => {
-    const r = await fetch(`${base}/${encodeURIComponent(range)}`, { headers });
-    const j = await r.json();
-    if (!r.ok)
-      throw new Error(
-        `Sheets API ${r.status}: ${j.error ? j.error.message : ""}`,
-      );
-    return j.values || [];
-  };
-
+async function readLiveRows(client) {
   const toObjects = (cols, rows) =>
     rows.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i] ?? ""])));
 
-  const approvedRaw = await fetchRange("'Approved Outreach'!A2:X");
-  const outreachRaw = await fetchRange("'Outreach Log'!A2:V");
+  const approvedAll = await client.listRows("Approved Outreach");
+  const outreachAll = await client.listRows("Outreach Log");
+  const approvedRaw = approvedAll.slice(1); // drop header row
+  const outreachRaw = outreachAll.slice(1);
 
   return {
     approvedRows: toObjects(APPROVED_COLUMNS, approvedRaw),
@@ -212,10 +169,12 @@ function reportWarn(message) {
     process.exit(3);
   }
 
+  const client = GoogleSheetsClient.fromEnv(process.env);
+
   let approvedRows;
   let outreachRows;
   try {
-    const rows = await readLiveRows();
+    const rows = await readLiveRows(client);
     approvedRows = rows.approvedRows;
     outreachRows = rows.outreachRows;
   } catch (err) {
@@ -254,8 +213,6 @@ function reportWarn(message) {
   printPairs(pairs);
   console.log("Press Ctrl-C within 5 seconds to abort.");
   await new Promise((r) => setTimeout(r, 5000));
-
-  const client = GoogleSheetsClient.fromEnv(process.env);
 
   const provider = providerFor("REAL");
   if (provider === NOT_CONFIGURED_PROVIDER || !provider.isConfigured()) {
