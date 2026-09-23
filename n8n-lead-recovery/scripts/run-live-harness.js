@@ -17,6 +17,7 @@ const { buildFixtureWorkflow, FIXTURE_OUTPUT } = require('./build-fixture-workfl
 const VERIFIED_TAB = 'Verified Leads';
 const APPROVED_TAB = 'Approved Outreach';
 const OUTREACH_TAB = 'Outreach Log';
+const APPROVED_LEAD_COL = APPROVED_COLUMNS.indexOf('lead_id');
 
 function parseArgs(argv) {
   const args = { execute: false, plain: false, noInteractive: false, phases: [], fixtureSheetId: '' };
@@ -77,7 +78,7 @@ async function seed(env, fixtures, client, args) {
     .map((r) => inputColumns.map((c) => (r[c] === undefined || r[c] === null ? '' : String(r[c]))));
 
   const approvedGrid = await client.listRows(APPROVED_TAB);
-  const approvedIds = new Set(approvedGrid.slice(1).map((r) => String(r[0] || '').trim()).filter(Boolean));
+  const approvedIds = new Set(approvedGrid.slice(1).map((r) => String(r[APPROVED_LEAD_COL] || '').trim()).filter(Boolean));
   const approvedToAppend = fixtures.approvedPreseed
     .filter((r) => !approvedIds.has(r.lead_id))
     .map((r) => APPROVED_COLUMNS.map((c) => (r[c] === undefined || r[c] === null ? '' : String(r[c]))));
@@ -203,7 +204,7 @@ async function verify(env, client, cleanupOk) {
 async function cleanup(env, client, args) {
   const collected = {
     verified: collectTestRows(await client.listRows(VERIFIED_TAB)),
-    approved: collectTestRows(await client.listRows(APPROVED_TAB)),
+    approved: collectTestRows(await client.listRows(APPROVED_TAB), APPROVED_LEAD_COL),
   };
   for (const group of Object.values(collected)) {
     for (const row of group) assertNamespaced(row.lead_id);
@@ -222,7 +223,7 @@ async function cleanup(env, client, args) {
   await client.deleteRows(APPROVED_TAB, collected.approved.map((r) => r.index));
 
   const after = collectTestRows(await client.listRows(VERIFIED_TAB)).length
-    + collectTestRows(await client.listRows(APPROVED_TAB)).length;
+    + collectTestRows(await client.listRows(APPROVED_TAB), APPROVED_LEAD_COL).length;
   if (after !== 0) {
     console.error(`[cleanup] FAIL: ${after} TEST-AOH rows remain after delete.`);
     return false;

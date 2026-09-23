@@ -15,6 +15,7 @@ const { GoogleSheetsClient, GoogleSheetsError } = require('../src/google-sheets-
 
 const APPROVED_TAB = 'Approved Outreach';
 const OUTREACH_TAB = 'Outreach Log';
+const APPROVED_LEAD_COL = APPROVED_COLUMNS.indexOf('lead_id');
 
 const DEFAULT_SCENARIO = 'TEST-RECON-010';
 
@@ -95,7 +96,7 @@ async function seed(env, client, args) {
   }
 
   const approvedGrid = await client.listRows(APPROVED_TAB);
-  const approvedIds = new Set(approvedGrid.map((r) => String(r[0] ?? '').trim()).filter(Boolean));
+  const approvedIds = new Set(approvedGrid.map((r) => String(r[APPROVED_LEAD_COL] ?? '').trim()).filter(Boolean));
   const approvedToAppend = scenario.approvedRows
     .filter((r) => !approvedIds.has(r.lead_id))
     .map((r) => APPROVED_COLUMNS.map((c) => (r[c] === undefined || r[c] === null ? '' : String(r[c]))));
@@ -219,7 +220,7 @@ async function verify(env, client, args) {
 }
 
 function buildVerifyOutcome({ approvedGrid, outreachGrid, scenario }) {
-  const approved = rowsForNamespace(approvedGrid, APPROVED_COLUMNS, 0);
+  const approved = rowsForNamespace(approvedGrid, APPROVED_COLUMNS, APPROVED_LEAD_COL);
   const outreach = rowsForNamespace(outreachGrid, OUTREACH_COLUMNS, 1);
   const result = reconcileScoped({ approvedRows: approved, outreachRows: outreach });
   const expected = (scenario && scenario.expected) || {};
@@ -261,7 +262,7 @@ function deepEqualStrict(a, b) {
 }
 
 async function cleanup(env, client, args) {
-  const approved = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, 0);
+  const approved = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, APPROVED_LEAD_COL);
   const outreach = rowsForNamespace(await client.listRows(OUTREACH_TAB), OUTREACH_COLUMNS, 1);
   for (const row of [...approved, ...outreach]) assertNamespacedOutreach(row.leadId);
   const total = approved.length + outreach.length;
@@ -277,7 +278,7 @@ async function cleanup(env, client, args) {
   await client.deleteRows(APPROVED_TAB, approved.map((r) => r.index));
   await client.deleteRows(OUTREACH_TAB, outreach.map((r) => r.index));
 
-  const after = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, 0).length
+  const after = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, APPROVED_LEAD_COL).length
     + rowsForNamespace(await client.listRows(OUTREACH_TAB), OUTREACH_COLUMNS, 1).length;
   if (after !== 0) {
     console.error(`[cleanup] FAIL: ${after} TEST-RECON rows remain after delete.`);
@@ -288,7 +289,7 @@ async function cleanup(env, client, args) {
 }
 
 async function verifyFinal(client) {
-  const approved = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, 0);
+  const approved = rowsForNamespace(await client.listRows(APPROVED_TAB), APPROVED_COLUMNS, APPROVED_LEAD_COL);
   const outreach = rowsForNamespace(await client.listRows(OUTREACH_TAB), OUTREACH_COLUMNS, 1);
   const total = approved.length + outreach.length;
   const ok = total === 0;
