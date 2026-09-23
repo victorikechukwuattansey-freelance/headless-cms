@@ -378,7 +378,7 @@ function computeMetrics({ approvedRows, queue, results, logRows, attempts, ambig
     executed_rejected: results.filter((r) => r.status === EXECUTION_STATUS.REJECTED).length,
     duplicate_suppressed: results.filter((r) => r.status === EXECUTION_STATUS.DUPLICATE_SUPPRESSED).length,
     ambiguous_log_rows: ambiguousCount,
-    log_rows_written: (logRows || []).length,
+    log_rows_written: (logRows || []).length + (w.pending_rows_appended || 0),
     provider_calls: attempts,
     pending_rows_appended: w.pending_rows_appended || 0,
     ack_updates_attempted: w.ack_updates_attempted || 0,
@@ -453,7 +453,7 @@ async function executeFromSheets({
   const finalRunId = runId || `${RUN_LABEL}-${runAt.replace(/[^\d]/g, '').slice(0, 14)}`;
   const resolvedMode = mode === MODE.REAL ? MODE.REAL : MODE.DRY_RUN;
   const providerInstance = provider || NOT_CONFIGURED_PROVIDER;
-  const providerLabel = providerInstance.mode || 'NOT_CONFIGURED';
+  const providerLabel = providerInstance.label || providerInstance.mode || 'NOT_CONFIGURED';
   const providerConfigured = typeof providerInstance.isConfigured === 'function'
     ? Boolean(providerInstance.isConfigured())
     : true;

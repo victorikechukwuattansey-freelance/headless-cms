@@ -273,9 +273,10 @@ function reportWarn(message) {
     reportWarn(`report.status = ${report.status}; expected COMPLETED`);
     warned = true;
   }
-  if (report.pending_rows_appended !== K) {
+  const attempted = report.executed_attempted || 0;
+  if (report.pending_rows_appended !== attempted) {
     reportWarn(
-      `pending_rows_appended = ${report.pending_rows_appended}; expected ${K}`,
+      `pending_rows_appended = ${report.pending_rows_appended}; expected ${attempted}`,
     );
     warned = true;
   }

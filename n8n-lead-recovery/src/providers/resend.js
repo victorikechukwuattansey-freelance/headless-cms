@@ -57,6 +57,7 @@ class ResendAdapter {
       throw new Error('ResendAdapter requires an apiKey');
     }
     this.apiKey = apiKey;
+    this.label = 'RESEND';
     this.fetch = fetchImpl || globalThis.fetch;
     this.timeoutMs = timeoutMs;
     this.backoffMs = backoffMs;
