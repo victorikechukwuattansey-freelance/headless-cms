@@ -21,6 +21,8 @@ const { mintJwt } = require('../src/google-sheets-client');
 const { buildFixtureWorkflow, PROD_WORKFLOW } = require('../scripts/build-fixture-workflow');
 const { seed, cleanup, parseArgs } = require('../scripts/run-live-harness');
 
+const APPROVED_LEAD_COL = APPROVED_COLUMNS.indexOf('lead_id');
+
 const CANONICAL_LABELS = [
   'QUALIFIED + website',
   'QUALIFIED + phone',
@@ -53,19 +55,10 @@ function preparedApprovedRow(lead) {
     phone: lead.phone,
     email: '',
     contact_name: '',
-    contact_title: '',
-    email_source: '',
-    email_verified: '',
-    contact_form: '',
-    linkedin_url: '',
-    lead_score: lead.score === undefined || lead.score === null ? '' : String(lead.score),
-    qualification_status: lead.qualification_status,
-    outreach_channel: '',
-    outreach_status: 'not_ready',
+    score: lead.score === undefined || lead.score === null ? '' : String(lead.score),
+    status: 'not_ready',
     approved_at: new Date().toISOString(),
     notes: '',
-    contact_blocked: '',
-    contact_source_provider: '',
   };
 }
 
@@ -75,7 +68,7 @@ function simulateHandoff(mock) {
   const eligible = leads.filter((l) => isEligible(l));
 
   const approvedGrid = mock.listRows('Approved Outreach');
-  const existingIds = new Set(approvedGrid.slice(1).map((r) => String(r[0] || '').trim()).filter(Boolean));
+  const existingIds = new Set(approvedGrid.slice(1).map((r) => String(r[APPROVED_LEAD_COL] || '').trim()).filter(Boolean));
 
   const seen = new Set();
   const rows = [];
@@ -144,7 +137,9 @@ test('fixtures: verified rows carry the full 28-column schema with formula-owned
 
 test('schema: header and helper conventions are consistent', () => {
   assert.equal(VERIFIED_COLUMNS.length, 28);
-  assert.equal(APPROVED_COLUMNS.length, 23);
+  assert.equal(APPROVED_COLUMNS.length, 24);
+  assert.equal(APPROVED_COLUMNS[0], 'approval_id');
+  assert.equal(APPROVED_COLUMNS[APPROVED_LEAD_COL], 'lead_id');
   assert.ok(VERIFIED_COLUMNS.includes('enrichment_business_status'));
   assert.ok(VERIFIED_COLUMNS.includes('enrichment_confidence'));
   assert.ok(VERIFIED_COLUMNS.includes('enrichment_gers_id'));
@@ -179,7 +174,7 @@ test('report: schema contract flags control-field leakage', () => {
     .filter((r) => fixtures.expectedInsert.has(r.lead_id))
     .map((r) => {
       const row = gridFromObjects(APPROVED_COLUMNS, [preparedApprovedRow(r)])[1];
-      row.push('_control'); // stray control field appended past the 23-column contract
+      row.push('_control'); // stray control field appended past the 24-column contract
       row.push(JSON.stringify({ eligible: 1 }));
       return row;
     });
@@ -208,10 +203,10 @@ test('cleanup: selects only TEST-AOH namespace and deletes nothing else', () => 
     preparedApprovedRow(fixtures.verifiedSeeds.find((r) => r.lead_id === 'TEST-AOH-001')),
     { lead_id: 'LEAD-ALPHA', business_name: 'Real Lead Co', outreach_status: 'not_ready' },
   ]);
-  const collected = collectTestRows(rows);
+  const collected = collectTestRows(rows, APPROVED_LEAD_COL);
   assert.deepEqual(collected.map((r) => r.lead_id).sort(), ['TEST-AOH-001', 'TEST-AOH-006']);
   const after = applyRowDeletes(rows, collected.map((r) => r.index));
-  const survivors = after.map((r) => r[0]);
+  const survivors = after.map((r) => r[APPROVED_LEAD_COL]);
   assert.ok(survivors.includes('lead_id'));
   assert.ok(survivors.includes('LEAD-ALPHA'));
   assert.ok(!survivors.includes('TEST-AOH-001'));
@@ -267,10 +262,10 @@ test('e2e: SEED (dry-run then live) -> RUN -> VERIFY(12/13) -> repeat -> CLEANUP
   assert.equal(report1.passed, 12, 'pre-cleanup: only Cleanup is pending');
 
   const approvedIdsAfterRun = mock.listRows('Approved Outreach')
-    .slice(1).map((r) => r[0]).filter((x) => /^TEST-AOH-\d+$/.test(x)).sort();
+    .slice(1).map((r) => r[APPROVED_LEAD_COL]).filter((x) => /^TEST-AOH-\d+$/.test(x)).sort();
   assert.deepEqual(approvedIdsAfterRun, ['TEST-AOH-001', 'TEST-AOH-002', 'TEST-AOH-006', 'TEST-AOH-007', 'TEST-AOH-008']);
 
-  const seventhCount = mock.listRows('Approved Outreach').filter((r) => r[0] === 'TEST-AOH-007').length;
+  const seventhCount = mock.listRows('Approved Outreach').filter((r) => r[APPROVED_LEAD_COL] === 'TEST-AOH-007').length;
   assert.equal(seventhCount, 1, 'duplicate within batch must be rejected');
 
   // repeat execution adds zero new rows
@@ -288,10 +283,11 @@ test('e2e: SEED (dry-run then live) -> RUN -> VERIFY(12/13) -> repeat -> CLEANUP
     target_niche: 'General', score: '85', qualification_status: 'QUALIFIED', verified_at: '2026-09-01T00:00:00.000Z',
     notes: '', manual_review_notes: '',
   }])[1]]);
-mock.appendRows('Approved Outreach', [[
-    'LEAD-ALPHA', 'Alpha Roofer', 'Roofing', 'Austin', 'Texas', 'USA', '', '', '', '', '', '', '',
-    '', '', '70', 'QUALIFIED', 'email', 'ready', '2026-09-02T00:00:00.000Z', '', '', '',
-  ]]);
+mock.appendRows('Approved Outreach', [gridFromObjects(APPROVED_COLUMNS, [{
+    lead_id: 'LEAD-ALPHA', business_name: 'Alpha Roofer', niche: 'Roofing', city: 'Austin',
+    state: 'Texas', country: 'USA', score: '70', channel: 'email', approval_stage: 'QUALIFIED',
+    approved_at: '2026-09-02T00:00:00.000Z', status: 'ready',
+  }])[1]]);
   assert.equal(simulateHandoff(mock), 1); // LEAD-BETA now flows through the handoff
 
   const snapshotApproved = mock.listRows('Approved Outreach');
@@ -302,7 +298,7 @@ mock.appendRows('Approved Outreach', [[
   assert.equal(collectTestRows(mock.listRows('Verified Leads')).length, 0);
   assert.equal(collectTestRows(mock.listRows('Approved Outreach')).length, 0);
 
-  const survivors = mock.listRows('Approved Outreach').slice(1).map((r) => r[0]).sort();
+  const survivors = mock.listRows('Approved Outreach').slice(1).map((r) => r[APPROVED_LEAD_COL]).sort();
   assert.deepEqual(survivors, ['LEAD-ALPHA', 'LEAD-BETA'], 'non-fixture rows must survive cleanup');
 
   const finalReport = buildReport({

@@ -182,6 +182,7 @@ export interface TransactionDetailViewModel {
   readonly notifications: readonly NotificationRecord[];
   readonly can: CanAct;
   readonly facts: TransactionReconciliationFacts | null;
+  readonly ledger: readonly WalletLedgerEntry[];
   readonly isSimulated: true;
 }
 
@@ -684,6 +685,9 @@ export async function transactionDetailViewModel(
     await listNotificationsByCustomer(deps.store, transaction.customerId)
   ).filter((record) => record.transactionId === transaction.id);
   const facts = await marketplaceTransactionFacts(deps.store, transaction.id);
+  const ledger = (
+    await deps.store.readAll<WalletLedgerEntry>("wallet_ledger")
+  ).filter((entry) => entry.transactionId === transaction.id);
 
   const terminal =
     transaction.resolutionStatus === "REFUNDED" ||
@@ -743,6 +747,7 @@ export async function transactionDetailViewModel(
     notifications,
     can,
     facts,
+    ledger,
     isSimulated: true,
   };
 }

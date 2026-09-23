@@ -22,12 +22,12 @@ Not implemented (explicitly out of scope): Phase 3A pilot, 3C detail surface, 3D
 
 ## B. Files Created
 
-| File | Purpose |
-| --- | --- |
+| File                                                       | Purpose                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `storefront/src/marketplace/payment-sources/csv-intake.ts` | Core Phase 3B module: pure `importCsv` parse/validate/normalize + durable `recordCsvImport`. Exposes `CsvImportErrorCode`, typed result/error/row-diagnostic types, `parseAmountMinor`, `normalizeStatus`, `buildImportId`, `parseCsv`, `toEpochMs`. |
-| `storefront/test/marketplace/csv-intake.test.ts` | 17 tests: happy paths (reconcilekit-style + Paystack-style), amount units, all validation rejections, mixed diagnostics, idempotency/determinism, provenance, architectural protection, end-to-end engine boundary, rejected-rows-no-persist. |
-| `storefront/test/fixtures/synthetic-reconcilekit.csv` | Synthetic (clearly labeled) reconcilekit-column-shape fixture: `merchant_reference,amount,currency,status,occurred_at,source_reference`. |
-| `storefront/test/fixtures/synthetic-paystack-export.csv` | Synthetic Paystack-dashboard-shape fixture: `Reference,Transaction Date,Amount Paid,Currency,Status,Source Identifier,Customer Email`. |
+| `storefront/test/marketplace/csv-intake.test.ts`           | 17 tests: happy paths (reconcilekit-style + Paystack-style), amount units, all validation rejections, mixed diagnostics, idempotency/determinism, provenance, architectural protection, end-to-end engine boundary, rejected-rows-no-persist.        |
+| `storefront/test/fixtures/synthetic-reconcilekit.csv`      | Synthetic (clearly labeled) reconcilekit-column-shape fixture: `merchant_reference,amount,currency,status,occurred_at,source_reference`.                                                                                                             |
+| `storefront/test/fixtures/synthetic-paystack-export.csv`   | Synthetic Paystack-dashboard-shape fixture: `Reference,Transaction Date,Amount Paid,Currency,Status,Source Identifier,Customer Email`.                                                                                                               |
 
 The real fixtures `merchant.csv` and `merchant-reconcilekit.csv` at the repo root were read for shape reference but **not** modified.
 
@@ -73,15 +73,15 @@ Typed, explicit results — no console-only errors, swallowed exceptions, ambigu
 
 ## H. Test Results (baseline 388/601 → green + new)
 
-| Gate | Result |
-| --- | --- |
-| Phase 3B tests (`csv-intake.test.ts`) | **17/17 PASS** |
-| Storefront suite | **405/405 PASS** (388 baseline + 17 new) |
+| Gate                                              | Result                                   |
+| ------------------------------------------------- | ---------------------------------------- |
+| Phase 3B tests (`csv-intake.test.ts`)             | **17/17 PASS**                           |
+| Storefront suite                                  | **405/405 PASS** (388 baseline + 17 new) |
 | Root suite (`npm test` from repo root, recursive) | **618/618 PASS** (601 baseline + 17 new) |
-| Storefront typecheck | **PASS** |
-| Root typecheck | **PASS** |
-| ESLint (`npm run lint`) | **PASS** |
-| Prettier (`npm run format:check`) | **PASS** |
+| Storefront typecheck                              | **PASS**                                 |
+| Root typecheck                                    | **PASS**                                 |
+| ESLint (`npm run lint`)                           | **PASS**                                 |
+| Prettier (`npm run format:check`)                 | **PASS**                                 |
 
 All Phase 3B tests verified: happy path (both fixture shapes), amount-unit control, missing/conflicting column, missing reference, invalid amount, missing/unsupported currency, invalid status, invalid timestamp, mixed row diagnostics, exactly-once idempotency, stable import ID, provenance, `mk_txn_`-never-from-CSV architectural protection, end-to-end engine boundary, and rejected-row no-persist.
 

@@ -10,7 +10,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test",
-    "start": "node --env-file-if-exists=.env src/main.ts"
+    "start": "node --env-file-if-exists=.env src/main.ts",
+    "pilot:run": "node src/cli/pilot-run.ts"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

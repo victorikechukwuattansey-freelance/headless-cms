@@ -25,6 +25,7 @@ const assert = require('node:assert/strict');
 
 const { runNode, handoffNodeCode, handoffArtifact, HANDOFF_CODE_NODES } = require('./helpers/handoff-vm.js');
 const { loadHandoffFixtures } = require('../fixtures/handoff-fixtures.js');
+const { APPROVED_COLUMNS } = require('../src/schema.js');
 
 const FIXED_NOW = '2026-09-16T12:00:00.000Z';
 
@@ -48,6 +49,24 @@ const APPROVED_OUTREACH_COLUMNS = [
   'qualification_status',
   'outreach_channel',
   'outreach_status',
+  'approved_at',
+  'notes',
+];
+
+const WRITE_MAP_COLUMNS = [
+  'lead_id',
+  'business_name',
+  'niche',
+  'city',
+  'state',
+  'country',
+  'website',
+  'phone',
+  'email',
+  'contact_name',
+  'verification_source',
+  'score',
+  'channel',
   'approved_at',
   'notes',
 ];
@@ -199,12 +218,24 @@ describe('Handoff stage integrity (structural, offline)', () => {
     );
   });
 
-  it('the columns mapping writes exactly the Approved Outreach columns, never Q:U formula fields', () => {
+  it('the columns mapping writes exactly the 15 handoff-owned columns, never Q:U formula fields', () => {
     const wf = handoffArtifact();
     const write = wf.nodes.find((n) => n.name === 'Write Approved Outreach');
     const columns = write.parameters.columns;
     assert.equal(columns.mappingMode, 'defineBelow');
-    assert.deepEqual(Object.keys(columns.value).sort(), [...APPROVED_OUTREACH_COLUMNS].sort());
+    assert.deepEqual(Object.keys(columns.value).sort(), [...WRITE_MAP_COLUMNS].sort());
+    const enrichmentOwned = ['contact_blocked', 'contact_source_provider'];
+    for (const key of Object.keys(columns.value)) {
+      assert.ok(
+        APPROVED_COLUMNS.includes(key),
+        `write map key must be a live Approved Outreach sheet header: ${key}`,
+      );
+      assert.ok(
+        !enrichmentOwned.includes(key),
+        `handoff must never write an enrichment-owned column: ${key}`,
+      );
+    }
+    assert.ok('country' in columns.value, 'country must stay mapped (live column X)');
     for (const banned of ['_control', '_noNewApproved', ...VERIFIED_FORMULA_FIELDS, 'verified_at', 'manual_review_notes']) {
       assert.ok(!(banned in columns.value), `write mapping must not include ${banned}`);
     }

@@ -85,6 +85,7 @@ export function formatDate(iso: string): string {
 const CHIP_CLASS: Readonly<Record<string, string>> = {
   CONFIRMED: "chip-good",
   HEALTHY: "chip-good",
+  SUCCESS: "chip-good",
   PENDING: "chip-warn",
   PENDING_PROVIDER: "chip-warn",
   REFUND_PENDING: "chip-warn",

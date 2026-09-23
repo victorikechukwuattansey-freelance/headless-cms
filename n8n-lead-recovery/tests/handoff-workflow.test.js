@@ -8,6 +8,8 @@ const path = require('node:path');
 const WF_PATH = path.join(__dirname, '..', 'Approved Outreach Handoff V1.json');
 const WF = JSON.parse(fs.readFileSync(WF_PATH, 'utf8'));
 
+const { APPROVED_COLUMNS } = require('../src/schema.js');
+
 const SPREADSHEET_ID = '1KN-mAYQnCFJJpHofvDmelGK2eMDyPs-TXVZGMKllHFQ';
 
 const APPROVED_OUTREACH_COLUMNS = [
@@ -30,6 +32,24 @@ const APPROVED_OUTREACH_COLUMNS = [
   'qualification_status',
   'outreach_channel',
   'outreach_status',
+  'approved_at',
+  'notes',
+];
+
+const WRITE_MAP_COLUMNS = [
+  'lead_id',
+  'business_name',
+  'niche',
+  'city',
+  'state',
+  'country',
+  'website',
+  'phone',
+  'email',
+  'contact_name',
+  'verification_source',
+  'score',
+  'channel',
   'approved_at',
   'notes',
 ];
@@ -353,12 +373,12 @@ test('T8: source integrity — Verified Leads are only read, nothing leaked into
   const write = byName('Write Approved Outreach');
   const columns = write.parameters.columns;
   assert.equal(columns.mappingMode, 'defineBelow');
-  assert.deepEqual(Object.keys(columns.value).sort(), [...APPROVED_OUTREACH_COLUMNS].sort());
+  assert.deepEqual(Object.keys(columns.value).sort(), [...WRITE_MAP_COLUMNS].sort());
   assert.ok(!('_control' in columns.value));
   assert.ok(!('_noNewApproved' in columns.value));
 });
 
-test('write-subset guard: the handoff append maps ONLY the 21 handoff-owned columns', () => {
+test('write-subset guard: the handoff append maps ONLY the 15 handoff-owned columns', () => {
   const write = byName('Write Approved Outreach');
   const columns = write.parameters.columns;
   assert.equal(columns.mappingMode, 'defineBelow');
@@ -366,8 +386,8 @@ test('write-subset guard: the handoff append maps ONLY the 21 handoff-owned colu
   const enrichmentOwned = ['contact_blocked', 'contact_source_provider'];
   for (const key of mapped) {
     assert.ok(
-      APPROVED_OUTREACH_COLUMNS.includes(key),
-      'handoff must not map a column outside its 21-owned contract: ' + key,
+      APPROVED_COLUMNS.includes(key),
+      'write map key must be a live Approved Outreach sheet header: ' + key,
     );
     assert.ok(
       !enrichmentOwned.includes(key),
@@ -376,9 +396,10 @@ test('write-subset guard: the handoff append maps ONLY the 21 handoff-owned colu
   }
   assert.deepEqual(
     mapped.sort(),
-    [...APPROVED_OUTREACH_COLUMNS].sort(),
-    'handoff writes exactly its 21-owned columns',
+    [...WRITE_MAP_COLUMNS].sort(),
+    'handoff writes exactly its 15-owned columns',
   );
+  assert.ok(mapped.includes('country'), 'country must stay mapped (live column X)');
 });
 
 test('T9: failure recovery — re-running after a failed/partial write never duplicates', () => {

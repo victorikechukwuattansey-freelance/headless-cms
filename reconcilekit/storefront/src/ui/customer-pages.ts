@@ -436,7 +436,7 @@ export function renderTransactionDetailPage(
     <a href="${attr(receiptHref(vm.transaction.id))}">${icon("receipt")} Receipt</a>
     <a href="${attr(evidenceHref(vm.transaction.id))}">${icon("cards")} Evidence detail</a>
   </div>
-  ${resultBanner(vm.evidence)}
+  ${stateBanner(vm)}
   <dl class="kv" style="margin-top:16px">
     <dt>Outcome</dt><dd><span class="mono">${escapeHtml(outcome)}</span></dd>
     <dt>Codes</dt><dd>${escapeHtml((vm.evidence.reconciliation?.codes ?? []).join(", ") || "none")}</dd>
@@ -446,14 +446,10 @@ export function renderTransactionDetailPage(
     <dt>Resolution</dt><dd>${escapeHtml(vm.evidence.resolutionStatus)}</dd>
   </dl>`;
 
-  const moneyBlock = `
-  <dl class="kv">
-    <dt>Your money</dt><dd class="big">${escapeHtml(amountOf(vm))}</dd>
-    <dt>Spend</dt><dd>${escapeHtml(formatMinor(vm.order?.quotedAmountMinor ?? 0, vm.order?.currency ?? "NGN"))}</dd>
-    <dt>Ledger reference</dt><dd class="mono">${escapeHtml(vm.transaction.reference)}</dd>
-  </dl>
-  <div style="margin-top:14px">${atRisk ? moneyAtRiskBadge(true) : `<span class="chip chip-good">${icon("check")} Money not at risk</span>`}</div>`;
-
+  const moneyBlock = paymentTruthBlock(vm);
+  const ledgerBlock = ledgerTruthBlock(vm);
+  const fulfillmentBlock = fulfillmentTruthBlock(vm);
+  const nextBlock = whatNextBlock(vm);
   const actionsBlock = actionsHtml(vm);
   const timelineBlock = timelineHtml(vm);
   const ticketsBlock = ticketsHtml(vm);
@@ -474,6 +470,7 @@ export function renderTransactionDetailPage(
     </div>
   </div>
 
+  <div class="section-label">Transaction truth — three separate records, shown distinctly</div>
   <div class="grid grid-2">
     <div class="card">
       <h3>${icon("wallet")} What happened to your money</h3>
@@ -484,10 +481,22 @@ export function renderTransactionDetailPage(
       ${providerBlock}
     </div>
     <div class="card">
+      <h3>${icon("list")} Ledger truth</h3>
+      ${ledgerBlock}
+    </div>
+    <div class="card">
+      <h3>${icon("check")} Fulfillment truth</h3>
+      ${fulfillmentBlock}
+    </div>
+    <div class="card" style="grid-column:1 / -1">
       <h3>${icon("shield")} ReconcileKit determination</h3>
       ${reconcileBlock}
     </div>
-    <div class="card">
+    <div class="card" style="grid-column:1 / -1">
+      <h3>${icon("arrowLeft")} What happens next</h3>
+      ${nextBlock}
+    </div>
+    <div class="card" style="grid-column:1 / -1">
       <h3>${icon("user")} Simulated data</h3>
       ${simulatedBlock(vm)}
     </div>
@@ -508,6 +517,118 @@ export function renderTransactionDetailPage(
     },
     content,
   );
+}
+
+type DetailRenderState = "SUCCESS" | "DISCREPANCY" | "UNRESOLVED";
+
+function renderStateFor(vm: TransactionDetailViewModel): DetailRenderState {
+  const outcome = vm.transaction.reconcileOutcome ?? "UNKNOWN";
+  if (outcome === "MATCH") {
+    return "SUCCESS";
+  }
+  if (outcome === "DISCREPANCY") {
+    return "DISCREPANCY";
+  }
+  return "UNRESOLVED";
+}
+
+function stateBanner(vm: TransactionDetailViewModel): string {
+  const state = renderStateFor(vm);
+  const outcome = vm.transaction.reconcileOutcome ?? "UNKNOWN";
+  switch (state) {
+    case "SUCCESS":
+      return `<div class="notice notice-good" role="status">${icon("check")}<span><strong>MATCH</strong> — payment, ledger, provider, and fulfillment records line up.</span></div>`;
+    case "DISCREPANCY": {
+      const codes =
+        (vm.evidence?.reconciliation?.codes ?? []).join(", ") || "none";
+      return `<div class="notice notice-warn" role="status">${icon("alert")}<span><strong>${escapeHtml(outcome)}</strong> — the records do not line up. Codes: ${escapeHtml(codes)}.</span></div>`;
+    }
+    default:
+      return `<div class="notice notice-warn" role="status">${icon("alert")}<span><strong>${escapeHtml(outcome)}</strong> — we found records for this transaction, but they do not give us enough evidence to confirm exactly what happened. This is not proof that anything failed — and the system refuses to guess.</span></div>`;
+  }
+}
+
+function paymentTruthBlock(vm: TransactionDetailViewModel): string {
+  const payment = vm.payment;
+  const status = vm.transaction.paymentStatus;
+  const currency = payment?.currency ?? vm.order?.currency ?? "NGN";
+  const paidAt =
+    payment?.paidAt === null || payment?.paidAt === undefined
+      ? "—"
+      : formatDate(payment.paidAt);
+  const charged =
+    payment?.actualAmountMinor === null ||
+    payment?.actualAmountMinor === undefined
+      ? "—"
+      : formatMinor(payment.actualAmountMinor, currency);
+  return `
+  <p class="muted" style="margin:0 0 10px;font-size:0.85em">Statement from the payment layer, recorded before any provider response.</p>
+  <dl class="kv">
+    <dt>Your money</dt><dd class="big">${escapeHtml(amountOf(vm))}</dd>
+    <dt>Payment record status</dt><dd>${statusPill(status.toLowerCase(), status)} ${escapeHtml(status)}</dd>
+    <dt>Expected amount</dt><dd>${escapeHtml(formatMinor(payment?.expectedAmountMinor ?? vm.order?.quotedAmountMinor ?? 0, currency))}</dd>
+    <dt>Amount charged</dt><dd>${escapeHtml(charged)}</dd>
+    <dt>Paid at</dt><dd>${paidAt}</dd>
+    <dt>Wallet reference</dt><dd class="mono">${escapeHtml(payment?.walletReference ?? "—")}</dd>
+  </dl>
+  <div style="margin-top:14px">${vm.truth.moneyAtRisk ? moneyAtRiskBadge(true) : `<span class="chip chip-good">${icon("check")} Money not at risk</span>`}</div>`;
+}
+
+function ledgerTruthBlock(vm: TransactionDetailViewModel): string {
+  if (vm.ledger.length === 0) {
+    return `<div class="empty-state">${icon("wallet")}<p>No wallet ledger entry recorded for this transaction.</p></div>`;
+  }
+  const rows = vm.ledger
+    .map(
+      (entry) => `
+  <tr>
+    <td class="mono">${escapeHtml(entry.id)}</td>
+    <td>${escapeHtml(entry.type.replace(/_/g, " "))}</td>
+    <td class="nowrap">${escapeHtml(formatMinor(entry.amountMinor, entry.currency))}</td>
+    <td>${statusPill(entry.status.toLowerCase(), entry.status)}</td>
+    <td class="mono">${escapeHtml(entry.reference)}</td>
+    <td class="muted nowrap">${escapeHtml(formatDate(entry.occurredAt))}</td>
+  </tr>`,
+    )
+    .join("");
+  return `
+  <p class="muted" style="margin:0 0 10px;font-size:0.85em">Wallet ledger movement for this transaction — money actually moved or reserved.</p>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Entry</th><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th><th>When</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function fulfillmentTruthBlock(vm: TransactionDetailViewModel): string {
+  const artifacts: string[] = [];
+  if (vm.tickets.length > 0) {
+    artifacts.push(`${vm.tickets.length} ticket(s)`);
+  }
+  if (vm.giftCards.length > 0) {
+    artifacts.push(`${vm.giftCards.length} gift card(s)`);
+  }
+  const delivered = artifacts.length === 0 ? "none" : artifacts.join(", ");
+  return `
+  <dl class="kv">
+    <dt>Fulfillment status</dt><dd>${statusPill(vm.transaction.fulfillmentStatus.toLowerCase(), vm.transaction.fulfillmentStatus)} ${escapeHtml(vm.transaction.fulfillmentStatus)}</dd>
+    <dt>Delivered artifacts</dt><dd>${escapeHtml(delivered)}</dd>
+    <dt>Provider reported</dt><dd>${escapeHtml(vm.providerAttempt?.status ?? "—")}</dd>
+  </dl>
+  <p class="muted" style="margin-top:14px;font-size:0.85em">Confirmed payment and delivered fulfillment are separate statements — payment success does not mean the service was delivered.</p>`;
+}
+
+function whatNextBlock(vm: TransactionDetailViewModel): string {
+  const resolution = vm.transaction.resolutionStatus;
+  const resolutionLine =
+    resolution === "NONE"
+      ? ""
+      : `<p style="margin:10px 0 0"><strong>Resolution:</strong> this transaction's resolution state is <span class="mono">${escapeHtml(resolution)}</span>. Open the receipt or evidence detail for the full record.</p>`;
+  return `
+  <p style="margin:0"><strong>${escapeHtml(vm.truth.nextAction)}</strong></p>
+  <p class="muted" style="margin:8px 0 0">${escapeHtml(vm.truth.explanation)}</p>
+  ${resolutionLine}`;
 }
 
 export function renderReceiptPage(vm: ReceiptViewModel): string {
