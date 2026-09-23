@@ -1,280 +1,280 @@
 {
-    "version":  7,
-    "about":  "Integrity manifest for Phase 1-5 FROZEN artifacts (H6 hygiene). A SHA-256 mismatch means the frozen artifact was modified and must not be committed without an approved change. Maintained by the hygiene workstream; baseline hashes recorded in reports/PHASE-6-response-interpretation-v1.md section 9. Version 2: re-baselined the live runner after the approved Phase 5 revision (CLI execution backend); all other artifact hashes were unchanged from the Phase 6 baseline. Phase 5.2: re-baselined the shipped workflow JSON and the workflow contract after correcting the Manual Trigger connection output-slot defect (single main[0] fan-out holding both read targets). Phase 5.4: re-baselined the SAME three artifacts after (a) rewiring the workflow from the diamond (Manual Trigger -\u003e [Read Reconciliation Report, Read Response Log] -\u003e Interpret Responses) to a strict linear chain (Manual Trigger -\u003e Read Reconciliation Report -\u003e Read Response Log -\u003e Interpret Responses -\u003e Response Interpretation Complete), and (b) extending the live runner to surface raw n8n execution errors in failure_info. The diamond is fatally unreachable under n8n pairedItem semantics — an empirical `n8n execute` run produced ExpressionError descriptionKey pairedItemNoConnectionCodeNode (\"Node \u0027Read Reconciliation Report\u0027 hasn\u0027t been executed\"). In the JSON only the connections block changed; node names, ids, types, parameters, and positions are byte-identical. The four frozen-by-task engine sources (response-interpretation.js, embedded-response-interpret.js, response-capture.js, response-reconcile.js) remain unchanged and are verified byte-identical. scripts/build-response-interpretation-workflow.js is NOT a manifest artifact and carries no revision entry. Version 3 (Phase 6.5): re-baselined the live runner after ADDITIVE harness-backend support (webhook payload injection for the test-only workflow; --inject-scenario; executeFailureInfo banner-strip via parseExecuteStdout; no behavioral change to cli/http paths) and ADDED the three Phase 6.5 test-surface artifacts to `artifacts`: the generated `Response-Interpretation V1 — Test Harness.json`, `src/response-interpretation-scenario-payloads.js`, and `src/response-interpretation-test-harness-contract.js`. All frozen hashes (e.g. the shipped workflow `ae365cd3...adb4bac`) are UNCHANGED. scripts/build-response-interpretation-test-harness.js is NOT a manifest artifact. 6.5.1 runtime revision (2026-09-14): harness-backend URL correction (harnessWebhookUrl never embeds a workflow id; dedicated RESP_INT_HARNESS_* env sourcing with N8N_BASE_URL fallback only) plus the approved single-exception empty-read continuation flag (Read Response Log alwaysOutputData=true in the harness only) re-baselined three artifacts: the live runner, the harness contract, and the generated harness JSON. The FROZEN production Response-Interpretation V1.json hash is UNCHANGED (ae365cd3b98fce08b95ccea9fae7661e4d1bde7f655326a4ed13b7031adb4bac). See reports/PHASE-6-5-REVISION-REPORT.md. Version 4 (Phase 6.6 / R-ENRICH-1): enrolled the Enrichment V1 freeze — 9 query-shape sources (enrichment-schema/cache/business/contact/contact-client/contact-oss + the three embedded node mirrors) + 3 fixture files (loader + two fixture JSON goldens), all ADDITIVE and previously-unfrozen, plus the shipped Enrichment V1.json generated deterministically by scripts/build-enrichment-workflow.js (flagged beyond the approved +11 source/fixture dilution). Enrichment V1.json is a builder-derived artifact: any hand-edit that is not reproducible by `npm run enrichment:build` breaks the freeze. No previously-frozen Phase 1-6.5 artifact sha changed. Version 5 (H.4-rev, R-ENRICH-2): AgentData is the new default contact-enrichment provider (Hunter retained, selectable). Re-implemented the client/engine/embedded-mirror around the domainSearch() -\u003e {emails, source} / thrown-error contract; builder adds provider + agentdata* seams, a consolidating contact_provider label, and a report provider_runs key that is provider-dynamic. Re-baselined: src/enrichment-contact.js, src/enrichment-contact-client.js, src/embedded-enrichment-contact.js, fixtures/enrichment-contact-fixtures.json (hunter fixtures gained the provider label + canonical item shape; expected goldens byte-same), fixtures/enrichment-fixtures.js (AGENTDATA fixture path), and the rebuilt Enrichment V1.json; NEW frozen artifact fixtures/enrichment-contact-agentdata.json (AgentData goldens TEST-ENRICH-020/021/022/024/025/026) Version 6 (H.8c / D-C8 revision, 2026-09-18): APPROVED D-C8 country-policy change — src/enrichment-contact.js and src/enrichment-contact-oss.js gained an OPTIONAL countryInScope predicate (default isUsCountry, so the built workflow, fixtures, and every non-runner consumer are byte-behavior-identical), the live runner passes its ENRICHMENT_COUNTRIES_ALLOW/DENY policy through that seam, and Enrichment V1.json was deterministically rebuilt from the updated mirrors. ONLY these three artifact hashes changed; the two embedded-mirror source files are unchanged (they compute their composed body from the engines at load time).",
-    "revisions":  [
-                      {
-                          "path":  "fixtures/enrichment-contact-agentdata.json",
-                          "previous_sha256":  null,
-                          "sha256":  "967a097cb8165bf0894265b58856698145519afb0c38000e3265c823dbb7d31b",
-                          "date":  "2026-09-17",
-                          "reason":  "R-ENRICH-2 (H.4-rev): NEW AgentData fixture goldens TEST-ENRICH-020 (fresh best-email hit + fill-only-empty + preserved contact_name), -021 (name edges incl single-token \u0027Ted\u0027 and absent name), -022 (no_emails_found, credit 1), -024 (fatal auth halt, 2 leads), -025 (server error defers lead A, lead B enriches), -026 (in-process cache hit 2 -\u003e 3, ::agentdata key)."
-                      },
-                      {
-                          "path":  "fixtures/enrichment-contact-fixtures.json",
-                          "previous_sha256":  "b870040d7583bf35c8f2d4e978af73037c1710de863455a07c8bdfd49190a8d2",
-                          "sha256":  "b7dbd2ecef698a88637b646b1bd907dab0c2c7ea7afd6b740230c03e8480c582",
-                          "date":  "2026-09-17",
-                          "reason":  "R-ENRICH-2 (H.4-rev): hunter fixtures 007-013 gained the provider: hunter label and their domainResults emails were migrated to the canonical domainSearch item shape ({email, confidence, verification_status, first_name, last_name, position}); expected golden blocks byte-same. 021-B\u0027s verification was rewritten valid at the wire (catch-all normalized by the client), so the engine\u0027s strict-valid branch sees \u0027valid\u0027."
-                      },
-                      {
-                          "path":  "fixtures/enrichment-fixtures.js",
-                          "previous_sha256":  "b15e2e044efdb32822e458710c1b6b0dfb357c782f5757e5ed28b0beee87061d",
-                          "sha256":  "3bc148fc156c5eaefaf6c2de50e8615f760723753064e49db08b8178d6a48151",
-                          "date":  "2026-09-17",
-                          "reason":  "R-ENRICH-2 (H.4-rev): loader exports AGENTDATA_CONTACT_FIXTURES_PATH and clones the fixture provider field so agentdata vs hunter fixtures stay isolated."
-                      },
-                      {
-                          "path":  "src/enrichment-contact-client.js",
-                          "previous_sha256":  "6b6557acc20bd85ec956411741ee2a06eb9ed5bfc0d77d035e8a6725da39430d",
-                          "sha256":  "3182928a110e8f047dcfd64ba00441124181297a35a40ece579f3f527c86f36e",
-                          "date":  "2026-09-17",
-                          "reason":  "R-ENRICH-2 (H.4-rev): rewrite to the domainSearch() -\u003e {emails, source, creditsUsed} contract with thrown errors (.fatal/.reason/.status). createContactClient dispatch: default provider = opts.provider || ENRICHMENT_PROVIDER || \u0027agentdata\u0027; unknown provider throws. AgentData client: GET https://agentdata.run/api/v1/lookup?domain=...\u0026min_confidence=90\u0026verification_status=valid,catch-all, Authorization Bearer, pure paceDelayFor (200ms min), injectable sleep/clock, retries [500,1500,4500], 401/403 fatal no-retry, 429/5xx retry then non-fatal, other 4xx empty 0-credit, status-0 -\u003e unknown-response; verification caught catch-all -\u003e valid; messages never leak the key. Hunter client retained, canonical emails + throws. apiKey fallback treats explicitly-empty as missing (falls back to env)."
-                      },
-                      {
-                          "path":  "src/enrichment-contact.js",
-                          "previous_sha256":  "6b47955a5af6c1d8578160a1a0d1636efa1efb62c5fb549954ec4564f47f1917",
-                          "sha256":  "3ffc0fafcc4970bbcd0a1b3e4dc1c3574332dd0e0e7c39814f9c6d0d61c68bc7",
-                          "date":  "2026-09-17",
-                          "reason":  "R-ENRICH-2 (H.4-rev): re-implemented around domainSearch/throw contract. provider = opts.provider || client.provider || \u0027agentdata\u0027; lookup prefers client.domainSearch else client.search; fatal throw halts the batch, non-fatal defers; no_client_configured fatal when no lookup fn; tolerant emailOf/scoreOf/verifiedOf; envelope carries provider; SKIP_REASONS/NO_EMAILS_FOUND/NO_ACCEPTED_EMAIL keep their literal strings."
-                      },
-                      {
-                          "path":  "src/embedded-enrichment-contact.js",
-                          "previous_sha256":  "826d9d3390342142d10258d974f50c35e5009d575f46d7e616adb752e0d6199c",
-                          "sha256":  "afa85c2543323eba4c5640ccffce2e8fdc2674444e095d89ea3bb54a7bf212f4",
-                          "date":  "2026-09-17",
-                          "reason":  "R-ENRICH-2 (H.4-rev): self-contained mirror now reads provider seams; provider = payload.provider || \u0027agentdata\u0027 and the failure maps are selected accordingly (agentdataResults/agentdataFailures vs hunterResults/hunterFailures); every failure-map entry throws back into the embedded engine; absent result entries yield {emails: [], source, creditsUsed: 0}; run clock read from payload.now || payload.run_timestamp."
-                      },
-                      {
-                          "path":  "Enrichment V1.json",
-                          "previous_sha256":  "2a20f2f92aab1d3474d85c6e17972cca248dd62d2e8f036a9e91bee0f6332489",
-                          "sha256":  "f6ecb0e8ba5367372b74151c11466a1be35c3378a5fdf48f04621978f39b6770",
-                          "date":  "2026-09-17",
-                          "reason":  "R-ENRICH-2 (H.4-rev): rebuilt deterministically by scripts/build-enrichment-workflow.js. Prepare Enrichment Scope now injects provider + agentdataResults + agentdataFailures seams (hunter seams kept); Consolidate adds contact_provider; the report\u0027s provider_runs key is provider-dynamic ([contactProvider]) while the oss key stays static; the Enrich Contact node was renamed enrich-contact-0001 and fatal behavior wording is provider-neutral (AgentData/Hunter auth). No credential material, byte-deterministic output, clean-source nodes, pinned write surface unchanged."
-                      },
-                      {
-                          "path":  "src/response-interpretation-live-runner.js",
-                          "previous_sha256":  "40ed611f79bcbd1c2ee46374a8c83653470cdf30e60e9b3b35ef00bfc9af7cb1",
-                          "sha256":  "ecf46417d700d87cefa99efa4fd37f2e9ec35e6b9f8680578303837111989f68",
-                          "date":  "2026-09-12",
-                          "reason":  "Phase 5 revision: fix live runner execution mechanism - configurable execution backend (RESP_INT_EXEC_BACKEND=cli|http); cli mode spawns `docker exec -u node -e N8N_RUNNERS_BROKER_PORT=\u003cport\u003e \u003ccontainer\u003e n8n execute --id \u003cworkflow\u003e` with 5679 port-conflict resolution; http mode preserves the REST POST path."
-                      },
-                      {
-                          "path":  "src/response-interpretation-workflow-contract.js",
-                          "previous_sha256":  "9d75b769145e65c2ff14fc129ec3a2f227daf27143d738e132b79e377ea67230",
-                          "sha256":  "dbc452121e50f7a478e7634a629729ea9b7b1f44ce5799b83b1fe1313854bcc0",
-                          "date":  "2026-09-12",
-                          "reason":  "Phase 5.1: contract hardening with explicit expected edges, orphan detection, unreachable-node checks, and $(\u0027Node Name\u0027) reference reachability. No behavioral changes; artifact sha changes only because the contract module is extended with canonical edge sets and reachability helpers."
-                      },
-                      {
-                          "path":  "Response-Interpretation V1.json",
-                          "previous_sha256":  "6b0c6a006d4d745f3e89702a7af8d2100f87132d5cd9b29b84e932aa7c564c03",
-                          "sha256":  "57b80b947fe0d08054285590ffe8ea2d5ef225bdc8e8daad79c0eae7470e2dce",
-                          "date":  "2026-09-13",
-                          "reason":  "Phase 5.2: correct the Manual Trigger connection output-slot defect. The old artifact listed the two read targets as main: [[a], [b]] while n8n-nodes-base.manualTrigger has exactly one output, so main[1] was silently discarded at runtime and every execution stopped at Read Response Log. Regenerated by scripts/build-response-interpretation-workflow.js with both targets living in a single main[0]. Reference: reports/PHASE-6-BLOCKER-REPORT.md. Phase 5.1\u0027s determination that the repo artifact was correct is invalid; only the connection block changed."
-                      },
-                      {
-                          "path":  "src/response-interpretation-workflow-contract.js",
-                          "previous_sha256":  "dbc452121e50f7a478e7634a629729ea9b7b1f44ce5799b83b1fe1313854bcc0",
-                          "sha256":  "7bfb4715ab9ba2d340e5a01a3d5383044a549c1ee2d8d7dace2e060618218115",
-                          "date":  "2026-09-13",
-                          "reason":  "Phase 5.2: contract hardening for the connection output-slot defect class - enforce n8n runtime semantics so the validator fails when a connection\u0027s main array has more branches than the source node\u0027s output count, when a branch index exceeds the output count, and when an edge references an output index \u003e= the source output count; reference topology connection layout corrected to the single-output-slot fan-out. See reports/PHASE-5-2-REPORT.md."
-                      },
-                      {
-                          "path":  "Response-Interpretation V1.json",
-                          "previous_sha256":  "57b80b947fe0d08054285590ffe8ea2d5ef225bdc8e8daad79c0eae7470e2dce",
-                          "sha256":  "ae365cd3b98fce08b95ccea9fae7661e4d1bde7f655326a4ed13b7031adb4bac",
-                          "date":  "2026-09-13",
-                          "reason":  "Phase 5.4: rewire the workflow from the diamond (Manual Trigger -\u003e [Read Reconciliation Report, Read Response Log] -\u003e Interpret Responses) to a strict linear chain (Manual Trigger -\u003e Read Reconciliation Report -\u003e Read Response Log -\u003e Interpret Responses -\u003e Response Interpretation Complete). An empirical `n8n execute --id` run (1 seeded row; tested on 2026-09-13) proved the diamond fatally broken: Interpret Responses threw ExpressionError descriptionKey pairedItemNoConnectionCodeNode with message \"Node \u0027Read Reconciliation Report\u0027 hasn\u0027t been executed\" — n8n pairs every input item to ONE parent item, so a sibling-branch read can never be resolved by $(\u0027...\u0027). Zero seeded rows hid the defect (no items = no pairing check). Only the connections block changed; node names, ids, types, parameters, and positions are byte-identical. Regenerated by scripts/build-response-interpretation-workflow.js (referenceWorkflow now owns the chain; the Phase 5.2 Manual Trigger override was removed). See reports/PHASE-5-4-REPORT.md."
-                      },
-                      {
-                          "path":  "src/response-interpretation-workflow-contract.js",
-                          "previous_sha256":  "7bfb4715ab9ba2d340e5a01a3d5383044a549c1ee2d8d7dace2e060618218115",
-                          "sha256":  "8bb58c9beb51931af6d64811b8dc30daa6774917bcd85ed428dc80cd68792168",
-                          "date":  "2026-09-13",
-                          "reason":  "Phase 5.4: contract rewired to the strict linear chain. TOPOLOGY and EXPECTED_EDGES changed from the diamond fan-out to the chain; referenceWorkflow() connections emit the chain (now the single source of truth); the Phase 5.1+5.2 fan-out validation block was replaced by chain fan-in/fan-out checks (every non-terminal node exactly one outgoing edge, every non-trigger node exactly one incoming edge — the fan-in check is what catches a diamond); new pure helpers incomingCounts/outgoingCounts/pairedItemAncestors exported; assertWorkflowContract now also rejects any $(\u0027X\u0027) reference that is not a transitive pairedItem ancestor (the exact failure class: both diamond reads are reachable, yet only the item\u0027s own ancestry matters). Phase 5.1 reachability/orphan and Phase 5.2 output-slot checks retained. See reports/PHASE-5-4-REPORT.md."
-                      },
-                      {
-                          "path":  "src/response-interpretation-live-runner.js",
-                          "previous_sha256":  "ecf46417d700d87cefa99efa4fd37f2e9ec35e6b9f8680578303837111989f68",
-                          "sha256":  "7cffb808ca6480268fb8d5b1e0a0e220bcb63334a24f9a6354bead2c7bcc7dae",
-                          "date":  "2026-09-13",
-                          "reason":  "Phase 5.4: runner error surfacing. Added executeFailureInfo(stdout) — a pure extractor returning the structured n8n execution error (stage:\u0027execute\u0027, name, message, nodeCause/lastNodeExecuted from resultData.error.context; subset-only, never stack trace or runData) or { stage:\u0027execute\u0027, name:\u0027UnparseableOutput\u0027, message:\u003c300-chars\u003e } for non-empty non-JSON stdout and null for empty stdout. executeCli FAIL now attaches the structured failure so it survives into outcomes.failures -\u003e report failure_info (fullRun and runSelectedPhases push ex.failure or fall back to the string detail); printSummary JSON-stringifies object failures; SECRET_PATTERNS extended with Bearer-token and JWT shapes so redact masks them even inside extracted error text. See reports/PHASE-5-4-REPORT.md."
-                      },
-                      {
-                          "path":  "src/response-interpretation-live-runner.js",
-                          "previous_sha256":  "7cffb808ca6480268fb8d5b1e0a0e220bcb63334a24f9a6354bead2c7bcc7dae",
-                          "sha256":  "8b48a3299132bdb05661debc5a5a14c0dea808d2e829c49d7d58b98779b51a20",
-                          "date":  "2026-09-13",
-                          "reason":  "Phase 6.5: ADDITIVE harness backend. executeShipped/collectExecution route through effectiveExecBackend (args.injectScenario || RESP_INT_EXEC_BACKEND=harness) to executeHarness, which POSTs buildScenarioPayload(scenario, ns) to the versioned webhook url and captures the lastNode Interpret report (normalizeHarnessResponse unwraps a single-item array; null -\u003e NOT_CONFIGURED, non-ok/transport-throw -\u003e FAIL, contract-gate -\u003e FAIL). readConfig gains exec.harness.{baseUrl,workflowId,ready} (ready = baseUrl \u0026\u0026 workflowId, API key not required); buildRunReport execution block gains base_url + webhook_path; preflight adds informational harness-artifact checks under harness mode; parseArgs/usage document --inject-scenario and the harness backend. Fix: executeFailureInfo now strips n8n banner/noise lines via parseExecuteStdout before extracting the error (bare JSON path unchanged). cli/http behavior byte-identical. See reports/PHASE-6-5-REPORT.md."
-                      },
-                      {
-                          "path":  "src/response-interpretation-live-runner.js",
-                          "previous_sha256":  "8b48a3299132bdb05661debc5a5a14c0dea808d2e829c49d7d58b98779b51a20",
-                          "sha256":  "f921263bb37d4dc9c2fbe1cc5b2afe3ea71b45ad2a3f4cac57ba6374aff5eff9",
-                          "date":  "2026-09-14",
-                          "reason":  "Phase 6.5.1: harness backend URL/env correction. harnessWebhookUrl drops the abandoned two-segment workflow-id experiment (production mounts at /webhook/\u003cpath\u003e, test at /webhook-test/\u003cpath\u003e; the workflow id is NEVER part of a webhook URL). readConfig gains exec.harness.{baseUrl,workflowId,webhookPath,webhookMode,ready} sourced ONLY from dedicated RESP_INT_HARNESS_BASE_URL / RESP_INT_HARNESS_WORKFLOW_ID / RESP_INT_HARNESS_WEBHOOK_PATH / RESP_INT_HARNESS_WEBHOOK_MODE (N8N_BASE_URL fallback for baseUrl only; N8N_WORKFLOW_ID alone never satisfies the harness -\u003e NOT_CONFIGURED). .env.example documents the harness block. Empirically, the serene_swartz container (n8n 2.38.7) registers the production webhook under a workflow-id-prefixed path (/webhook/harnessRespIntV10000001/webhook/test/resp-int-harness; the plain /webhook/test/resp-int-harness 404s even after a clean restart), so the operator MUST set RESP_INT_HARNESS_WEBHOOK_PATH to the live-registered path. See reports/PHASE-6-5-REVISION-REPORT.md."
-                      },
-                      {
-                          "path":  "Response-Interpretation V1 — Test Harness.json",
-                          "previous_sha256":  "62664c7c4e3cda56830b8d403fe9b8479d70478f2d17478dd86edd8b31ad30fd",
-                          "sha256":  "9a75ace5635072f63ec73fb591b204c646a6ad4d761cbab9c17879a8f536956e",
-                          "date":  "2026-09-14",
-                          "reason":  "Phase 6.5.1: approved single-exception empty-read continuation flag — the harness Read Response Log (googleSheets) node now sets alwaysOutputData=true (documented contract exception HARNESS_CONTINUATION_FLAG_NODES). A live Response Log sheet with zero data rows makes the read emit an empty branch; an empty main terminates the frozen chain and responseMode=lastNode then 500s with \u0027No item to return was found\u0027 (verified from n8n source webhook-last-node-response-extractor.js + decoded execution runData). The flag passes the input item through on an empty read, so the frozen Interpret Responses -\u003e Response Interpretation Complete chain always runs and the webhook returns a structured report (empirically 200 + full report JSON after re-import + re-activate). Regenerated by scripts/build-response-interpretation-test-harness.js; the FROZEN Response-Interpretation V1.json is untouched."
-                      },
-                      {
-                          "path":  "src/response-interpretation-test-harness-contract.js",
-                          "previous_sha256":  "284b694c51fb5d198bee11894803ce8eabe5aba53b4edd348235b26d5379ff7a",
-                          "sha256":  "3b05058480ec6bce6b207ab666827093c06007198b734abb95eafd9f594d13b9",
-                          "date":  "2026-09-14",
-                          "reason":  "Phase 6.5.1: splice-identity alwaysOutputData check is exception-aware. Read Response Log may set the documented empty-read continuation flag (alwaysOutputData=true; HARNESS_CONTINUATION_FLAG_NODES) while every other spliced node keeps the strict frozen-equal alwaysOutputData check. Module header + hygiene-rule docs describe the single allowance; +2 phase-6-5 tests (flag present on the harness node, flag on a non-exception spliced node rejected)."
-                      },
-                      {
-                          "path":  "src/enrichment-contact.js",
-                          "previous_sha256":  "3ffc0fafcc4970bbcd0a1b3e4dc1c3574332dd0e0e7c39814f9c6d0d61c68bc7",
-                          "sha256":  "0aa919bf6fe54413ec71a6ee6c19e453a7991af9e0785a9ee1df7f436c62a1e3",
-                          "date":  "2026-09-18",
-                          "reason":  "H.8c / D-C8: optional countryInScope predicate (default isUsCountry) so the runnable country policy can reach the engine; skip semantics unchanged. Runner-only seam; default behavior byte-identical."
-                      },
-                      {
-                          "path":  "src/enrichment-contact-oss.js",
-                          "previous_sha256":  "cf31002bfb45369f53c202c1dda44717323396effe8ce7bda4be13be57e7d448",
-                          "sha256":  "9fd8fba6a2d4d7091f78063e5f7c232b38ba327977d80898cc150a4a87722d81",
-                          "date":  "2026-09-18",
-                          "reason":  "H.8c / D-C8: optional countryInScope predicate (default isUsCountry), mirroring the contact engine seam."
-                      },
-                      {
-                          "path":  "Enrichment V1.json",
-                          "previous_sha256":  "f6ecb0e8ba5367372b74151c11466a1be35c3378a5fdf48f04621978f39b6770",
-                          "sha256":  "06a6101c7a922bcf62cca8de07ab6a05db13bbb0d3cfdf4708b28e51f4de1cf1",
-                          "date":  "2026-09-18",
-                          "reason":  "H.8c / D-C8: deterministic rebuild by scripts/build-enrichment-workflow.js after the contact engines gained the countryInScope seam; the built workflow still runs the default US-only isUsCountry gate (unchanged behavior)."
-                      }
-                  ],
-    "artifacts":  [
-                      {
-                          "path":  "src/response-interpretation.js",
-                          "sha256":  "1e3341dbeb02800d21cc69ea1a4648ef196f0982ce2ee98e11fde2c3c6afe401",
-                          "note":  "Response Interpretation engine"
-                      },
-                      {
-                          "path":  "src/response-interpretation-workflow-contract.js",
-                          "sha256":  "8bb58c9beb51931af6d64811b8dc30daa6774917bcd85ed428dc80cd68792168",
-                          "note":  "Phase 3 workflow contract (pinned SPREADSHEET_ID, timestamps/run ids) — Phase 5.1 hardening (EXPECTED_EDGES, reachability helpers), Phase 5.2 output-slot validity, and Phase 5.4 chain: TOPOLOGY/EXPECTED_EDGES are the strict linear chain, referenceWorkflow owns the chain wiring, chain fan-in/fan-out checks + pairedItemAncestors + transitive-ancestor code-reference check"
-                      },
-                      {
-                          "path":  "src/embedded-response-interpret.js",
-                          "sha256":  "8d56121734094e3e9f14d0a8ab1f82db76d7b7b45f81e115753535acf0d7894c",
-                          "note":  "Phase 4 embedded mirror shipped inside the workflow (unchanged by Phase 5.4; references only the chain\u0027s transitive ancestors)"
-                      },
-                      {
-                          "path":  "src/response-interpretation-live-runner.js",
-                          "sha256":  "f921263bb37d4dc9c2fbe1cc5b2afe3ea71b45ad2a3f4cac57ba6374aff5eff9",
-                          "note":  "Phase 5+6.5 live runner (cli/http execution backend; Phase 5.4: executeFailureInfo + structured failure_info; Phase 6.5: ADDITIVE harness backend with --inject-scenario; Phase 6.5.1: harnessWebhookUrl never embeds a workflow id + dedicated RESP_INT_HARNESS_* env sourcing)"
-                      },
-                      {
-                          "path":  "Response-Interpretation V1.json",
-                          "sha256":  "ae365cd3b98fce08b95ccea9fae7661e4d1bde7f655326a4ed13b7031adb4bac",
-                          "note":  "Shipped Response Interpretation V1 workflow (Phase 5.4 strict chain: Manual Trigger -\u003e Read Reconciliation Report -\u003e Read Response Log -\u003e Interpret Responses -\u003e Response Interpretation Complete)"
-                      },
-                      {
-                          "path":  "src/response-capture.js",
-                          "sha256":  "83407df33c2f5b9f88185162480bb7abda600c9d43b79e345007ab1b8ab0f779",
-                          "note":  "Response Capture engine"
-                      },
-                      {
-                          "path":  "src/response-reconcile.js",
-                          "sha256":  "7554973cbab19f7e68cdf363833bd34f6518843b05ce46d597a6a16dad0a6131",
-                          "note":  "Response Reconciliation engine"
-                      },
-                      {
-                          "path":  "Response-Interpretation V1 — Test Harness.json",
-                          "sha256":  "9a75ace5635072f63ec73fb591b204c646a6ad4d761cbab9c17879a8f536956e",
-                          "note":  "Phase 6.5 TEST-ONLY harness (webhook payload-injection surface; generated, deterministic; spliced nodes byte-identical to the frozen chain except the two documented modular allowances on Read Response Log: reference-only credential block + alwaysOutputData=true empty-read continuation flag)"
-                      },
-                      {
-                          "path":  "src/response-interpretation-scenario-payloads.js",
-                          "sha256":  "a4914a85f503a7d44a5a4faa1ec09ffc466e8299575a2c5c356fb9e7bb627ded",
-                          "note":  "Phase 6.5 scenario -\u003e trigger-input payload builder (parity with runner.injectedTriggerInputFor)"
-                      },
-                      {
-                          "path":  "src/response-interpretation-test-harness-contract.js",
-                          "sha256":  "3b05058480ec6bce6b207ab666827093c06007198b734abb95eafd9f594d13b9",
-                          "note":  "Phase 6.5 harness contract + constants (checkHarnessContract/assertHarnessContract; frozen splice identity with the documented alwaysOutputData continuation-flag exception on Read Response Log; hygiene scans)"
-                      },
-                      {
-                          "path":  "src/enrichment-schema.js",
-                          "sha256":  "c8feda69b2039700b8d65db5853b5034b601912f7407f48242027fbe9bf16f0f",
-                          "note":  "R-ENRICH-1: enrichment column/schema contract (Contact Enrichment Log A-N; Verified Leads +4; Approved Outreach contact_blocked + contact_source_provider with the handoff ownership split)"
-                      },
-                      {
-                          "path":  "src/enrichment-cache.js",
-                          "sha256":  "bcb00d36f9f6b021be0a00987c2b5debc8bbfb86c335a33a59e4c0124ba40584",
-                          "note":  "R-ENRICH-1: enrichment cache engine (enrichment_key TTL hit/miss, upsertCache, write-back cache_hit_count)"
-                      },
-                      {
-                          "path":  "src/enrichment-business.js",
-                          "sha256":  "4d8cbd064bec876f47ddd5c095ea5e471def8ee46fc5e29ef1557d5d9a9e04d1",
-                          "note":  "R-ENRICH-1: Overture (business half) enrichment engine"
-                      },
-                      {
-                          "path":  "src/enrichment-contact.js",
-                          "sha256":  "0aa919bf6fe54413ec71a6ee6c19e453a7991af9e0785a9ee1df7f436c62a1e3",
-                          "note":  "R-ENRICH-2: contact-half enrichment engine (provider-labeled AgentData default / Hunter selectable; domainSearch throw contract; best-email scoring, cache-aware, provider envelope)"
-                      },
-                      {
-                          "path":  "src/enrichment-contact-client.js",
-                          "sha256":  "3182928a110e8f047dcfd64ba00441124181297a35a40ece579f3f527c86f36e",
-                          "note":  "R-ENRICH-2: provider dispatch (agentdata|hunter) runner-only transport (Bearer/api_key; pacing, retries, fatal/empty matrix; never shipped inside the workflow)"
-                      },
-                      {
-                          "path":  "src/enrichment-contact-oss.js",
-                          "sha256":  "9fd8fba6a2d4d7091f78063e5f7c232b38ba327977d80898cc150a4a87722d81",
-                          "note":  "R-ENRICH-1: zero-credit OSS fallback contact engine (provider oss/manual, blocked surface)"
-                      },
-                      {
-                          "path":  "src/embedded-enrichment-business.js",
-                          "sha256":  "165935640be753f68952a710fd2f66647ee945f8ad3be599d73993b7bd4cb026",
-                          "note":  "R-ENRICH-1: business-half embedded mirror (self-contained source shipped inside the workflow)"
-                      },
-                      {
-                          "path":  "src/embedded-enrichment-contact.js",
-                          "sha256":  "afa85c2543323eba4c5640ccffce2e8fdc2674444e095d89ea3bb54a7bf212f4",
-                          "note":  "R-ENRICH-2: provider-aware contact mirror byte-equal to Enrich Contact node jsCode"
-                      },
-                      {
-                          "path":  "src/embedded-enrichment-contact-oss.js",
-                          "sha256":  "ac0c37b02fe9485ea5fbe85e59e051fc402d88a2d4214bc8a7d89876266d7224",
-                          "note":  "R-ENRICH-1: OSS mirror byte-equal to Enrich Contact OSS Fallback node jsCode"
-                      },
-                      {
-                          "path":  "fixtures/enrichment-fixtures.js",
-                          "sha256":  "3bc148fc156c5eaefaf6c2de50e8615f760723753064e49db08b8178d6a48151",
-                          "note":  "R-ENRICH-2: enrichment fixture loader (TEST-ENRICH namespaces + golden assertions; AGENTDATA fixture path + provider clone)"
-                      },
-                      {
-                          "path":  "fixtures/enrichment-fixtures.json",
-                          "sha256":  "e46f6c0503d83de873c77cad517a28d574d3c53b067f0e99fd3b00038644c235",
-                          "note":  "R-ENRICH-1: enrichment fixture goldens (business + legacy contact)"
-                      },
-                      {
-                          "path":  "fixtures/enrichment-contact-fixtures.json",
-                          "sha256":  "b7dbd2ecef698a88637b646b1bd907dab0c2c7ea7afd6b740230c03e8480c582",
-                          "note":  "R-ENRICH-2: Hunter contact fixture goldens TEST-ENRICH-007..013 (provider label + canonical item shape; expected goldens byte-same)"
-                      },
-                      {
-                          "path":  "fixtures/enrichment-contact-agentdata.json",
-                          "sha256":  "967a097cb8165bf0894265b58856698145519afb0c38000e3265c823dbb7d31b",
-                          "note":  "R-ENRICH-2: AgentData contact fixture goldens TEST-ENRICH-020/021/022/024/025/026 (fresh hit, name edges, no-emails, fatal auth, server-error defer, cache hit)"
-                      },
-                      {
-                          "path":  "Enrichment V1.json",
-                          "sha256":  "06a6101c7a922bcf62cca8de07ab6a05db13bbb0d3cfdf4708b28e51f4de1cf1",
-                          "note":  "R-ENRICH-2: shipped 16-node Enrichment V1 workflow, deterministic output of scripts/build-enrichment-workflow.js; provider seams (agentdata/hunter) + provider-dynamic report; every code node is a clean-source embedded mirror and sheet writes are pinned to Contact Enrichment Log (append) + the two Approved Outreach enrichment-owned columns (update)"
-                      },
-                      {
-                          "path":  "Approved Outreach Handoff V1.json",
-                          "sha256":  "a1488d119d776bf313faf10cda1dbe266d938926e7163ce0e670f67311cfdeb6",
-                          "note":  "Approved Outreach Handoff V1 — write node reconciled to live sheet schema + alwaysOutputData on Read Approved Outreach (H.8d + lineage fix)"
-                      }
-                  ]
+  "version": 7,
+  "about": "Integrity manifest for Phase 1-5 FROZEN artifacts (H6 hygiene). A SHA-256 mismatch means the frozen artifact was modified and must not be committed without an approved change. Maintained by the hygiene workstream; baseline hashes recorded in reports/PHASE-6-response-interpretation-v1.md section 9. Version 2: re-baselined the live runner after the approved Phase 5 revision (CLI execution backend); all other artifact hashes were unchanged from the Phase 6 baseline. Phase 5.2: re-baselined the shipped workflow JSON and the workflow contract after correcting the Manual Trigger connection output-slot defect (single main[0] fan-out holding both read targets). Phase 5.4: re-baselined the SAME three artifacts after (a) rewiring the workflow from the diamond (Manual Trigger -> [Read Reconciliation Report, Read Response Log] -> Interpret Responses) to a strict linear chain (Manual Trigger -> Read Reconciliation Report -> Read Response Log -> Interpret Responses -> Response Interpretation Complete), and (b) extending the live runner to surface raw n8n execution errors in failure_info. The diamond is fatally unreachable under n8n pairedItem semantics — an empirical `n8n execute` run produced ExpressionError descriptionKey pairedItemNoConnectionCodeNode (\"Node 'Read Reconciliation Report' hasn't been executed\"). In the JSON only the connections block changed; node names, ids, types, parameters, and positions are byte-identical. The four frozen-by-task engine sources (response-interpretation.js, embedded-response-interpret.js, response-capture.js, response-reconcile.js) remain unchanged and are verified byte-identical. scripts/build-response-interpretation-workflow.js is NOT a manifest artifact and carries no revision entry. Version 3 (Phase 6.5): re-baselined the live runner after ADDITIVE harness-backend support (webhook payload injection for the test-only workflow; --inject-scenario; executeFailureInfo banner-strip via parseExecuteStdout; no behavioral change to cli/http paths) and ADDED the three Phase 6.5 test-surface artifacts to `artifacts`: the generated `Response-Interpretation V1 — Test Harness.json`, `src/response-interpretation-scenario-payloads.js`, and `src/response-interpretation-test-harness-contract.js`. All frozen hashes (e.g. the shipped workflow `ae365cd3...adb4bac`) are UNCHANGED. scripts/build-response-interpretation-test-harness.js is NOT a manifest artifact. 6.5.1 runtime revision (2026-09-14): harness-backend URL correction (harnessWebhookUrl never embeds a workflow id; dedicated RESP_INT_HARNESS_* env sourcing with N8N_BASE_URL fallback only) plus the approved single-exception empty-read continuation flag (Read Response Log alwaysOutputData=true in the harness only) re-baselined three artifacts: the live runner, the harness contract, and the generated harness JSON. The FROZEN production Response-Interpretation V1.json hash is UNCHANGED (ae365cd3b98fce08b95ccea9fae7661e4d1bde7f655326a4ed13b7031adb4bac). See reports/PHASE-6-5-REVISION-REPORT.md. Version 4 (Phase 6.6 / R-ENRICH-1): enrolled the Enrichment V1 freeze — 9 query-shape sources (enrichment-schema/cache/business/contact/contact-client/contact-oss + the three embedded node mirrors) + 3 fixture files (loader + two fixture JSON goldens), all ADDITIVE and previously-unfrozen, plus the shipped Enrichment V1.json generated deterministically by scripts/build-enrichment-workflow.js (flagged beyond the approved +11 source/fixture dilution). Enrichment V1.json is a builder-derived artifact: any hand-edit that is not reproducible by `npm run enrichment:build` breaks the freeze. No previously-frozen Phase 1-6.5 artifact sha changed. Version 5 (H.4-rev, R-ENRICH-2): AgentData is the new default contact-enrichment provider (Hunter retained, selectable). Re-implemented the client/engine/embedded-mirror around the domainSearch() -> {emails, source} / thrown-error contract; builder adds provider + agentdata* seams, a consolidating contact_provider label, and a report provider_runs key that is provider-dynamic. Re-baselined: src/enrichment-contact.js, src/enrichment-contact-client.js, src/embedded-enrichment-contact.js, fixtures/enrichment-contact-fixtures.json (hunter fixtures gained the provider label + canonical item shape; expected goldens byte-same), fixtures/enrichment-fixtures.js (AGENTDATA fixture path), and the rebuilt Enrichment V1.json; NEW frozen artifact fixtures/enrichment-contact-agentdata.json (AgentData goldens TEST-ENRICH-020/021/022/024/025/026) Version 6 (H.8c / D-C8 revision, 2026-09-18): APPROVED D-C8 country-policy change — src/enrichment-contact.js and src/enrichment-contact-oss.js gained an OPTIONAL countryInScope predicate (default isUsCountry, so the built workflow, fixtures, and every non-runner consumer are byte-behavior-identical), the live runner passes its ENRICHMENT_COUNTRIES_ALLOW/DENY policy through that seam, and Enrichment V1.json was deterministically rebuilt from the updated mirrors. ONLY these three artifact hashes changed; the two embedded-mirror source files are unchanged (they compute their composed body from the engines at load time).",
+  "revisions": [
+    {
+      "path": "fixtures/enrichment-contact-agentdata.json",
+      "previous_sha256": null,
+      "sha256": "967a097cb8165bf0894265b58856698145519afb0c38000e3265c823dbb7d31b",
+      "date": "2026-09-17",
+      "reason": "R-ENRICH-2 (H.4-rev): NEW AgentData fixture goldens TEST-ENRICH-020 (fresh best-email hit + fill-only-empty + preserved contact_name), -021 (name edges incl single-token 'Ted' and absent name), -022 (no_emails_found, credit 1), -024 (fatal auth halt, 2 leads), -025 (server error defers lead A, lead B enriches), -026 (in-process cache hit 2 -> 3, ::agentdata key)."
+    },
+    {
+      "path": "fixtures/enrichment-contact-fixtures.json",
+      "previous_sha256": "b870040d7583bf35c8f2d4e978af73037c1710de863455a07c8bdfd49190a8d2",
+      "sha256": "b7dbd2ecef698a88637b646b1bd907dab0c2c7ea7afd6b740230c03e8480c582",
+      "date": "2026-09-17",
+      "reason": "R-ENRICH-2 (H.4-rev): hunter fixtures 007-013 gained the provider: hunter label and their domainResults emails were migrated to the canonical domainSearch item shape ({email, confidence, verification_status, first_name, last_name, position}); expected golden blocks byte-same. 021-B's verification was rewritten valid at the wire (catch-all normalized by the client), so the engine's strict-valid branch sees 'valid'."
+    },
+    {
+      "path": "fixtures/enrichment-fixtures.js",
+      "previous_sha256": "b15e2e044efdb32822e458710c1b6b0dfb357c782f5757e5ed28b0beee87061d",
+      "sha256": "3bc148fc156c5eaefaf6c2de50e8615f760723753064e49db08b8178d6a48151",
+      "date": "2026-09-17",
+      "reason": "R-ENRICH-2 (H.4-rev): loader exports AGENTDATA_CONTACT_FIXTURES_PATH and clones the fixture provider field so agentdata vs hunter fixtures stay isolated."
+    },
+    {
+      "path": "src/enrichment-contact-client.js",
+      "previous_sha256": "6b6557acc20bd85ec956411741ee2a06eb9ed5bfc0d77d035e8a6725da39430d",
+      "sha256": "3182928a110e8f047dcfd64ba00441124181297a35a40ece579f3f527c86f36e",
+      "date": "2026-09-17",
+      "reason": "R-ENRICH-2 (H.4-rev): rewrite to the domainSearch() -> {emails, source, creditsUsed} contract with thrown errors (.fatal/.reason/.status). createContactClient dispatch: default provider = opts.provider || ENRICHMENT_PROVIDER || 'agentdata'; unknown provider throws. AgentData client: GET https://agentdata.run/api/v1/lookup?domain=...&min_confidence=90&verification_status=valid,catch-all, Authorization Bearer, pure paceDelayFor (200ms min), injectable sleep/clock, retries [500,1500,4500], 401/403 fatal no-retry, 429/5xx retry then non-fatal, other 4xx empty 0-credit, status-0 -> unknown-response; verification caught catch-all -> valid; messages never leak the key. Hunter client retained, canonical emails + throws. apiKey fallback treats explicitly-empty as missing (falls back to env)."
+    },
+    {
+      "path": "src/enrichment-contact.js",
+      "previous_sha256": "6b47955a5af6c1d8578160a1a0d1636efa1efb62c5fb549954ec4564f47f1917",
+      "sha256": "3ffc0fafcc4970bbcd0a1b3e4dc1c3574332dd0e0e7c39814f9c6d0d61c68bc7",
+      "date": "2026-09-17",
+      "reason": "R-ENRICH-2 (H.4-rev): re-implemented around domainSearch/throw contract. provider = opts.provider || client.provider || 'agentdata'; lookup prefers client.domainSearch else client.search; fatal throw halts the batch, non-fatal defers; no_client_configured fatal when no lookup fn; tolerant emailOf/scoreOf/verifiedOf; envelope carries provider; SKIP_REASONS/NO_EMAILS_FOUND/NO_ACCEPTED_EMAIL keep their literal strings."
+    },
+    {
+      "path": "src/embedded-enrichment-contact.js",
+      "previous_sha256": "826d9d3390342142d10258d974f50c35e5009d575f46d7e616adb752e0d6199c",
+      "sha256": "afa85c2543323eba4c5640ccffce2e8fdc2674444e095d89ea3bb54a7bf212f4",
+      "date": "2026-09-17",
+      "reason": "R-ENRICH-2 (H.4-rev): self-contained mirror now reads provider seams; provider = payload.provider || 'agentdata' and the failure maps are selected accordingly (agentdataResults/agentdataFailures vs hunterResults/hunterFailures); every failure-map entry throws back into the embedded engine; absent result entries yield {emails: [], source, creditsUsed: 0}; run clock read from payload.now || payload.run_timestamp."
+    },
+    {
+      "path": "Enrichment V1.json",
+      "previous_sha256": "2a20f2f92aab1d3474d85c6e17972cca248dd62d2e8f036a9e91bee0f6332489",
+      "sha256": "f6ecb0e8ba5367372b74151c11466a1be35c3378a5fdf48f04621978f39b6770",
+      "date": "2026-09-17",
+      "reason": "R-ENRICH-2 (H.4-rev): rebuilt deterministically by scripts/build-enrichment-workflow.js. Prepare Enrichment Scope now injects provider + agentdataResults + agentdataFailures seams (hunter seams kept); Consolidate adds contact_provider; the report's provider_runs key is provider-dynamic ([contactProvider]) while the oss key stays static; the Enrich Contact node was renamed enrich-contact-0001 and fatal behavior wording is provider-neutral (AgentData/Hunter auth). No credential material, byte-deterministic output, clean-source nodes, pinned write surface unchanged."
+    },
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "previous_sha256": "40ed611f79bcbd1c2ee46374a8c83653470cdf30e60e9b3b35ef00bfc9af7cb1",
+      "sha256": "ecf46417d700d87cefa99efa4fd37f2e9ec35e6b9f8680578303837111989f68",
+      "date": "2026-09-12",
+      "reason": "Phase 5 revision: fix live runner execution mechanism - configurable execution backend (RESP_INT_EXEC_BACKEND=cli|http); cli mode spawns `docker exec -u node -e N8N_RUNNERS_BROKER_PORT=<port> <container> n8n execute --id <workflow>` with 5679 port-conflict resolution; http mode preserves the REST POST path."
+    },
+    {
+      "path": "src/response-interpretation-workflow-contract.js",
+      "previous_sha256": "9d75b769145e65c2ff14fc129ec3a2f227daf27143d738e132b79e377ea67230",
+      "sha256": "dbc452121e50f7a478e7634a629729ea9b7b1f44ce5799b83b1fe1313854bcc0",
+      "date": "2026-09-12",
+      "reason": "Phase 5.1: contract hardening with explicit expected edges, orphan detection, unreachable-node checks, and $('Node Name') reference reachability. No behavioral changes; artifact sha changes only because the contract module is extended with canonical edge sets and reachability helpers."
+    },
+    {
+      "path": "Response-Interpretation V1.json",
+      "previous_sha256": "6b0c6a006d4d745f3e89702a7af8d2100f87132d5cd9b29b84e932aa7c564c03",
+      "sha256": "57b80b947fe0d08054285590ffe8ea2d5ef225bdc8e8daad79c0eae7470e2dce",
+      "date": "2026-09-13",
+      "reason": "Phase 5.2: correct the Manual Trigger connection output-slot defect. The old artifact listed the two read targets as main: [[a], [b]] while n8n-nodes-base.manualTrigger has exactly one output, so main[1] was silently discarded at runtime and every execution stopped at Read Response Log. Regenerated by scripts/build-response-interpretation-workflow.js with both targets living in a single main[0]. Reference: reports/PHASE-6-BLOCKER-REPORT.md. Phase 5.1's determination that the repo artifact was correct is invalid; only the connection block changed."
+    },
+    {
+      "path": "src/response-interpretation-workflow-contract.js",
+      "previous_sha256": "dbc452121e50f7a478e7634a629729ea9b7b1f44ce5799b83b1fe1313854bcc0",
+      "sha256": "7bfb4715ab9ba2d340e5a01a3d5383044a549c1ee2d8d7dace2e060618218115",
+      "date": "2026-09-13",
+      "reason": "Phase 5.2: contract hardening for the connection output-slot defect class - enforce n8n runtime semantics so the validator fails when a connection's main array has more branches than the source node's output count, when a branch index exceeds the output count, and when an edge references an output index >= the source output count; reference topology connection layout corrected to the single-output-slot fan-out. See reports/PHASE-5-2-REPORT.md."
+    },
+    {
+      "path": "Response-Interpretation V1.json",
+      "previous_sha256": "57b80b947fe0d08054285590ffe8ea2d5ef225bdc8e8daad79c0eae7470e2dce",
+      "sha256": "ae365cd3b98fce08b95ccea9fae7661e4d1bde7f655326a4ed13b7031adb4bac",
+      "date": "2026-09-13",
+      "reason": "Phase 5.4: rewire the workflow from the diamond (Manual Trigger -> [Read Reconciliation Report, Read Response Log] -> Interpret Responses) to a strict linear chain (Manual Trigger -> Read Reconciliation Report -> Read Response Log -> Interpret Responses -> Response Interpretation Complete). An empirical `n8n execute --id` run (1 seeded row; tested on 2026-09-13) proved the diamond fatally broken: Interpret Responses threw ExpressionError descriptionKey pairedItemNoConnectionCodeNode with message \"Node 'Read Reconciliation Report' hasn't been executed\" — n8n pairs every input item to ONE parent item, so a sibling-branch read can never be resolved by $('...'). Zero seeded rows hid the defect (no items = no pairing check). Only the connections block changed; node names, ids, types, parameters, and positions are byte-identical. Regenerated by scripts/build-response-interpretation-workflow.js (referenceWorkflow now owns the chain; the Phase 5.2 Manual Trigger override was removed). See reports/PHASE-5-4-REPORT.md."
+    },
+    {
+      "path": "src/response-interpretation-workflow-contract.js",
+      "previous_sha256": "7bfb4715ab9ba2d340e5a01a3d5383044a549c1ee2d8d7dace2e060618218115",
+      "sha256": "8bb58c9beb51931af6d64811b8dc30daa6774917bcd85ed428dc80cd68792168",
+      "date": "2026-09-13",
+      "reason": "Phase 5.4: contract rewired to the strict linear chain. TOPOLOGY and EXPECTED_EDGES changed from the diamond fan-out to the chain; referenceWorkflow() connections emit the chain (now the single source of truth); the Phase 5.1+5.2 fan-out validation block was replaced by chain fan-in/fan-out checks (every non-terminal node exactly one outgoing edge, every non-trigger node exactly one incoming edge — the fan-in check is what catches a diamond); new pure helpers incomingCounts/outgoingCounts/pairedItemAncestors exported; assertWorkflowContract now also rejects any $('X') reference that is not a transitive pairedItem ancestor (the exact failure class: both diamond reads are reachable, yet only the item's own ancestry matters). Phase 5.1 reachability/orphan and Phase 5.2 output-slot checks retained. See reports/PHASE-5-4-REPORT.md."
+    },
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "previous_sha256": "ecf46417d700d87cefa99efa4fd37f2e9ec35e6b9f8680578303837111989f68",
+      "sha256": "7cffb808ca6480268fb8d5b1e0a0e220bcb63334a24f9a6354bead2c7bcc7dae",
+      "date": "2026-09-13",
+      "reason": "Phase 5.4: runner error surfacing. Added executeFailureInfo(stdout) — a pure extractor returning the structured n8n execution error (stage:'execute', name, message, nodeCause/lastNodeExecuted from resultData.error.context; subset-only, never stack trace or runData) or { stage:'execute', name:'UnparseableOutput', message:<300-chars> } for non-empty non-JSON stdout and null for empty stdout. executeCli FAIL now attaches the structured failure so it survives into outcomes.failures -> report failure_info (fullRun and runSelectedPhases push ex.failure or fall back to the string detail); printSummary JSON-stringifies object failures; SECRET_PATTERNS extended with Bearer-token and JWT shapes so redact masks them even inside extracted error text. See reports/PHASE-5-4-REPORT.md."
+    },
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "previous_sha256": "7cffb808ca6480268fb8d5b1e0a0e220bcb63334a24f9a6354bead2c7bcc7dae",
+      "sha256": "8b48a3299132bdb05661debc5a5a14c0dea808d2e829c49d7d58b98779b51a20",
+      "date": "2026-09-13",
+      "reason": "Phase 6.5: ADDITIVE harness backend. executeShipped/collectExecution route through effectiveExecBackend (args.injectScenario || RESP_INT_EXEC_BACKEND=harness) to executeHarness, which POSTs buildScenarioPayload(scenario, ns) to the versioned webhook url and captures the lastNode Interpret report (normalizeHarnessResponse unwraps a single-item array; null -> NOT_CONFIGURED, non-ok/transport-throw -> FAIL, contract-gate -> FAIL). readConfig gains exec.harness.{baseUrl,workflowId,ready} (ready = baseUrl && workflowId, API key not required); buildRunReport execution block gains base_url + webhook_path; preflight adds informational harness-artifact checks under harness mode; parseArgs/usage document --inject-scenario and the harness backend. Fix: executeFailureInfo now strips n8n banner/noise lines via parseExecuteStdout before extracting the error (bare JSON path unchanged). cli/http behavior byte-identical. See reports/PHASE-6-5-REPORT.md."
+    },
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "previous_sha256": "8b48a3299132bdb05661debc5a5a14c0dea808d2e829c49d7d58b98779b51a20",
+      "sha256": "f921263bb37d4dc9c2fbe1cc5b2afe3ea71b45ad2a3f4cac57ba6374aff5eff9",
+      "date": "2026-09-14",
+      "reason": "Phase 6.5.1: harness backend URL/env correction. harnessWebhookUrl drops the abandoned two-segment workflow-id experiment (production mounts at /webhook/<path>, test at /webhook-test/<path>; the workflow id is NEVER part of a webhook URL). readConfig gains exec.harness.{baseUrl,workflowId,webhookPath,webhookMode,ready} sourced ONLY from dedicated RESP_INT_HARNESS_BASE_URL / RESP_INT_HARNESS_WORKFLOW_ID / RESP_INT_HARNESS_WEBHOOK_PATH / RESP_INT_HARNESS_WEBHOOK_MODE (N8N_BASE_URL fallback for baseUrl only; N8N_WORKFLOW_ID alone never satisfies the harness -> NOT_CONFIGURED). .env.example documents the harness block. Empirically, the serene_swartz container (n8n 2.38.7) registers the production webhook under a workflow-id-prefixed path (/webhook/harnessRespIntV10000001/webhook/test/resp-int-harness; the plain /webhook/test/resp-int-harness 404s even after a clean restart), so the operator MUST set RESP_INT_HARNESS_WEBHOOK_PATH to the live-registered path. See reports/PHASE-6-5-REVISION-REPORT.md."
+    },
+    {
+      "path": "Response-Interpretation V1 — Test Harness.json",
+      "previous_sha256": "62664c7c4e3cda56830b8d403fe9b8479d70478f2d17478dd86edd8b31ad30fd",
+      "sha256": "9a75ace5635072f63ec73fb591b204c646a6ad4d761cbab9c17879a8f536956e",
+      "date": "2026-09-14",
+      "reason": "Phase 6.5.1: approved single-exception empty-read continuation flag — the harness Read Response Log (googleSheets) node now sets alwaysOutputData=true (documented contract exception HARNESS_CONTINUATION_FLAG_NODES). A live Response Log sheet with zero data rows makes the read emit an empty branch; an empty main terminates the frozen chain and responseMode=lastNode then 500s with 'No item to return was found' (verified from n8n source webhook-last-node-response-extractor.js + decoded execution runData). The flag passes the input item through on an empty read, so the frozen Interpret Responses -> Response Interpretation Complete chain always runs and the webhook returns a structured report (empirically 200 + full report JSON after re-import + re-activate). Regenerated by scripts/build-response-interpretation-test-harness.js; the FROZEN Response-Interpretation V1.json is untouched."
+    },
+    {
+      "path": "src/response-interpretation-test-harness-contract.js",
+      "previous_sha256": "284b694c51fb5d198bee11894803ce8eabe5aba53b4edd348235b26d5379ff7a",
+      "sha256": "3b05058480ec6bce6b207ab666827093c06007198b734abb95eafd9f594d13b9",
+      "date": "2026-09-14",
+      "reason": "Phase 6.5.1: splice-identity alwaysOutputData check is exception-aware. Read Response Log may set the documented empty-read continuation flag (alwaysOutputData=true; HARNESS_CONTINUATION_FLAG_NODES) while every other spliced node keeps the strict frozen-equal alwaysOutputData check. Module header + hygiene-rule docs describe the single allowance; +2 phase-6-5 tests (flag present on the harness node, flag on a non-exception spliced node rejected)."
+    },
+    {
+      "path": "src/enrichment-contact.js",
+      "previous_sha256": "3ffc0fafcc4970bbcd0a1b3e4dc1c3574332dd0e0e7c39814f9c6d0d61c68bc7",
+      "sha256": "0aa919bf6fe54413ec71a6ee6c19e453a7991af9e0785a9ee1df7f436c62a1e3",
+      "date": "2026-09-18",
+      "reason": "H.8c / D-C8: optional countryInScope predicate (default isUsCountry) so the runnable country policy can reach the engine; skip semantics unchanged. Runner-only seam; default behavior byte-identical."
+    },
+    {
+      "path": "src/enrichment-contact-oss.js",
+      "previous_sha256": "cf31002bfb45369f53c202c1dda44717323396effe8ce7bda4be13be57e7d448",
+      "sha256": "9fd8fba6a2d4d7091f78063e5f7c232b38ba327977d80898cc150a4a87722d81",
+      "date": "2026-09-18",
+      "reason": "H.8c / D-C8: optional countryInScope predicate (default isUsCountry), mirroring the contact engine seam."
+    },
+    {
+      "path": "Enrichment V1.json",
+      "previous_sha256": "f6ecb0e8ba5367372b74151c11466a1be35c3378a5fdf48f04621978f39b6770",
+      "sha256": "06a6101c7a922bcf62cca8de07ab6a05db13bbb0d3cfdf4708b28e51f4de1cf1",
+      "date": "2026-09-18",
+      "reason": "H.8c / D-C8: deterministic rebuild by scripts/build-enrichment-workflow.js after the contact engines gained the countryInScope seam; the built workflow still runs the default US-only isUsCountry gate (unchanged behavior)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "src/response-interpretation.js",
+      "sha256": "1e3341dbeb02800d21cc69ea1a4648ef196f0982ce2ee98e11fde2c3c6afe401",
+      "note": "Response Interpretation engine"
+    },
+    {
+      "path": "src/response-interpretation-workflow-contract.js",
+      "sha256": "8bb58c9beb51931af6d64811b8dc30daa6774917bcd85ed428dc80cd68792168",
+      "note": "Phase 3 workflow contract (pinned SPREADSHEET_ID, timestamps/run ids) — Phase 5.1 hardening (EXPECTED_EDGES, reachability helpers), Phase 5.2 output-slot validity, and Phase 5.4 chain: TOPOLOGY/EXPECTED_EDGES are the strict linear chain, referenceWorkflow owns the chain wiring, chain fan-in/fan-out checks + pairedItemAncestors + transitive-ancestor code-reference check"
+    },
+    {
+      "path": "src/embedded-response-interpret.js",
+      "sha256": "8d56121734094e3e9f14d0a8ab1f82db76d7b7b45f81e115753535acf0d7894c",
+      "note": "Phase 4 embedded mirror shipped inside the workflow (unchanged by Phase 5.4; references only the chain's transitive ancestors)"
+    },
+    {
+      "path": "src/response-interpretation-live-runner.js",
+      "sha256": "f921263bb37d4dc9c2fbe1cc5b2afe3ea71b45ad2a3f4cac57ba6374aff5eff9",
+      "note": "Phase 5+6.5 live runner (cli/http execution backend; Phase 5.4: executeFailureInfo + structured failure_info; Phase 6.5: ADDITIVE harness backend with --inject-scenario; Phase 6.5.1: harnessWebhookUrl never embeds a workflow id + dedicated RESP_INT_HARNESS_* env sourcing)"
+    },
+    {
+      "path": "Response-Interpretation V1.json",
+      "sha256": "ae365cd3b98fce08b95ccea9fae7661e4d1bde7f655326a4ed13b7031adb4bac",
+      "note": "Shipped Response Interpretation V1 workflow (Phase 5.4 strict chain: Manual Trigger -> Read Reconciliation Report -> Read Response Log -> Interpret Responses -> Response Interpretation Complete)"
+    },
+    {
+      "path": "src/response-capture.js",
+      "sha256": "83407df33c2f5b9f88185162480bb7abda600c9d43b79e345007ab1b8ab0f779",
+      "note": "Response Capture engine"
+    },
+    {
+      "path": "src/response-reconcile.js",
+      "sha256": "7554973cbab19f7e68cdf363833bd34f6518843b05ce46d597a6a16dad0a6131",
+      "note": "Response Reconciliation engine"
+    },
+    {
+      "path": "Response-Interpretation V1 — Test Harness.json",
+      "sha256": "9a75ace5635072f63ec73fb591b204c646a6ad4d761cbab9c17879a8f536956e",
+      "note": "Phase 6.5 TEST-ONLY harness (webhook payload-injection surface; generated, deterministic; spliced nodes byte-identical to the frozen chain except the two documented modular allowances on Read Response Log: reference-only credential block + alwaysOutputData=true empty-read continuation flag)"
+    },
+    {
+      "path": "src/response-interpretation-scenario-payloads.js",
+      "sha256": "a4914a85f503a7d44a5a4faa1ec09ffc466e8299575a2c5c356fb9e7bb627ded",
+      "note": "Phase 6.5 scenario -> trigger-input payload builder (parity with runner.injectedTriggerInputFor)"
+    },
+    {
+      "path": "src/response-interpretation-test-harness-contract.js",
+      "sha256": "3b05058480ec6bce6b207ab666827093c06007198b734abb95eafd9f594d13b9",
+      "note": "Phase 6.5 harness contract + constants (checkHarnessContract/assertHarnessContract; frozen splice identity with the documented alwaysOutputData continuation-flag exception on Read Response Log; hygiene scans)"
+    },
+    {
+      "path": "src/enrichment-schema.js",
+      "sha256": "c8feda69b2039700b8d65db5853b5034b601912f7407f48242027fbe9bf16f0f",
+      "note": "R-ENRICH-1: enrichment column/schema contract (Contact Enrichment Log A-N; Verified Leads +4; Approved Outreach contact_blocked + contact_source_provider with the handoff ownership split)"
+    },
+    {
+      "path": "src/enrichment-cache.js",
+      "sha256": "bcb00d36f9f6b021be0a00987c2b5debc8bbfb86c335a33a59e4c0124ba40584",
+      "note": "R-ENRICH-1: enrichment cache engine (enrichment_key TTL hit/miss, upsertCache, write-back cache_hit_count)"
+    },
+    {
+      "path": "src/enrichment-business.js",
+      "sha256": "4d8cbd064bec876f47ddd5c095ea5e471def8ee46fc5e29ef1557d5d9a9e04d1",
+      "note": "R-ENRICH-1: Overture (business half) enrichment engine"
+    },
+    {
+      "path": "src/enrichment-contact.js",
+      "sha256": "0aa919bf6fe54413ec71a6ee6c19e453a7991af9e0785a9ee1df7f436c62a1e3",
+      "note": "R-ENRICH-2: contact-half enrichment engine (provider-labeled AgentData default / Hunter selectable; domainSearch throw contract; best-email scoring, cache-aware, provider envelope)"
+    },
+    {
+      "path": "src/enrichment-contact-client.js",
+      "sha256": "3182928a110e8f047dcfd64ba00441124181297a35a40ece579f3f527c86f36e",
+      "note": "R-ENRICH-2: provider dispatch (agentdata|hunter) runner-only transport (Bearer/api_key; pacing, retries, fatal/empty matrix; never shipped inside the workflow)"
+    },
+    {
+      "path": "src/enrichment-contact-oss.js",
+      "sha256": "9fd8fba6a2d4d7091f78063e5f7c232b38ba327977d80898cc150a4a87722d81",
+      "note": "R-ENRICH-1: zero-credit OSS fallback contact engine (provider oss/manual, blocked surface)"
+    },
+    {
+      "path": "src/embedded-enrichment-business.js",
+      "sha256": "165935640be753f68952a710fd2f66647ee945f8ad3be599d73993b7bd4cb026",
+      "note": "R-ENRICH-1: business-half embedded mirror (self-contained source shipped inside the workflow)"
+    },
+    {
+      "path": "src/embedded-enrichment-contact.js",
+      "sha256": "afa85c2543323eba4c5640ccffce2e8fdc2674444e095d89ea3bb54a7bf212f4",
+      "note": "R-ENRICH-2: provider-aware contact mirror byte-equal to Enrich Contact node jsCode"
+    },
+    {
+      "path": "src/embedded-enrichment-contact-oss.js",
+      "sha256": "ac0c37b02fe9485ea5fbe85e59e051fc402d88a2d4214bc8a7d89876266d7224",
+      "note": "R-ENRICH-1: OSS mirror byte-equal to Enrich Contact OSS Fallback node jsCode"
+    },
+    {
+      "path": "fixtures/enrichment-fixtures.js",
+      "sha256": "3bc148fc156c5eaefaf6c2de50e8615f760723753064e49db08b8178d6a48151",
+      "note": "R-ENRICH-2: enrichment fixture loader (TEST-ENRICH namespaces + golden assertions; AGENTDATA fixture path + provider clone)"
+    },
+    {
+      "path": "fixtures/enrichment-fixtures.json",
+      "sha256": "e46f6c0503d83de873c77cad517a28d574d3c53b067f0e99fd3b00038644c235",
+      "note": "R-ENRICH-1: enrichment fixture goldens (business + legacy contact)"
+    },
+    {
+      "path": "fixtures/enrichment-contact-fixtures.json",
+      "sha256": "b7dbd2ecef698a88637b646b1bd907dab0c2c7ea7afd6b740230c03e8480c582",
+      "note": "R-ENRICH-2: Hunter contact fixture goldens TEST-ENRICH-007..013 (provider label + canonical item shape; expected goldens byte-same)"
+    },
+    {
+      "path": "fixtures/enrichment-contact-agentdata.json",
+      "sha256": "967a097cb8165bf0894265b58856698145519afb0c38000e3265c823dbb7d31b",
+      "note": "R-ENRICH-2: AgentData contact fixture goldens TEST-ENRICH-020/021/022/024/025/026 (fresh hit, name edges, no-emails, fatal auth, server-error defer, cache hit)"
+    },
+    {
+      "path": "Enrichment V1.json",
+      "sha256": "06a6101c7a922bcf62cca8de07ab6a05db13bbb0d3cfdf4708b28e51f4de1cf1",
+      "note": "R-ENRICH-2: shipped 16-node Enrichment V1 workflow, deterministic output of scripts/build-enrichment-workflow.js; provider seams (agentdata/hunter) + provider-dynamic report; every code node is a clean-source embedded mirror and sheet writes are pinned to Contact Enrichment Log (append) + the two Approved Outreach enrichment-owned columns (update)"
+    },
+    {
+      "path": "Approved Outreach Handoff V1.json",
+      "sha256": "b2a3888916873df374b26cace939f4143c9c9de728f5acc51a652a2a98d6e803",
+      "note": "Approved Outreach Handoff V1 — write node reconciled to live sheet schema + alwaysOutputData on Read Approved Outreach (H.8d + lineage fix)"
+    }
+  ]
 }
