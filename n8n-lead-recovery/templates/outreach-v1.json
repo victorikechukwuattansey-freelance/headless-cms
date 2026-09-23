@@ -1,0 +1,5 @@
+{
+  "subject": "Quick question about {{lead.business_name}}",
+  "text": "Hi,\n\nI came across {{lead.business_name}} and wanted to reach out about a short pilot we're running for local service businesses.\n\nWould you have 15 minutes this week?\n\n— Victor",
+  "html": "<p>Hi,</p>\n<p>I came across <strong>{{lead.business_name}}</strong> and wanted to reach out about a short pilot we're running for local service businesses.</p>\n<p>Would you have 15 minutes this week?</p>\n<p>— Victor</p>"
+}

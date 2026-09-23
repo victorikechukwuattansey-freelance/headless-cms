@@ -4,6 +4,7 @@ const { APPROVED_COLUMNS, normalize } = require('./schema');
 const { OUTREACH_COLUMNS } = require('./reconcile');
 const { buildQueueFromSheets, READINESS, CHANNEL, SUPPORTED_CHANNELS } = require('./queue');
 const { NOT_CONFIGURED_PROVIDER } = require('./provider');
+const { resolveMessage } = require('./message-body');
 const { cellRange, rowNumberFromRange } = require('./google-sheets-client');
 
 /*
@@ -43,6 +44,8 @@ const { cellRange, rowNumberFromRange } = require('./google-sheets-client');
  */
 
 const RUN_LABEL = 'EXECUTION';
+
+const DEFAULT_MESSAGE_VARIANT = 'cold-outreach-v1';
 
 const MODE = {
   DRY_RUN: 'DRY_RUN',
@@ -178,7 +181,9 @@ function mergeQueueWithApproved(queue, approvedRows, messageVariants) {
       email: normalize(approved.email),
       phone: normalize(approved.phone),
       contact_name: normalize(approved.contact_name),
-      message_variant: variant,
+      message_variant: !variant && normalize(q.available_channel) === CHANNEL.EMAIL
+        ? DEFAULT_MESSAGE_VARIANT
+        : variant,
     });
     merged.outreach_id = outreachIdFor(merged.lead_id, merged.available_channel);
     return merged;
@@ -224,7 +229,19 @@ function buildPayload(item, executionId) {
     channel: item.available_channel,
     message_variant: item.message_variant,
   };
-  if (item.available_channel === CHANNEL.EMAIL) payload.email = item.email;
+  if (item.available_channel === CHANNEL.EMAIL) {
+    payload.email = item.email;
+    try {
+      const message = resolveMessage({ lead: item, variant: item.message_variant });
+      payload.from = message.from;
+      payload.to = message.to;
+      payload.subject = message.subject;
+      payload.text = message.text;
+      payload.html = message.html;
+    } catch (err) {
+      payload.resolve_error = err && err.message ? String(err.message) : 'message-body: resolve failed';
+    }
+  }
   if (item.available_channel === CHANNEL.CALL) payload.phone = item.phone;
   return payload;
 }
@@ -510,6 +527,16 @@ async function executeFromSheets({
     }
 
     const payload = buildPayload(item, executionId);
+
+    if (payload.resolve_error) {
+      results.push(resultCard(item, {
+        status: EXECUTION_STATUS.REJECTED,
+        reason: REASON.INVALID_PAYLOAD,
+        detail: payload.resolve_error,
+        payload,
+      }));
+      continue;
+    }
 
     if (resolvedMode === MODE.DRY_RUN) {
       results.push(resultCard(item, {

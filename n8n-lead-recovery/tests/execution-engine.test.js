@@ -422,6 +422,89 @@ test('validatePayload: email needs email+variant; call needs phone', () => {
   assert.equal(validatePayload(Object.assign({}, call, { phone: '' })).ok, false);
 });
 
+test('mergeQueueWithApproved defaults email items to cold-outreach-v1 when no explicit variant', () => {
+  const queue = [
+    { lead_id: 'TEST-EXEC-201', available_channel: 'email' },
+    { lead_id: 'TEST-EXEC-202', available_channel: 'call' },
+    { lead_id: 'TEST-EXEC-203', available_channel: 'email' },
+  ];
+  const approved = [
+    { lead_id: 'TEST-EXEC-201', email: 'a@a.example', phone: '', contact_name: 'A' },
+    { lead_id: 'TEST-EXEC-202', email: '', phone: '5125550300', contact_name: 'B' },
+    { lead_id: 'TEST-EXEC-203', email: 'c@c.example', phone: '', contact_name: 'C' },
+  ];
+  const merged = mergeQueueWithApproved(queue, approved, { 'TEST-EXEC-203': 'outreach-v1' });
+  assert.equal(merged[0].message_variant, 'cold-outreach-v1', 'email without explicit variant defaults');
+  assert.equal(merged[1].message_variant, '', 'call items keep an empty variant');
+  assert.equal(merged[2].message_variant, 'outreach-v1', 'explicit variant wins over the default');
+});
+
+test('validatePayload accepts an email item whose variant was defaulted at merge', () => {
+  const merged = mergeQueueWithApproved(
+    [{ lead_id: 'TEST-EXEC-204', available_channel: 'email' }],
+    [{ lead_id: 'TEST-EXEC-204', email: 'd@d.example' }],
+    {},
+  )[0];
+  assert.equal(merged.message_variant, 'cold-outreach-v1');
+  assert.equal(validatePayload(merged).ok, true, 'defaulted variant satisfies the email payload contract');
+});
+
+test('buildPayload for email merges the message-body resolver envelope', () => {
+  const item = {
+    lead_id: 'TEST-EXEC-205',
+    outreach_id: 'EX-TEST-EXEC-205-email',
+    business_name: 'Envelope Co',
+    contact_name: 'Ed',
+    available_channel: 'email',
+    email: 'ed@env.example',
+    message_variant: 'cold-outreach-v1',
+  };
+  const payload = buildPayload(item, 'EXE-DET');
+  assert.equal(payload.email, 'ed@env.example');
+  assert.equal(payload.to, 'ed@env.example');
+  assert.equal(payload.from, process.env.RESEND_FROM_EMAIL || '');
+  assert.equal(payload.subject, 'Quick question about Envelope Co');
+  assert.match(payload.text, /Envelope Co/);
+  assert.match(payload.html, /Envelope Co/);
+  assert.equal(payload.resolve_error, undefined, 'no resolver failure for a resolvable variant');
+});
+
+test('buildPayload for call stays phone-only with no message fields', () => {
+  const item = {
+    lead_id: 'TEST-EXEC-206',
+    outreach_id: 'EX-TEST-EXEC-206-call',
+    business_name: 'Call Co',
+    available_channel: 'call',
+    phone: '5125550400',
+    message_variant: '',
+  };
+  const payload = buildPayload(item, 'EXE-DET');
+  assert.equal(payload.phone, '5125550400');
+  assert.equal(payload.email, undefined);
+  assert.equal(payload.subject, undefined);
+  assert.equal(payload.resolve_error, undefined);
+});
+
+test('payload resolve failure rejects INVALID_PAYLOAD and does not throw out of executeFromSheets', async () => {
+  const fx = fixtureById('TEST-EXEC-001');
+  const { report, logRows } = await runRows(fx, {
+    provider: providerFor('SUCCESS'),
+    messageVariants: { 'TEST-EXEC-001': 'no-such-template-v1' },
+  });
+  assert.equal(report.status, 'COMPLETED');
+  assert.equal(report.ready_candidates, 1);
+  assert.equal(report.executed_attempted, 0, 'no provider attempt for an unresolvable template');
+  assert.equal(report.executed_rejected, 1);
+  assert.equal(report.provider_calls, 0);
+  assert.equal(logRows.length, 0);
+  const card = report.results[0];
+  assert.equal(card.status, EXECUTION_STATUS.REJECTED);
+  assert.equal(card.reason, REASON.INVALID_PAYLOAD);
+  assert.match(card.detail, /message-body: template not found: no-such-template-v1/);
+  assert.equal(card.payload.message_variant, 'no-such-template-v1');
+  assert.equal(card.provider_call, null);
+});
+
 test('gateExecution: empty sent_at holds LOG_INCONSISTENT; confirmed rows suppress; suppressed leads block', () => {
   const sent = buildSentIndex([
     { lead_id: 'TEST-EXEC-300', channel: 'email', sent_at: '2026-09-01T00:00:00.000Z' },
