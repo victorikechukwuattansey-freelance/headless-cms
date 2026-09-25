@@ -143,6 +143,56 @@ test('Idempotency-Key header is EX-<lead_id>-<channel> and stable across retries
   assert.deepEqual(keys, ['EX-LEAD-001-email', 'EX-LEAD-001-email']);
 });
 
+test('List-Unsubscribe headers sent when both URL and mailto are set', async () => {
+  const sentHeaders = [];
+  const fetchImpl = async (_url, opts) => {
+    sentHeaders.push(opts.headers);
+    return fakeResponse({ status: 200, body: { id: 're_test_123' } });
+  };
+  const adapter = new ResendAdapter({
+    apiKey: 're_test_key',
+    fetchImpl,
+    pacingMs: 0,
+    unsubscribeUrl: 'https://example.com/unsub',
+    unsubscribeMailto: 'unsubscribe@example.com',
+  });
+  await adapter.execute('email', BASE_PAYLOAD);
+  assert.equal(
+    sentHeaders[0]['List-Unsubscribe'],
+    '<https://example.com/unsub>, <mailto:unsubscribe@example.com>'
+  );
+  assert.equal(sentHeaders[0]['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
+});
+
+test('List-Unsubscribe-Post is omitted when only mailto is set', async () => {
+  const sentHeaders = [];
+  const fetchImpl = async (_url, opts) => {
+    sentHeaders.push(opts.headers);
+    return fakeResponse({ status: 200, body: { id: 're_test_123' } });
+  };
+  const adapter = new ResendAdapter({
+    apiKey: 're_test_key',
+    fetchImpl,
+    pacingMs: 0,
+    unsubscribeMailto: 'unsubscribe@example.com',
+  });
+  await adapter.execute('email', BASE_PAYLOAD);
+  assert.equal(sentHeaders[0]['List-Unsubscribe'], '<mailto:unsubscribe@example.com>');
+  assert.equal(sentHeaders[0]['List-Unsubscribe-Post'], undefined);
+});
+
+test('no List-Unsubscribe headers when neither option is set', async () => {
+  const sentHeaders = [];
+  const fetchImpl = async (_url, opts) => {
+    sentHeaders.push(opts.headers);
+    return fakeResponse({ status: 200, body: { id: 're_test_123' } });
+  };
+  const adapter = new ResendAdapter({ apiKey: 're_test_key', fetchImpl, pacingMs: 0 });
+  await adapter.execute('email', BASE_PAYLOAD);
+  assert.equal(sentHeaders[0]['List-Unsubscribe'], undefined);
+  assert.equal(sentHeaders[0]['List-Unsubscribe-Post'], undefined);
+});
+
 test('network error retries once then fails', async () => {
   let call = 0;
   const fetchImpl = async () => {

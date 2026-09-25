@@ -52,6 +52,8 @@ class ResendAdapter {
     timeoutMs = DEFAULT_TIMEOUT_MS,
     backoffMs = DEFAULT_BACKOFF_MS,
     pacingMs = DEFAULT_PACING_MS,
+    unsubscribeUrl = '',
+    unsubscribeMailto = '',
   } = {}) {
     if (!apiKey) {
       throw new Error('ResendAdapter requires an apiKey');
@@ -62,6 +64,8 @@ class ResendAdapter {
     this.timeoutMs = timeoutMs;
     this.backoffMs = backoffMs;
     this.pacingMs = pacingMs;
+    this.unsubscribeUrl = unsubscribeUrl;
+    this.unsubscribeMailto = unsubscribeMailto;
   }
 
   isConfigured() {
@@ -83,14 +87,28 @@ class ResendAdapter {
   async _post(body, idempotencyKey) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${this.apiKey}`,
+      'Idempotency-Key': idempotencyKey,
+    };
+
+    // RFC 2369 / RFC 8058 — List-Unsubscribe. One-Click is only valid when an
+    // HTTPS URL is present; mailto alone gets the base header without the Post.
+    const listUnsubscribe = [];
+    if (this.unsubscribeUrl) listUnsubscribe.push(`<${this.unsubscribeUrl}>`);
+    if (this.unsubscribeMailto) listUnsubscribe.push(`<mailto:${this.unsubscribeMailto}>`);
+    if (listUnsubscribe.length > 0) {
+      headers['List-Unsubscribe'] = listUnsubscribe.join(', ');
+      if (this.unsubscribeUrl) {
+        headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+      }
+    }
+
     try {
       return await this.fetch(RESEND_API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-          'Idempotency-Key': idempotencyKey,
-        },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });

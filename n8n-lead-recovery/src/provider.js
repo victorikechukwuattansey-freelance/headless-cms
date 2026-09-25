@@ -114,7 +114,11 @@ function providerFor(mode) {
   if (mode === PROVIDER_MODE.REAL) {
     if (process.env.RESEND_API_KEY) {
       const { ResendAdapter } = require('./providers/resend');
-      return new ResendAdapter({ apiKey: process.env.RESEND_API_KEY });
+      return new ResendAdapter({
+        apiKey: process.env.RESEND_API_KEY,
+        unsubscribeUrl: process.env.RESEND_UNSUBSCRIBE_URL || '',
+        unsubscribeMailto: process.env.RESEND_UNSUBSCRIBE_MAILTO || '',
+      });
     }
     return NOT_CONFIGURED_PROVIDER;
   }
