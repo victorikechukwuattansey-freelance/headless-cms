@@ -21,6 +21,10 @@
  *     otherwise -> REJECTED_PAYLOAD (defense-in-depth; the executor validates too).
  *   - Idempotency-Key: EX-<lead_id>-<channel>, deterministic across retries/runs.
  *   - POST { from, to, subject, text, html } (html omitted when not provided).
+ *   - RFC 8058 List-Unsubscribe headers are sent in the request BODY's
+ *     `headers` field (Resend forwards body.headers onto the outgoing email),
+ *     never as HTTP request headers — HTTP request headers are only seen by
+ *     Resend's API and never reach the delivered message.
  *   - 200 + { id } -> { success: true, provider_status: 'SENT',
  *     provider_message_id: id, idempotent_replayed }.
  *   - 429/5xx or network/timeout: retry once after backoff; second failure fails.
@@ -93,18 +97,6 @@ class ResendAdapter {
       'Idempotency-Key': idempotencyKey,
     };
 
-    // RFC 2369 / RFC 8058 — List-Unsubscribe. One-Click is only valid when an
-    // HTTPS URL is present; mailto alone gets the base header without the Post.
-    const listUnsubscribe = [];
-    if (this.unsubscribeUrl) listUnsubscribe.push(`<${this.unsubscribeUrl}>`);
-    if (this.unsubscribeMailto) listUnsubscribe.push(`<mailto:${this.unsubscribeMailto}>`);
-    if (listUnsubscribe.length > 0) {
-      headers['List-Unsubscribe'] = listUnsubscribe.join(', ');
-      if (this.unsubscribeUrl) {
-        headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-      }
-    }
-
     try {
       return await this.fetch(RESEND_API_URL, {
         method: 'POST',
@@ -150,6 +142,21 @@ class ResendAdapter {
     }
     if (hasHtml) {
       body.html = payload.html;
+    }
+
+    // RFC 8058 List-Unsubscribe — these go in the request BODY's `headers`
+    // field, not as HTTP request headers. Resend forwards body.headers onto
+    // the outgoing email; HTTP request headers are only seen by Resend's API.
+    const unsubscribe = {};
+    if (this.unsubscribeUrl) {
+      unsubscribe['List-Unsubscribe'] = `<${this.unsubscribeUrl}>` +
+        (this.unsubscribeMailto ? `, <mailto:${this.unsubscribeMailto}>` : '');
+      unsubscribe['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+    } else if (this.unsubscribeMailto) {
+      unsubscribe['List-Unsubscribe'] = `<mailto:${this.unsubscribeMailto}>`;
+    }
+    if (Object.keys(unsubscribe).length > 0) {
+      body.headers = unsubscribe;
     }
 
     for (let attempt = 0; attempt < 2; attempt += 1) {

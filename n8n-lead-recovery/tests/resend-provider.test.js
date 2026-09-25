@@ -143,10 +143,10 @@ test('Idempotency-Key header is EX-<lead_id>-<channel> and stable across retries
   assert.deepEqual(keys, ['EX-LEAD-001-email', 'EX-LEAD-001-email']);
 });
 
-test('List-Unsubscribe headers sent when both URL and mailto are set', async () => {
-  const sentHeaders = [];
+test('List-Unsubscribe headers sent in body when both URL and mailto are set', async () => {
+  const requests = [];
   const fetchImpl = async (_url, opts) => {
-    sentHeaders.push(opts.headers);
+    requests.push(opts);
     return fakeResponse({ status: 200, body: { id: 're_test_123' } });
   };
   const adapter = new ResendAdapter({
@@ -157,17 +157,19 @@ test('List-Unsubscribe headers sent when both URL and mailto are set', async () 
     unsubscribeMailto: 'unsubscribe@example.com',
   });
   await adapter.execute('email', BASE_PAYLOAD);
+  const body = JSON.parse(requests[0].body);
   assert.equal(
-    sentHeaders[0]['List-Unsubscribe'],
+    body.headers['List-Unsubscribe'],
     '<https://example.com/unsub>, <mailto:unsubscribe@example.com>'
   );
-  assert.equal(sentHeaders[0]['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
+  assert.equal(body.headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
+  assert.equal(requests[0].headers['List-Unsubscribe'], undefined);
 });
 
-test('List-Unsubscribe-Post is omitted when only mailto is set', async () => {
-  const sentHeaders = [];
+test('List-Unsubscribe-Post is omitted in body when only mailto is set', async () => {
+  const requests = [];
   const fetchImpl = async (_url, opts) => {
-    sentHeaders.push(opts.headers);
+    requests.push(opts);
     return fakeResponse({ status: 200, body: { id: 're_test_123' } });
   };
   const adapter = new ResendAdapter({
@@ -177,20 +179,39 @@ test('List-Unsubscribe-Post is omitted when only mailto is set', async () => {
     unsubscribeMailto: 'unsubscribe@example.com',
   });
   await adapter.execute('email', BASE_PAYLOAD);
-  assert.equal(sentHeaders[0]['List-Unsubscribe'], '<mailto:unsubscribe@example.com>');
-  assert.equal(sentHeaders[0]['List-Unsubscribe-Post'], undefined);
+  const body = JSON.parse(requests[0].body);
+  assert.equal(body.headers['List-Unsubscribe'], '<mailto:unsubscribe@example.com>');
+  assert.equal(body.headers['List-Unsubscribe-Post'], undefined);
 });
 
-test('no List-Unsubscribe headers when neither option is set', async () => {
-  const sentHeaders = [];
+test('no List-Unsubscribe headers field when neither option is set', async () => {
+  const requests = [];
   const fetchImpl = async (_url, opts) => {
-    sentHeaders.push(opts.headers);
+    requests.push(opts);
     return fakeResponse({ status: 200, body: { id: 're_test_123' } });
   };
   const adapter = new ResendAdapter({ apiKey: 're_test_key', fetchImpl, pacingMs: 0 });
   await adapter.execute('email', BASE_PAYLOAD);
-  assert.equal(sentHeaders[0]['List-Unsubscribe'], undefined);
-  assert.equal(sentHeaders[0]['List-Unsubscribe-Post'], undefined);
+  const body = JSON.parse(requests[0].body);
+  assert.equal(body.headers, undefined);
+});
+
+test('List-Unsubscribe is never sent as an HTTP request header', async () => {
+  const requests = [];
+  const fetchImpl = async (_url, opts) => {
+    requests.push(opts);
+    return fakeResponse({ status: 200, body: { id: 're_test_123' } });
+  };
+  const adapter = new ResendAdapter({
+    apiKey: 're_test_key',
+    fetchImpl,
+    pacingMs: 0,
+    unsubscribeUrl: 'https://example.com/unsub',
+    unsubscribeMailto: 'unsubscribe@example.com',
+  });
+  await adapter.execute('email', BASE_PAYLOAD);
+  assert.equal(requests[0].headers['List-Unsubscribe'], undefined);
+  assert.equal(requests[0].headers['List-Unsubscribe-Post'], undefined);
 });
 
 test('network error retries once then fails', async () => {
