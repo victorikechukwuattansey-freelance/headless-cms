@@ -61,3 +61,5 @@ sa-*.json
 .env
 .env.*
 !.env.example
+# Inner-repo backup during consolidation — safe to delete once Cloudflare is re-pointed
+n8n-lead-recovery/.git.backup/
