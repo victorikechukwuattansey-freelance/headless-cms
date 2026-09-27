@@ -5,6 +5,7 @@ const {
   APPROVED_COLUMNS,
   OUTREACH_COLUMNS,
 } = require("../src/queue");
+const { GoogleSheetsClient } = require("../src/google-sheets-client");
 const {
   executeFromSheets,
   MODE,
@@ -12,31 +13,27 @@ const {
 } = require("../src/execution");
 
 (async () => {
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-  const token = process.env.GOOGLE_ACCESS_TOKEN;
-  if (!sheetId || !token) {
-    console.error("GOOGLE_SHEET_ID and GOOGLE_ACCESS_TOKEN are required");
+  if (!process.env.GOOGLE_SHEET_ID) {
+    console.error("GOOGLE_SHEET_ID is required");
+    process.exit(3);
+  }
+  if (
+    !process.env.GOOGLE_ACCESS_TOKEN &&
+    !process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  ) {
+    console.error(
+      "GOOGLE_ACCESS_TOKEN or GOOGLE_SERVICE_ACCOUNT_JSON is required",
+    );
     process.exit(3);
   }
 
-  const base = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values`;
-  const headers = { Authorization: `Bearer ${token}` };
-
-  const fetchRange = async (range) => {
-    const r = await fetch(`${base}/${encodeURIComponent(range)}`, { headers });
-    const j = await r.json();
-    if (!r.ok)
-      throw new Error(
-        `Sheets API ${r.status}: ${j.error ? j.error.message : ""}`,
-      );
-    return j.values || [];
-  };
+  const client = GoogleSheetsClient.fromEnv(process.env);
 
   const toObjects = (cols, rows) =>
     rows.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i] ?? ""])));
 
-  const approvedRaw = await fetchRange("'Approved Outreach'!A2:X");
-  const outreachRaw = await fetchRange("'Outreach Log'!A2:V");
+  const approvedRaw = (await client.listRows("Approved Outreach")).slice(1); // drop header row
+  const outreachRaw = (await client.listRows("Outreach Log")).slice(1); // drop header row
 
   console.log("[debug] approvedRaw rows:", approvedRaw.length);
   console.log("[debug] outreachRaw rows:", outreachRaw.length);
