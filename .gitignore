@@ -54,3 +54,10 @@ handi_work/
 reconcilekit/merchant.csv
 reconcilekit/merchant-reconcilekit.csv
 workflows/lead-recovery-engine/batch.csv
+
+# Service account keys and secrets — never commit
+sa-*.json
+*service-account*.json
+.env
+.env.*
+!.env.example
