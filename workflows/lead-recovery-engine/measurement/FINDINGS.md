@@ -2,7 +2,9 @@
 
 **Date:** 2026-09-27
 **Updated:** 2026-09-28 — reconciled against committed production at `5c1a854`. F11, F12, F13 and
-F14 are resolved; F15 is open.
+F14 are resolved; F15, F16 and F17 are open. F16 and F17 were added from
+`measurement/EVIDENCE_MATRIX.md` (`c0f8e5b`, a docs-only commit); production JSON is unchanged at
+`5c1a854`.
 **Scope:** `workflows/lead-recovery-engine/01–07` (committed JSON at `5c1a854`)
 **Method:** observational harness (`measurement/`) executes the real workflow JSON —
 real Code-node `jsCode` via `new Function`, an n8n expression evaluator
@@ -29,6 +31,8 @@ copied verbatim from the live tab contracts.
 | **F13** | **RESOLVED 2026-09-28** | `error_message` is now sanitised in `06 - Error Handler.json`, and its string branch redacts like its object branch. Commit `5c1a854`. |
 | **F14** | **RESOLVED 2026-09-28** | The shared `SECRET_RE` now consumes a bare or header-style Bearer credential whole, in all three consumers. Commit `5c1a854`. |
 | **F15** | **open** | Quoted JSON secret values (`"password":"hunter2"`) are still not redacted. Deliberately excluded from `5c1a854`. |
+| **F16** | **open** | WF05's follow-up failure path leaves lead state untouched, so a lead that keeps failing is retried hourly, forever, with nothing recorded. Classification: production reliability defect. Severity: not yet assigned. |
+| **F17** | **open** | WF05 writes no `status_updates` row for the terminal transition, so the transition that closes the follow-up lifecycle is the one the audit trail does not record. Classification: audit-trail defect. Severity: not yet assigned. |
 
 ### F1 side effect on F6
 
@@ -151,7 +155,7 @@ Restates the resolution log above for `5c1a854`; the log remains the source of t
 
 **Resolved — 8 findings, no further work claimed:** F1, F5, F9, F10, F11, F12, F13, F14.
 
-**Open — 7 findings, carried forward.** The second column is the reason each one is still open, so a
+**Open — 9 findings, carried forward.** The second column is the reason each one is still open, so a
 deliberately deferred item is not read as an active regression.
 
 | ID | Why still open | Deferred? |
@@ -163,6 +167,8 @@ deliberately deferred item is not read as an active regression.
 | F7 | `Update Lead Response` does not bump `updated_at` | yes — out of scope |
 | F8 | Rejected and duplicate traffic leaves no trace anywhere | yes — needs a schema decision, not a code fix |
 | F15 | Quoted JSON secret values are not redacted | yes — deliberately excluded from `5c1a854` |
+| F16 | WF05 fails silently and leaves the lead re-eligible forever | **no — active production defect** |
+| F17 | WF05 records no `status_updates` row for the terminal transition | **no — active audit-trail defect** |
 
 **`measurement_events` — not implemented, and not introduced by any fix in this document.** It
 remains an open *schema* decision attached to F8, not a code finding and not a code fix. F8 is the
@@ -770,6 +776,111 @@ rather than folded into that commit.
 
 ---
 
+## F16 — WF05 fails follow-up sends silently and leaves the lead re-eligible forever
+
+**Status: OPEN · CONFIRMED · classification: production reliability defect · severity not yet assigned**
+
+Surfaced from `measurement/EVIDENCE_MATRIX.md`, which rated the claim *follow-up actually sent —
+attempts* as **NO**. Read as a measurement question the gap is survivable; read as a statement about
+the engine it is not: WF05's failure path is a terminal dead end that changes nothing, and the
+sweeper runs hourly.
+
+**Evidence.** `05 - Follow-up Sweeper.json` has ten nodes and exactly one write — `Update Lead
+Follow-up State`, on `leads`. The relevant edges:
+
+| Node | Type | Notes |
+| --- | --- | --- |
+| `Schedule Trigger` | `scheduleTrigger` | `0 * * * *` — hourly |
+| `Send Follow-up Email` | `emailSend` | `onError: continueErrorOutput` |
+| ↳ output 0 | — | → `Advance Follow-up State` |
+| ↳ output 1 | — | → `End Failed Sends` |
+| `Advance Follow-up State` | `code` | the **only** node that advances follow-up state |
+| `End Failed Sends` | `noOp` | **no outgoing connections — terminal** |
+
+`Advance Follow-up State` is the sole place in the whole engine that increments `followup_count`,
+stamps `last_contact_at`, recomputes `next_followup_at`, and sets the terminal
+`status: 'no_response'` once `count >= max_followups`. It is reachable only from output 0.
+
+**Consequence.** On failure, all four values are left exactly as they were:
+
+| Field | After a successful send | After a failed send |
+| --- | --- | --- |
+| `followup_count` | `+1` | **unchanged** |
+| `last_contact_at` | stamped now | **unchanged** |
+| `next_followup_at` | pushed out `followup_delay_hours` (default 24) | **unchanged, stays in the past** |
+| `status` | `no_response` once at max | **unchanged** |
+
+`Select Follow-up Candidates` admits a lead when `followup_count < max_followups` (default 3) **and**
+`next_followup_at` is present and `<= now`. A failure changes none of the three inputs to that test,
+so **all three conditions still hold on the next hourly run — and on every run after that.** The
+retry loop is unbounded in time, and `max_followups` is unreachable, because the counter it compares
+against is only incremented on the success path.
+
+**Nothing is recorded.** WF05 contains no `errors` write at all — its three Google Sheets nodes are
+two reads (`business_config`, `leads`) and one `leads` update. And because the email node sets
+`onError: continueErrorOutput`, the execution does not fail, so the workflow-level error handler
+(`06 - Error Handler.json`, wired as WF05's `errorWorkflow`) is never invoked either. There is
+consequently no observable signal that follow-ups are failing.
+
+**Why this is a reliability defect and not a measurement gap.** F2, F3 and F7 share a shape — an
+expected output is absent. F16 is different: the engine *acts*, repeatedly, and appears healthy. A
+lead whose sends fail on a persistent condition (invalid address, provider rejection, suppression)
+is re-selected hourly and retried indefinitely, while `leads` shows `followup_count = 0` and a
+`next_followup_at` stuck in the past. From the sheet, that lead is indistinguishable from one that
+has simply never been swept, so the failure is invisible to an operator and unbounded to the
+customer. F16 is the only open finding whose failure mode is *repetition* rather than *absence*.
+
+**Scope note.** This is bounded by one thing only: whether the failure is persistent. A single
+transient failure costs one redundant send. A persistent one is an unbounded loop. Nothing in
+`01–07` distinguishes the two, because the state that would distinguish them is exactly what the
+failure path declines to write.
+
+**Remediation:** not determined. No fix is proposed here.
+
+---
+
+## F17 — WF05 records no `status_updates` row for the terminal transition
+
+**Status: OPEN · CONFIRMED · classification: audit-trail defect · severity not yet assigned**
+
+Surfaced from `measurement/EVIDENCE_MATRIX.md` while rating the *no_response reached* and *final
+outcome traceable* claims. The string `status_updates` does not occur anywhere in
+`05 - Follow-up Sweeper.json`. Its only sheet nodes are the two reads and the one `leads` update
+listed in F16.
+
+**What is missing.** `Advance Follow-up State` moves a lead to `status: 'no_response'` when
+`followup_count` reaches `max_followups`. That state is written to the `leads` row and no
+`status_updates` row is appended, so the transition is never recorded as an event. The audit table
+that exists to record status transitions omits the one transition that closes the follow-up
+lifecycle.
+
+**Contrast with F5 (resolved).** `Build Status Update Record` exists in WF03 and WF04, so status
+changes arriving through the status-update and callback paths *are* recorded — each row carrying
+`update_id`, `created_at`, `lead_id`, `business_id`, `old_status`, `new_status`, `updated_by` and
+`notes`. The engine's own history is therefore inconsistent: the paths an operator can trigger by
+hand are audited, and the one path the scheduler takes on its own is not.
+
+**Precisely what is lost.** The end state survives — `leads.status` reads `no_response`, and
+`leads.followup_count` reads how many sends *succeeded*. What does not survive is the transition
+itself:
+
+- `old_status` — the status the lead was in when the sweeper gave up
+- `updated_by` — that the sweeper, not an operator, made this change
+- `new_status` as an event, with its own `update_id` and `created_at`
+- any record that the terminal decision was reached *deliberately* at `count >= max` rather than by
+  any other cause
+
+**Relationship to F16.** The two compound, and neither alone tells the whole story. `leads` shows
+`status = no_response` with `followup_count = N`, which reads as "we tried N times, successfully,
+and stopped." F16 says nothing about attempts that *failed*, because those leave no row anywhere;
+F17 says nothing about the transition, because no `status_updates` row is written. Closing F17 alone
+would produce a trustworthy-but-incomplete transition record that still cannot distinguish `N`
+attempts from `N + M` attempts.
+
+**Remediation:** not determined. No fix is proposed here.
+
+---
+
 ## Fix order
 
 F1, F5, F9, F10, F11, F12, F13 and F14 are done. Revised order for what remains:
@@ -777,12 +888,21 @@ F1, F5, F9, F10, F11, F12, F13 and F14 are done. Revised order for what remains:
 | # | Finding | Why |
 | --- | --- | --- |
 | 1 | **F15** | Quoted JSON secret values are still unredacted in the same `errors` write path that F11 and F13 just closed for unquoted forms. Only remaining open finding on that surface. |
-| 2 | F6 | WF03 and WF04 bodies still render `undefined` at customers and owners. |
-| 3 | F3 | Silent webhook hangs on unknown-lead booking traffic. |
-| 4 | F2 | Dangling `lead_id` handed to API callers. |
-| 5 | F8 | Needs a schema decision (`measurement_events`), not a code fix. |
-| 6 | F4 | Confirm n8n zero-item semantics live; fix only if the halt is real. |
-| 7 | F7 | Cosmetic staleness signal. |
+| 2 | **F16** | Unbounded hourly retry of a failing follow-up, with no state change and no record anywhere. The only open finding whose failure mode is repetition rather than absence. |
+| 3 | **F17** | The transition that closes the follow-up lifecycle is the one transition `status_updates` does not record. Cheaper to fix than F16 and shares its surface. |
+| 4 | F6 | WF03 and WF04 bodies still render `undefined` at customers and owners. |
+| 5 | F3 | Silent webhook hangs on unknown-lead booking traffic. |
+| 6 | F2 | Dangling `lead_id` handed to API callers. |
+| 7 | F8 | Needs a schema decision (`measurement_events`), not a code fix. |
+| 8 | F4 | Confirm n8n zero-item semantics live; fix only if the halt is real. |
+| 9 | F7 | Cosmetic staleness signal. |
+
+**Provisional ordering for F16 and F17.** Neither has a severity assigned, so the positions above
+reflect blast radius, not a triage decision, and should be revisited once severity is set. What the
+ordering does not depend on: F16 and F17 sit above the deferred group because they are active
+defects in committed production rather than deliberately deferred scope, and F17 should not be
+deferred behind F16 — it is on the same surface, is smaller, and closing it first makes any future
+F16 fix observable through the audit trail.
 
 ## Before the measurement layer is built
 
