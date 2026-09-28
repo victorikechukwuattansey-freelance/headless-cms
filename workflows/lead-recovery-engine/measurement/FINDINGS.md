@@ -4,7 +4,8 @@
 **Updated:** 2026-09-28 — reconciled against committed production at `5c1a854`. F11, F12, F13 and
 F14 are resolved; F15, F16 and F17 are open. F16 and F17 were added from
 `measurement/EVIDENCE_MATRIX.md` (`c0f8e5b`, a docs-only commit); production JSON is unchanged at
-`5c1a854`.
+`5c1a854`. Later the same day, F8 was reconciled against that matrix: the general
+`measurement_events` question is **closed**, and F8's residual production behaviour stays open.
 **Scope:** `workflows/lead-recovery-engine/01–07` (committed JSON at `5c1a854`)
 **Method:** observational harness (`measurement/`) executes the real workflow JSON —
 real Code-node `jsCode` via `new Function`, an n8n expression evaluator
@@ -25,7 +26,7 @@ copied verbatim from the live tab contracts.
 | F4 | open | out of scope; still needs one live confirmation |
 | F6 | open | **partly self-resolved** — see F1 note below |
 | F7 | open | out of scope |
-| F8 | open | out of scope |
+| F8 | **partly closed 2026-09-28** | Split into two questions. **(1) The general `measurement_events` event store is CLOSED — not required for the pilot**, per `measurement/EVIDENCE_MATRIX.md` (`c0f8e5b`): three of the four evidence gaps are better served by writing to tables that already exist, and the fourth is small and single-purpose. **(2) The underlying production behaviour — rejected and duplicate requests writing no rows — remains OPEN** in its own right and is no longer blocked on that decision. F10 improved the *email-failure* slice only. |
 | **F11** | **RESOLVED 2026-09-28** | `error_message` is now sanitised in both email-error builders. Covered by 6 tests. Its two residuals were closed as F13 and F14 in `5c1a854`; the quoted-JSON case became F15. |
 | **F12** | **RESOLVED 2026-09-28** | `booking_link_sent` now reflects the pre-existing `_bookingLinkPresent` flag. Covered by 4 behavioural + 1 structural test. |
 | **F13** | **RESOLVED 2026-09-28** | `error_message` is now sanitised in `06 - Error Handler.json`, and its string branch redacts like its object branch. Commit `5c1a854`. |
@@ -165,15 +166,26 @@ deliberately deferred item is not read as an active regression.
 | F4 | Empty `bookings` tab halts the first booking | yes — needs one live confirmation of n8n zero-item semantics |
 | F6 | WF03/WF04 bodies still render `undefined` | partly — WF01 closed as a consequence of F1 |
 | F7 | `Update Lead Response` does not bump `updated_at` | yes — out of scope |
-| F8 | Rejected and duplicate traffic leaves no trace anywhere | yes — needs a schema decision, not a code fix |
+| F8 | Rejected and duplicate traffic still writes no rows anywhere | **partly** — the `measurement_events` question beneath it is **closed**; the behaviour itself is still unfixed |
 | F15 | Quoted JSON secret values are not redacted | yes — deliberately excluded from `5c1a854` |
 | F16 | WF05 fails silently and leaves the lead re-eligible forever | **no — active production defect** |
 | F17 | WF05 records no `status_updates` row for the terminal transition | **no — active audit-trail defect** |
 
-**`measurement_events` — not implemented, and not introduced by any fix in this document.** It
-remains an open *schema* decision attached to F8, not a code finding and not a code fix. F8 is the
-only finding that requires it. F10 improved the email-failure slice of the F8 gap; it did not close
-it. No `measurement_events` table, node or column exists in `01–07` at `5c1a854`.
+**`measurement_events` — CLOSED as a requirement, and never implemented.** The general
+event store contemplated by F8 is **not required for the pilot**: `measurement/EVIDENCE_MATRIX.md`
+(`c0f8e5b`) found that the four evidence gaps are served by existing tabs and small
+purpose-specific records, and recommended against a general-purpose log. No `measurement_events`
+table, node or column exists in `01–07`, at `5c1a854` or at any later commit. Nothing in this
+document created one, and closing the question did not authorise one.
+
+**Scope of that closure — read before treating it as "no new schema".** The matrix recommended
+**four** instrumentation items, and the closed decision covered only the general event store. Two of
+the four reuse tabs that already exist: `errors` for WF02–WF05 email failures, and `status_updates`
+for the WF05 terminal transition (F17). The remaining two are **small new schema elements** that stay
+open on their own: a **sweep-run record**, and an **ingress record for reject and duplicate branches**
+— the latter being the substance of F8's still-open production half. So the closure is "the general
+event store is not needed", not "the pilot needs no new schema". Revisit only if an item 1–4 gap
+appears that genuinely fits no existing tab.
 
 ## Confidence labels
 
@@ -427,6 +439,13 @@ Journey G (`errors: []` despite nine rejected requests):
 **Measurement impact:** conversion, rejection and duplicate rates are all unmeasurable. The
 `errors` tab is only populated by explicit catch branches (WF01's email failures), not by
 validation rejections.
+
+**Scope — two questions, split at `c0f8e5b`.** This finding is now open on its production behaviour
+only: the rows above are still not written. The schema question that used to sit underneath it is
+**closed** — the general `measurement_events` event store is not required for the pilot, per
+`measurement/EVIDENCE_MATRIX.md`. The matrix's remedy for this section is a **small ingress record
+for reject and duplicate branches**, which is a separate, much smaller schema element than the event
+store and remains open.
 
 ---
 
@@ -893,7 +912,7 @@ F1, F5, F9, F10, F11, F12, F13 and F14 are done. Revised order for what remains:
 | 4 | F6 | WF03 and WF04 bodies still render `undefined` at customers and owners. |
 | 5 | F3 | Silent webhook hangs on unknown-lead booking traffic. |
 | 6 | F2 | Dangling `lead_id` handed to API callers. |
-| 7 | F8 | Needs a schema decision (`measurement_events`), not a code fix. |
+| 7 | F8 | Rejected/duplicate traffic still writes no rows. No longer blocked on `measurement_events` — that question is closed; needs a small ingress record instead. |
 | 8 | F4 | Confirm n8n zero-item semantics live; fix only if the halt is real. |
 | 9 | F7 | Cosmetic staleness signal. |
 
@@ -912,24 +931,43 @@ the engine actually serves more than one tenant, F10 means the `errors` tab is f
 usable failure ledger, F11/F13 mean the ledger's `error_message` is sanitised on both write paths,
 F14 closes the bearer pattern, and F12 means the booking column is trustworthy.
 
-Two things must be accounted for in the schema before trusting any metric:
+Four things must be accounted for before trusting any metric, as scoped by
+`measurement/EVIDENCE_MATRIX.md` (`c0f8e5b`):
 
 - **F15** — `errors.error_message` and `errors.payload` are sanitised for unquoted credential
   forms, but quoted JSON values (`"password":"hunter2"`) still pass through on the same paths. It
   should not be copied wholesale into a measurement table until the quoted form is redacted. F13
   closed the WF06 write path and F14 closed the bearer pattern; F15 is what is left of the F11
   residual.
-- **F8** — the original gap list (rejected intake, duplicate attempts, response attempts,
-  follow-up failures, candidate-selection counts, rejected transitions, discarded response
-  bodies, sweep run records) is unchanged, and F8 confirms those gaps are total, not partial.
-  F10 improved the *email-failure* slice of it; it did not close it.
+- **WF02–WF05 email failures are recorded nowhere** — WF01 is the only workflow with an error-record
+  builder, so four email nodes fail into silence. The matrix routes their existing error outputs to
+  the **`errors` tab already in use**; WF01's builder+append pair is the pattern to copy. This is
+  closer to a bug fix than to new instrumentation, and it is the highest-priority item in the
+  matrix.
+- **F17** — WF05 writes no `status_updates` row for the terminal transition, so the transition that
+  closes the follow-up lifecycle is the one the audit trail does not record. The matrix's fix
+  appends to the **`status_updates` tab already in use**, copying WF04's `Build Status Update Record`.
+- **Sweep-run record — the one item that may need a minimal new schema element, and it is kept
+  deliberately separate from the closed `measurement_events` question.** `Select Follow-up Candidates`
+  output feeds an IF directly, so no sweep-run record exists. Without one, "we stopped because
+  nothing was due" and "the sweeper is broken" are indistinguishable. No existing tab fits, so this
+  stays an open, separate decision rather than a consequence of the closure above.
+
+**F8's residual half.** Rejected and duplicate ingress still writes no rows, and cannot be derived
+from any current field; the matrix's remedy is a **small ingress record** — a second small new schema
+element, and the substance of why F8 remains open. F10 improved the *email-failure* slice of F8's
+original gap list; it did not close it, and the schema decision that used to sit underneath F8 is
+now closed.
 
 F12 no longer constrains the schema: `booking_link_sent` is now a truthful flag for every tenant.
 
-**`measurement_events` status: not implemented.** It remains the schema decision that F8 needs, and
-nothing in `5c1a854` introduced it, narrowed it or made it implementable. No `measurement_events`
-table, node or column exists in `01–07` at this commit. The gate on it is unchanged from the
-recommendation below.
+**`measurement_events` status: closed as a requirement; still not implemented.** The decision
+recorded in `measurement/EVIDENCE_MATRIX.md` (`c0f8e5b`) recommends against a general-purpose event
+log for the pilot, which closes the question this document previously left attached to F8. No
+`measurement_events` table, node or column exists in `01–07` at this commit, and closing the question
+did not authorise one. What remains open is scoped and small: the **sweep-run record** and the
+**ingress record** above.
 
-Recommended next step: fix F15, then re-open the `measurement_events` schema decision against a
-baseline that is finally trustworthy.
+Recommended next step: fix F15, then build the matrix's item 1 — route the WF02–WF05 email error
+outputs to the existing `errors` tab — since it closes the most gaps at once against a baseline that
+is finally trustworthy. F16 and F17 remain the only active production defects.
