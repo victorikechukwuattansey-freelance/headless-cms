@@ -124,7 +124,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const webhook = $('Lead Intake Webhook').first().json;\nconst body = webhook.body ?? webhook;\n\n// Explicitly read tenant configuration from Get Business Config.\nconst configJson = $('Get Business Config').first()?.json ?? null;\n\nconst businessId = body.business_id\n  ? String(body.business_id).trim()\n  : '';\n\nconst config =\n  configJson &&\n  String(configJson.business_id || '').trim() === businessId\n    ? configJson\n    : null;\n\nconst _configFound = !!config;\n\nconst _active =\n  _configFound &&\n  String(config.active || '').trim().toLowerCase() === 'true';\n\nconst now = new Date();\n\nfunction rid(prefix) {\n  return prefix + '_' + now.getTime() + '_' +\n    Math.random().toString(36).slice(2, 10);\n}\n\nfunction esc(v) {\n  return String(v == null ? '' : v)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}\n\nfunction fnv1a(str) {\n  let h = 0x811c9dc5;\n\n  for (let i = 0; i < str.length; i++) {\n    h ^= str.charCodeAt(i);\n    h = Math.imul(h, 0x01000193) >>> 0;\n  }\n\n  return ('00000000' + h.toString(16)).slice(-8);\n}\n\nfunction classifyUrgency(declared, msg) {\n  if (\n    declared &&\n    ['emergency', 'high', 'normal', 'low']\n      .includes(String(declared).toLowerCase())\n  ) {\n    return String(declared).toLowerCase();\n  }\n\n  const m = String(msg || '').toLowerCase();\n\n  if (/emergency|urgent|asap|immediately|right now|burst|leak|flood|no water|no hot water|lockout|fire|frozen pipe|smoke/i.test(m)) {\n    return 'emergency';\n  }\n\n  if (/soon|today|this week|quickly|as fast|tomorrow/i.test(m)) {\n    return 'high';\n  }\n\n  if (/just browsing|researching|not sure|eventually|curious|compare/i.test(m)) {\n    return 'low';\n  }\n\n  return 'normal';\n}\n\nfunction score(f) {\n  let s = 0;\n  const m = String(f.message || '').toLowerCase();\n\n  if (f.email) s += 15;\n  if (f.phone) s += 15;\n  if (f.service) s += 15;\n  if (f.city) s += 10;\n  if (f.state) s += 5;\n  if (f.name) s += 10;\n  if (f.urgency === 'high') s += 10;\n  if (f.urgency === 'emergency') s += 20;\n  if (m.length > 40) s += 5;\n  if (/quote|estimate|price|cost|book|schedule|install|repair|fix|replace|need|leak/i.test(m)) s += 10;\n  if (/emergency|urgent|asap|burst|leak|flood|no water|lockout/i.test(m)) s += 5;\n  if (/am |ready|this week|today|specific|available/i.test(m)) s += 5;\n\n  return Math.min(100, s);\n}\n\n// Runtime-compatible booking-link validation.\n// Do NOT use the URL constructor because it is unavailable\n// in the n8n Code node sandbox.\nfunction safeBookingLink(value, leadId) {\n  let raw = String(value || '').trim();\n\n  if (!raw) return '';\n\n  // Preserve {{lead_id}} substitution behavior.\n  raw = raw.replace(\n    /\\{\\{\\s*lead_id\\s*\\}\\}/g,\n    encodeURIComponent(leadId)\n  );\n\n  // HTTPS only.\n  if (!/^https:\\/\\/[^\\s\"'<>]+$/i.test(raw)) {\n    return '';\n  }\n\n  // Reject control/dangerous characters.\n  if (/[\\r\\n<>\"'`]/.test(raw)) {\n    return '';\n  }\n\n  // Preserve existing lead_id attribution.\n  if (/[?&]lead_id=/.test(raw)) {\n    return raw;\n  }\n\n  return raw +\n    (raw.includes('?') ? '&' : '?') +\n    'lead_id=' +\n    encodeURIComponent(leadId);\n}\n\nconst name = body.name || '';\nconst email = String(body.email || '').trim().toLowerCase();\nconst phone = String(body.phone || '').trim();\nconst normPhone = phone.replace(/\\D/g, '');\nconst message = body.message || '';\n\nconst normMessage = String(message || '')\n  .trim()\n  .toLowerCase()\n  .replace(/\\s+/g, ' ');\n\nconst service = body.service || '';\n\nconst srcType = String(\n  body.source_type || 'web_form'\n);\n\nconst srcId = body.source_id\n  ? String(body.source_id).trim()\n  : '';\n\nconst urgency = classifyUrgency(\n  body.urgency,\n  message\n);\n\n// Deterministic idempotency:\n// explicit key > upstream event ID > derived hash.\nlet idempotencyKey;\n\nif (body.idempotency_key) {\n  idempotencyKey = String(body.idempotency_key);\n} else if (srcId) {\n  idempotencyKey =\n    businessId + '|' + srcType + '|' + srcId;\n} else {\n  idempotencyKey =\n    'auto_' +\n    fnv1a([\n      businessId,\n      srcType,\n      normPhone,\n      email,\n      normMessage\n    ].join('|'));\n}\n\nconst leadId = body.lead_id || rid('lead');\n\n// Booking-link precedence:\n// 1. trusted request-supplied HTTPS link\n// 2. trusted business_config HTTPS link\n// 3. empty\nconst bodyLink = String(\n  body.booking_link || ''\n).trim();\n\nconst configLink = config\n  ? String(config.booking_link || '').trim()\n  : '';\n\nlet bookingLink = bodyLink\n  ? safeBookingLink(bodyLink, leadId)\n  : '';\n\nif (!bookingLink && configLink) {\n  bookingLink = safeBookingLink(\n    configLink,\n    leadId\n  );\n}\n\nconst lead = {\n  lead_id: leadId,\n  business_id: businessId,\n  created_at: now.toISOString(),\n  updated_at: now.toISOString(),\n  source_type: srcType,\n  source_id: srcId,\n  name: name,\n  phone: phone,\n  email: email,\n  message: message,\n  service: service,\n  niche: body.niche ||\n    (config ? (config.niche || '') : '') ||\n    '',\n  city: body.city || '',\n  state: body.state || '',\n  zip: body.zip || '',\n  urgency: urgency,\n  score: score({\n    name: name,\n    phone: phone,\n    email: email,\n    service: service,\n    city: body.city,\n    state: body.state,\n    message: message,\n    urgency: urgency\n  }),\n  status: 'new',\n  booking_link: bookingLink,\n  booking_link_sent: false,\n  booked: false,\n  followup_count: 0,\n  next_followup_at: '',\n  last_contact_at: '',\n  last_customer_response_at: '',\n  idempotency_key: idempotencyKey,\n  notes: body.notes || ''\n};\n\nconst merged = Object.assign({}, lead, {\n  _configFound: _configFound,\n  _active: _active,\n\n  _fromEmailPresent: !!(\n    config &&\n    config.from_email\n  ),\n\n  _replyToPresent: !!(\n    config &&\n    config.reply_to_email\n  ),\n\n  _bookingLinkPresent: !!bookingLink,\n\n  business_name: config\n    ? config.business_name\n    : '',\n\n  owner_name: config\n    ? config.owner_name\n    : '',\n\n  owner_email: config\n    ? config.owner_email\n    : '',\n\n  reply_to_email: config\n    ? config.reply_to_email\n    : '',\n\n  from_email: config\n    ? config.from_email\n    : '',\n\n  followup_delay_hours: config\n    ? Number(config.followup_delay_hours || 24)\n    : 24,\n\n  max_followups: config\n    ? Number(config.max_followups || 3)\n    : 3,\n\n  timezone: config\n    ? config.timezone\n    : 'America/Chicago'\n});\n\n// HTML-safe copies for email templates.\n// Underscore fields are not persisted by autoMapInputData.\nmerged._esc_lead_id = esc(lead.lead_id);\nmerged._esc_business_name = esc(merged.business_name);\nmerged._esc_name = esc(name);\nmerged._esc_phone = esc(phone);\nmerged._esc_email = esc(email);\nmerged._esc_service = esc(service);\nmerged._esc_city = esc(body.city || '');\nmerged._esc_state = esc(body.state || '');\nmerged._esc_zip = esc(body.zip || '');\nmerged._esc_message = esc(message);\nmerged._esc_booking_link = esc(bookingLink);\nmerged._esc_urgency = esc(urgency);\nmerged._esc_source_type = esc(srcType);\nmerged._esc_source_id = esc(srcId);\nmerged._esc_created_at = esc(lead.created_at);\n\nreturn [{ json: merged }];"
+        "jsCode": "const webhook = $('Lead Intake Webhook').first().json;\nconst body = webhook.body ?? webhook;\n\n// Explicitly read tenant configuration from Get Business Config.\n// The read is unfiltered, so it emits one item per tenant. Resolve the row\n// matching THIS business_id rather than taking .first(), which could only ever\n// match row 1 and rejected every other tenant with 403.\nconst configs = $('Get Business Config').all();\n\nconst businessId = body.business_id\n  ? String(body.business_id).trim()\n  : '';\n\nconst config =\n  configs.find((c) => String(c.json.business_id || '').trim() === businessId)\n    ?.json ?? null;\n\nconst _configFound = !!config;\n\nconst _active =\n  _configFound &&\n  String(config.active || '').trim().toLowerCase() === 'true';\n\nconst now = new Date();\n\nfunction rid(prefix) {\n  return prefix + '_' + now.getTime() + '_' +\n    Math.random().toString(36).slice(2, 10);\n}\n\nfunction esc(v) {\n  return String(v == null ? '' : v)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}\n\nfunction fnv1a(str) {\n  let h = 0x811c9dc5;\n\n  for (let i = 0; i < str.length; i++) {\n    h ^= str.charCodeAt(i);\n    h = Math.imul(h, 0x01000193) >>> 0;\n  }\n\n  return ('00000000' + h.toString(16)).slice(-8);\n}\n\nfunction classifyUrgency(declared, msg) {\n  if (\n    declared &&\n    ['emergency', 'high', 'normal', 'low']\n      .includes(String(declared).toLowerCase())\n  ) {\n    return String(declared).toLowerCase();\n  }\n\n  const m = String(msg || '').toLowerCase();\n\n  if (/emergency|urgent|asap|immediately|right now|burst|leak|flood|no water|no hot water|lockout|fire|frozen pipe|smoke/i.test(m)) {\n    return 'emergency';\n  }\n\n  if (/soon|today|this week|quickly|as fast|tomorrow/i.test(m)) {\n    return 'high';\n  }\n\n  if (/just browsing|researching|not sure|eventually|curious|compare/i.test(m)) {\n    return 'low';\n  }\n\n  return 'normal';\n}\n\nfunction score(f) {\n  let s = 0;\n  const m = String(f.message || '').toLowerCase();\n\n  if (f.email) s += 15;\n  if (f.phone) s += 15;\n  if (f.service) s += 15;\n  if (f.city) s += 10;\n  if (f.state) s += 5;\n  if (f.name) s += 10;\n  if (f.urgency === 'high') s += 10;\n  if (f.urgency === 'emergency') s += 20;\n  if (m.length > 40) s += 5;\n  if (/quote|estimate|price|cost|book|schedule|install|repair|fix|replace|need|leak/i.test(m)) s += 10;\n  if (/emergency|urgent|asap|burst|leak|flood|no water|lockout/i.test(m)) s += 5;\n  if (/am |ready|this week|today|specific|available/i.test(m)) s += 5;\n\n  return Math.min(100, s);\n}\n\n// Runtime-compatible booking-link validation.\n// Do NOT use the URL constructor because it is unavailable\n// in the n8n Code node sandbox.\nfunction safeBookingLink(value, leadId) {\n  let raw = String(value || '').trim();\n\n  if (!raw) return '';\n\n  // Preserve {{lead_id}} substitution behavior.\n  raw = raw.replace(\n    /\\{\\{\\s*lead_id\\s*\\}\\}/g,\n    encodeURIComponent(leadId)\n  );\n\n  // HTTPS only.\n  if (!/^https:\\/\\/[^\\s\"'<>]+$/i.test(raw)) {\n    return '';\n  }\n\n  // Reject control/dangerous characters.\n  if (/[\\r\\n<>\"'`]/.test(raw)) {\n    return '';\n  }\n\n  // Preserve existing lead_id attribution.\n  if (/[?&]lead_id=/.test(raw)) {\n    return raw;\n  }\n\n  return raw +\n    (raw.includes('?') ? '&' : '?') +\n    'lead_id=' +\n    encodeURIComponent(leadId);\n}\n\nconst name = body.name || '';\nconst email = String(body.email || '').trim().toLowerCase();\nconst phone = String(body.phone || '').trim();\nconst normPhone = phone.replace(/\\D/g, '');\nconst message = body.message || '';\n\nconst normMessage = String(message || '')\n  .trim()\n  .toLowerCase()\n  .replace(/\\s+/g, ' ');\n\nconst service = body.service || '';\n\nconst srcType = String(\n  body.source_type || 'web_form'\n);\n\nconst srcId = body.source_id\n  ? String(body.source_id).trim()\n  : '';\n\nconst urgency = classifyUrgency(\n  body.urgency,\n  message\n);\n\n// Deterministic idempotency:\n// explicit key > upstream event ID > derived hash.\nlet idempotencyKey;\n\nif (body.idempotency_key) {\n  idempotencyKey = String(body.idempotency_key);\n} else if (srcId) {\n  idempotencyKey =\n    businessId + '|' + srcType + '|' + srcId;\n} else {\n  idempotencyKey =\n    'auto_' +\n    fnv1a([\n      businessId,\n      srcType,\n      normPhone,\n      email,\n      normMessage\n    ].join('|'));\n}\n\nconst leadId = body.lead_id || rid('lead');\n\n// Booking-link precedence:\n// 1. trusted request-supplied HTTPS link\n// 2. trusted business_config HTTPS link\n// 3. empty\nconst bodyLink = String(\n  body.booking_link || ''\n).trim();\n\nconst configLink = config\n  ? String(config.booking_link || '').trim()\n  : '';\n\nlet bookingLink = bodyLink\n  ? safeBookingLink(bodyLink, leadId)\n  : '';\n\nif (!bookingLink && configLink) {\n  bookingLink = safeBookingLink(\n    configLink,\n    leadId\n  );\n}\n\nconst lead = {\n  lead_id: leadId,\n  business_id: businessId,\n  created_at: now.toISOString(),\n  updated_at: now.toISOString(),\n  source_type: srcType,\n  source_id: srcId,\n  name: name,\n  phone: phone,\n  email: email,\n  message: message,\n  service: service,\n  niche: body.niche ||\n    (config ? (config.niche || '') : '') ||\n    '',\n  city: body.city || '',\n  state: body.state || '',\n  zip: body.zip || '',\n  urgency: urgency,\n  score: score({\n    name: name,\n    phone: phone,\n    email: email,\n    service: service,\n    city: body.city,\n    state: body.state,\n    message: message,\n    urgency: urgency\n  }),\n  status: 'new',\n  booking_link: bookingLink,\n  booking_link_sent: false,\n  booked: false,\n  followup_count: 0,\n  next_followup_at: '',\n  last_contact_at: '',\n  last_customer_response_at: '',\n  idempotency_key: idempotencyKey,\n  notes: body.notes || ''\n};\n\nconst merged = Object.assign({}, lead, {\n  _configFound: _configFound,\n  _active: _active,\n\n  _fromEmailPresent: !!(\n    config &&\n    config.from_email\n  ),\n\n  _replyToPresent: !!(\n    config &&\n    config.reply_to_email\n  ),\n\n  _bookingLinkPresent: !!bookingLink,\n\n  business_name: config\n    ? config.business_name\n    : '',\n\n  owner_name: config\n    ? config.owner_name\n    : '',\n\n  owner_email: config\n    ? config.owner_email\n    : '',\n\n  reply_to_email: config\n    ? config.reply_to_email\n    : '',\n\n  from_email: config\n    ? config.from_email\n    : '',\n\n  followup_delay_hours: config\n    ? Number(config.followup_delay_hours || 24)\n    : 24,\n\n  max_followups: config\n    ? Number(config.max_followups || 3)\n    : 3,\n\n  timezone: config\n    ? config.timezone\n    : 'America/Chicago'\n});\n\n// HTML-safe copies for email templates.\n// Underscore fields are not persisted by autoMapInputData.\nmerged._esc_lead_id = esc(lead.lead_id);\nmerged._esc_business_name = esc(merged.business_name);\nmerged._esc_name = esc(name);\nmerged._esc_phone = esc(phone);\nmerged._esc_email = esc(email);\nmerged._esc_service = esc(service);\nmerged._esc_city = esc(body.city || '');\nmerged._esc_state = esc(body.state || '');\nmerged._esc_zip = esc(body.zip || '');\nmerged._esc_message = esc(message);\nmerged._esc_booking_link = esc(bookingLink);\nmerged._esc_urgency = esc(urgency);\nmerged._esc_source_type = esc(srcType);\nmerged._esc_source_id = esc(srcId);\nmerged._esc_created_at = esc(lead.created_at);\n\nreturn [{ json: merged }];"
       },
       "id": "515488a9-451f-41ae-abaa-0b853e77cf99",
       "name": "Resolve Config & Normalize Lead",
@@ -341,7 +341,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const lead = $input.first().json;\nreturn [{ json: lead }];"
+        "jsCode": "// $input here is the output of the Google Sheets 'Update Lead Next Follow-up' node,\n// which replaces $json with the sheet row. The tenant config and escaped HTML\n// fields the email templates depend on only exist on 'Compute Next Follow-up',\n// so read from that node explicitly.\nconst lead = $('Compute Next Follow-up').first().json;\nreturn [{ json: lead }];"
       },
       "id": "b4bdb58d-e85f-4373-bb12-03b4118fcc5d",
       "name": "Prepare Email Content",
@@ -408,7 +408,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const errWrap = $input.first().json;\nconst lead = $('Check Duplicate').first().json;\nfunction sanitize(v){\n  if (v === null || v === undefined) return '';\n  if (typeof v === 'object') return JSON.stringify(v).replace(/(secret|token|password|api[_ -]?key|authorization|bearer)([\"']?\\s*[:=]\\s*)([^,}\"'\\s]+)/gi, '$1$2[REDACTED]');\n  return String(v);\n}\nconst rawErr = errWrap.error !== undefined ? errWrap.error : (errWrap.json && errWrap.json.error);\nconst msg = (typeof rawErr === 'object' && rawErr !== null) ? String(rawErr.message || JSON.stringify(rawErr)) : String(rawErr || 'unknown email error');\nreturn [{ json: {\n  error_id: 'err_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n  created_at: new Date().toISOString(),\n  workflow: '01 - Lead Intake',\n  node: 'Customer Acknowledgment',\n  business_id: sanitize(lead.business_id),\n  lead_id: sanitize(lead.lead_id),\n  error_message: ('customer_email_failed: ' + msg).slice(0, 2000),\n  execution_id: $execution.id,\n  payload: sanitize({ lead_id: lead.lead_id, business_id: lead.business_id }).slice(0, 4000),\n  resolved: false\n} }];"
+        "jsCode": "const errWrap = $input.first().json;\nconst lead = $('Check Duplicate').first().json;\nconst SECRET_RE = /(secret|token|password|api[_ -]?key|authorization|bearer)([\"']?\\s*[:=]\\s*)([^,}\"'\\s]+)/gi;\nfunction sanitize(v){\n  if (v === null || v === undefined) return '';\n  if (typeof v === 'object') return JSON.stringify(v).replace(SECRET_RE, '$1$2[REDACTED]');\n  return String(v).replace(SECRET_RE, '$1$2[REDACTED]');\n}\nconst rawErr = errWrap.error !== undefined ? errWrap.error : (errWrap.json && errWrap.json.error);\nconst msg = (typeof rawErr === 'object' && rawErr !== null) ? String(rawErr.message || JSON.stringify(rawErr)) : String(rawErr || 'unknown email error');\nreturn [{ json: {\n  error_id: 'err_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n  created_at: new Date().toISOString(),\n  workflow: '01 - Lead Intake',\n  node: 'Customer Acknowledgment',\n  business_id: sanitize(lead.business_id),\n  lead_id: sanitize(lead.lead_id),\n  error_message: sanitize('customer_email_failed: ' + msg).slice(0, 2000),\n  execution_id: $execution.id,\n  payload: sanitize({ lead_id: lead.lead_id, business_id: lead.business_id }).slice(0, 4000),\n  resolved: false\n} }];"
       },
       "id": "39e82f87-f5f9-4463-8883-e5218d17d00b",
       "name": "Build Customer Email Error Record",
@@ -434,6 +434,50 @@
           "__rl": true,
           "value": "errors",
           "mode": "list"
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "error_id",
+              "fieldValue": "={{ $json.error_id }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "workflow",
+              "fieldValue": "={{ $json.workflow }}"
+            },
+            {
+              "fieldId": "node",
+              "fieldValue": "={{ $json.node }}"
+            },
+            {
+              "fieldId": "business_id",
+              "fieldValue": "={{ $json.business_id }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.error_message }}"
+            },
+            {
+              "fieldId": "execution_id",
+              "fieldValue": "={{ $json.execution_id }}"
+            },
+            {
+              "fieldId": "payload",
+              "fieldValue": "={{ $json.payload }}"
+            },
+            {
+              "fieldId": "resolved",
+              "fieldValue": "={{ $json.resolved }}"
+            }
+          ]
         },
         "options": {}
       },
@@ -507,7 +551,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const errWrap = $input.first().json;\nconst lead = $('Check Duplicate').first().json;\nfunction sanitize(v){\n  if (v === null || v === undefined) return '';\n  if (typeof v === 'object') return JSON.stringify(v).replace(/(secret|token|password|api[_ -]?key|authorization|bearer)([\"']?\\s*[:=]\\s*)([^,}\"'\\s]+)/gi, '$1$2[REDACTED]');\n  return String(v);\n}\nconst rawErr = errWrap.error !== undefined ? errWrap.error : (errWrap.json && errWrap.json.error);\nconst msg = (typeof rawErr === 'object' && rawErr !== null) ? String(rawErr.message || JSON.stringify(rawErr)) : String(rawErr || 'unknown email error');\nreturn [{ json: {\n  error_id: 'err_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n  created_at: new Date().toISOString(),\n  workflow: '01 - Lead Intake',\n  node: 'Owner Notification',\n  business_id: sanitize(lead.business_id),\n  lead_id: sanitize(lead.lead_id),\n  error_message: ('owner_email_failed: ' + msg).slice(0, 2000),\n  execution_id: $execution.id,\n  payload: sanitize({ lead_id: lead.lead_id, business_id: lead.business_id }).slice(0, 4000),\n  resolved: false\n} }];"
+        "jsCode": "const errWrap = $input.first().json;\nconst lead = $('Check Duplicate').first().json;\nconst SECRET_RE = /(secret|token|password|api[_ -]?key|authorization|bearer)([\"']?\\s*[:=]\\s*)([^,}\"'\\s]+)/gi;\nfunction sanitize(v){\n  if (v === null || v === undefined) return '';\n  if (typeof v === 'object') return JSON.stringify(v).replace(SECRET_RE, '$1$2[REDACTED]');\n  return String(v).replace(SECRET_RE, '$1$2[REDACTED]');\n}\nconst rawErr = errWrap.error !== undefined ? errWrap.error : (errWrap.json && errWrap.json.error);\nconst msg = (typeof rawErr === 'object' && rawErr !== null) ? String(rawErr.message || JSON.stringify(rawErr)) : String(rawErr || 'unknown email error');\nreturn [{ json: {\n  error_id: 'err_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n  created_at: new Date().toISOString(),\n  workflow: '01 - Lead Intake',\n  node: 'Owner Notification',\n  business_id: sanitize(lead.business_id),\n  lead_id: sanitize(lead.lead_id),\n  error_message: sanitize('owner_email_failed: ' + msg).slice(0, 2000),\n  execution_id: $execution.id,\n  payload: sanitize({ lead_id: lead.lead_id, business_id: lead.business_id }).slice(0, 4000),\n  resolved: false\n} }];"
       },
       "id": "5261c141-eb52-448e-ba51-fc5b643f0370",
       "name": "Build Owner Email Error Record",
@@ -535,6 +579,50 @@
           "mode": "list",
           "cachedResultName": "errors",
           "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=2001101880"
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "error_id",
+              "fieldValue": "={{ $json.error_id }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "workflow",
+              "fieldValue": "={{ $json.workflow }}"
+            },
+            {
+              "fieldId": "node",
+              "fieldValue": "={{ $json.node }}"
+            },
+            {
+              "fieldId": "business_id",
+              "fieldValue": "={{ $json.business_id }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.error_message }}"
+            },
+            {
+              "fieldId": "execution_id",
+              "fieldValue": "={{ $json.execution_id }}"
+            },
+            {
+              "fieldId": "payload",
+              "fieldValue": "={{ $json.payload }}"
+            },
+            {
+              "fieldId": "resolved",
+              "fieldValue": "={{ $json.resolved }}"
+            }
+          ]
         },
         "options": {}
       },
@@ -697,7 +785,7 @@
           "mappingMode": "defineBelow",
           "value": {
             "lead_id": "={{ $('Customer Email Present?').first().json.lead_id }}",
-            "booking_link_sent": "TRUE"
+            "booking_link_sent": "={{ $('Prepare Email Content').first().json._bookingLinkPresent ? 'TRUE' : 'false' }}"
           },
           "matchingColumns": [
             "lead_id"

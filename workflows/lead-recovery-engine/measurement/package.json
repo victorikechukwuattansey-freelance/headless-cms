@@ -1,0 +1,20 @@
+{
+  "name": "lead-recovery-engine-measurement",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Observational measurement/evidence layer for the 7-workflow Texas Home Services Lead Recovery Engine. Read-only over the engine's existing Google Sheets tabs. Does not participate in the lead lifecycle.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "test:contract": "node --test tests/workflow-contract.test.js",
+    "test:journeys": "node --test tests/measurement-journeys.test.js",
+    "test:measurement": "node --test tests/measurement-kpis.test.js",
+    "test:failsafe": "node --test tests/measurement-fail-safe.test.js",
+    "validate:workflows": "node scripts/validate-workflows.mjs",
+    "report": "node scripts/pilot-report.mjs",
+    "journeys": "node scripts/run-journeys.mjs"
+  }
+}
