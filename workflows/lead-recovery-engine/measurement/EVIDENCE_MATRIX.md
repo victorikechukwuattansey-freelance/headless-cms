@@ -319,10 +319,14 @@ record:
 - reject/duplicate events → one small ingress record (item 4)
 
 `measurement_events`, as contemplated in **F8**, would be a general-purpose event log intended to
-absorb all of these at once. The evidence here does not justify that: three of the four gaps are
+absorb all of these at once. The evidence here does not justify that: **two** of the four gaps are
 better served by writing to tables that already have owners, canonical field lists and an existing
-write pattern, and the fourth is small and single-purpose. A general event log would also add a
-schema-governance burden to exactly the phase where the engine's audit trail is still incomplete.
+write pattern (items 1 and 2), and the **remaining two** are small, single-purpose records that fit
+neither (items 3 and 4). Two narrow purpose-specific records are not the same thing as one
+general-purpose event store — each has a single consumer and needs no cross-cutting schema
+governance, whereas the event store would be a new surface that every future gap would have to be
+argued into. A general event log would also add a schema-governance burden to exactly the phase
+where the engine's audit trail is still incomplete.
 
 **F8's schema decision can therefore be closed as "not required for the pilot"** rather than
 deferred indefinitely — but note this is a recommendation about the pilot's four known gaps, not a
