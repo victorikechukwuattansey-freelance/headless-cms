@@ -1,7 +1,9 @@
 # Lead Recovery Engine — Execution Findings (Pilots 1–3)
 
 **Date:** 2026-09-27
-**Scope:** `workflows/lead-recovery-engine/01–07` (current working-tree JSON)
+**Updated:** 2026-09-28 — reconciled against committed production at `5c1a854`. F11, F12, F13 and
+F14 are resolved; F15 is open.
+**Scope:** `workflows/lead-recovery-engine/01–07` (committed JSON at `5c1a854`)
 **Method:** observational harness (`measurement/`) executes the real workflow JSON —
 real Code-node `jsCode` via `new Function`, an n8n expression evaluator
 (`$json`, `$()`, `$execution`, `{{ }}`), and an in-memory sheet store whose headers are
@@ -22,8 +24,11 @@ copied verbatim from the live tab contracts.
 | F6 | open | **partly self-resolved** — see F1 note below |
 | F7 | open | out of scope |
 | F8 | open | out of scope |
-| **F11** | **RESOLVED 2026-09-28** | `error_message` is now sanitised in both email-error builders. Covered by 6 tests. Two residual observations recorded below. |
+| **F11** | **RESOLVED 2026-09-28** | `error_message` is now sanitised in both email-error builders. Covered by 6 tests. Its two residuals were closed as F13 and F14 in `5c1a854`; the quoted-JSON case became F15. |
 | **F12** | **RESOLVED 2026-09-28** | `booking_link_sent` now reflects the pre-existing `_bookingLinkPresent` flag. Covered by 4 behavioural + 1 structural test. |
+| **F13** | **RESOLVED 2026-09-28** | `error_message` is now sanitised in `06 - Error Handler.json`, and its string branch redacts like its object branch. Commit `5c1a854`. |
+| **F14** | **RESOLVED 2026-09-28** | The shared `SECRET_RE` now consumes a bare or header-style Bearer credential whole, in all three consumers. Commit `5c1a854`. |
+| **F15** | **open** | Quoted JSON secret values (`"password":"hunter2"`) are still not redacted. Deliberately excluded from `5c1a854`. |
 
 ### F1 side effect on F6
 
@@ -77,19 +82,22 @@ F11 touches only two `jsCode` strings; F12 touches only one sheet-column express
 reuses the `SECRET_RE` / `sanitize()` pair that was already present in both builders, so no new
 mechanism and no new node was introduced. Reverting either fix leaves the other intact.
 
-### F11 residual observations (deliberately not changed)
+### F11 residual observations (both closed in `5c1a854`)
 
 The reported defect was the `errors` sheet copying provider messages verbatim. That is closed for
-WF01's two builders. Two adjacent exposures remain and were left alone to keep this pass scoped:
+WF01's two builders. Two adjacent exposures were left open by the F11 pass to keep it scoped. Both
+were subsequently closed in `5c1a854`; a third, separate exposure is tracked as F15.
 
-1. **Bearer tokens are only partially redacted.** `SECRET_RE` captures one token after `:` or `=`,
-   so `Authorization: Bearer eyJhbGciOi…` redacts only `Bearer` and leaves the JWT itself in
-   `error_message`. Fixing this means changing the shared regex in both builders, which would also
-   change every other field `sanitize()` already guards.
-2. **The same defect exists in `06 - Error Handler.json`.** Its `Build & Sanitize Error Record`
-   node writes `error_message: errorMessage` with no sanitisation at all, into the same `errors`
-   tab. WF06 is out of scope for an WF01 pass, so it is untouched. It is now the largest known
-   secret-leak path in the engine and should be the next fix of this shape.
+1. **Bearer tokens were only partially redacted — now F14 (RESOLVED).** `SECRET_RE` captured one
+   token after `:` or `=`, so `Authorization: Bearer eyJhbGciOi…` redacted only `Bearer` and left
+   the JWT itself in `error_message`.
+2. **The same defect existed in `06 - Error Handler.json` — now F13 (RESOLVED).** Its
+   `Build & Sanitize Error Record` node wrote `error_message: errorMessage` with no sanitisation at
+   all, into the same `errors` tab. It was the largest known secret-leak path in the engine at that
+   point.
+3. **Quoted JSON values are still unredacted — F15 (open).** Not a residual of F11: it is a
+   different root cause in the same shared regex, and it survives the F11, F13 and F14 fixes. See
+   the F15 section below.
 
 ### F12 contract
 
@@ -110,6 +118,56 @@ The intended behaviour, now asserted by tests:
 Verified end to end in Journey I: the linked tenant stays `"TRUE"` and the unlinked tenant moves
 `"TRUE"` → `"false"`, with that the only differing line in the whole journey set.
 
+### F13 and F14 attribution
+
+Both landed in `5c1a854`, across two files, and are independent of each other:
+
+| Fix | Node | Change |
+| --- | --- | --- |
+| F13 | `06` `Build & Sanitize Error Record` | `error_message` routed through that node's own `sanitize()` |
+| F13 | `06` `Build & Sanitize Error Record` | string branch returns `String(v).replace(SECRET_RE, redactSecret)` instead of `String(v)` |
+| F14 | `01` `Build Customer Email Error Record` | `SECRET_RE` + `redactSecret` replaced with the shared two-alternative form |
+| F14 | `01` `Build Owner Email Error Record` | same replacement |
+| F14 | `06` `Build & Sanitize Error Record` | same replacement |
+
+The committed regex, identical byte-for-byte in all three consumers:
+
+```js
+const SECRET_RE = /(bearer)(\s+)([^,}"'\s]+)|(secret|token|password|api[_ -]?key|authorization|bearer)(["']?\s*[:=]\s*)((?:bearer\s+)?[^,}"'\s]+)/gi;
+const redactSecret = (m, bearer, ws, token, keyword, sep) =>
+  (bearer ? bearer + ws + '[REDACTED]' : keyword + sep + '[REDACTED]');
+```
+
+The first alternative is new and is what F14 needed: it matches a bare `Bearer <token>` on its own,
+where the old keyword-then-separator form could only reach the word `Bearer` and stop. The second
+alternative is the pre-existing keyword form, with `bearer\s+` folded into the value so a
+keyword-prefixed credential is consumed whole. The keyword list is unchanged, so no field that
+`sanitize()` already guarded lost coverage. The three consumers are byte-identical by construction,
+so the three behavioural tests for F14 run the same logic in WF01 (twice) and WF06.
+
+## Status summary
+
+Restates the resolution log above for `5c1a854`; the log remains the source of truth.
+
+**Resolved — 8 findings, no further work claimed:** F1, F5, F9, F10, F11, F12, F13, F14.
+
+**Open — 7 findings, carried forward.** The second column is the reason each one is still open, so a
+deliberately deferred item is not read as an active regression.
+
+| ID | Why still open | Deferred? |
+| --- | --- | --- |
+| F2 | Duplicate branch returns an id that was never persisted | yes — out of scope |
+| F3 | Unknown-lead booking traffic gets no response | yes — out of scope |
+| F4 | Empty `bookings` tab halts the first booking | yes — needs one live confirmation of n8n zero-item semantics |
+| F6 | WF03/WF04 bodies still render `undefined` | partly — WF01 closed as a consequence of F1 |
+| F7 | `Update Lead Response` does not bump `updated_at` | yes — out of scope |
+| F8 | Rejected and duplicate traffic leaves no trace anywhere | yes — needs a schema decision, not a code fix |
+| F15 | Quoted JSON secret values are not redacted | yes — deliberately excluded from `5c1a854` |
+
+**`measurement_events` — not implemented, and not introduced by any fix in this document.** It
+remains an open *schema* decision attached to F8, not a code finding and not a code fix. F8 is the
+only finding that requires it. F10 improved the email-failure slice of the F8 gap; it did not close
+it. No `measurement_events` table, node or column exists in `01–07` at `5c1a854`.
 
 ## Confidence labels
 
@@ -510,7 +568,7 @@ cannot be trusted as a failure ledger, and this compounds F8.
 
 ## F11 — `error_message` is not sanitised, so provider secrets can leak into `errors`
 
-**Severity: high · CONFIRMED (not fixed)**
+**Severity: high · RESOLVED 2026-09-28**
 
 Surfaced while proving F10: the first time a real provider message reached the `errors` sheet.
 
@@ -536,7 +594,8 @@ that forwards or displays `error_message` may expose credentials.
 `sanitize()` helper they already defined, before the 2000-character slice, so nothing is
 truncated into a secret. The characterisation test was **replaced** by six regression tests that
 assert the opposite — secrets must not survive — so the original `F11 CHARACTERISATION` test no
-longer exists. See "F11 residual observations" above for the two exposures that remain open.
+longer exists. See "F11 residual observations" above for how its two residuals were closed as F13
+and F14, and for the one that became F15.
 
 ---
 
@@ -575,13 +634,149 @@ link was empty, so no other behaviour moved. Journey I is the regression witness
 
 ---
 
+## F13 — `06 - Error Handler.json` wrote `error_message` into the `errors` tab unsanitised
+
+**Status: RESOLVED 2026-09-28 · CONFIRMED · commit `5c1a854`**
+
+Severity was not separately triaged for this one; it was closed as a known exposure without a
+re-rating pass.
+
+`06 - Error Handler.json`, node `Build & Sanitize Error Record`, applied `sanitize()` to `payload`
+but not to the message it built from the n8n error:
+
+```js
+// before
+error_message: errorMessage.slice(0, 2000),
+// where errorMessage = String(executionError.message || triggerError.message || 'unknown error')
+```
+
+So the object branch of the same node was redacted while the string branch was copied verbatim, into
+the **same `errors` tab** F11 had just closed for WF01, and into the same admin notification. This
+was the largest known secret-leak path in the engine at the time of the F11 pass.
+
+**Fix applied:** the message is now sanitised by the node's own `sanitize()`, before truncation:
+
+```js
+const errorMessage = sanitize(
+  String(
+    executionError.message ||
+    triggerError.message ||
+    'unknown error'
+  )
+).slice(0, 2000);
+```
+
+Order matters and is deliberate: sanitising **before** the slice means a secret cannot be truncated
+into safety by having its keyword cut off. The node's own string branch was repaired in the same
+commit, because `sanitize()` on a string previously returned the input unchanged:
+
+```js
+// before
+if (typeof v === 'object') return JSON.stringify(v).replace(SECRET_RE, redactSecret);
+return String(v);
+// after
+if (typeof v === 'object') return JSON.stringify(v).replace(SECRET_RE, redactSecret);
+return String(v).replace(SECRET_RE, redactSecret);
+```
+
+No branch, IF gate, column or append mapping was changed — only redaction.
+
+---
+
+## F14 — `Authorization: Bearer <jwt>` was only partially redacted
+
+**Status: RESOLVED 2026-09-28 · CONFIRMED · commit `5c1a854`**
+
+Severity was not separately triaged for this one either.
+
+The shared `SECRET_RE` had a single keyword-then-separator alternative, so a header-style credential
+matched the keyword `authorization`, consumed the separator `: `, and then stopped at the space:
+
+```
+Authorization: Bearer eyJhbGciOi…
+             ^^^^^^^^^^ value group matches "Bearer" only; the JWT survives
+```
+
+Every bearer credential in the engine, in all three consumers, was therefore redacted to
+`Authorization: [REDACTED]` with the token still present.
+
+**Fix applied:** a second leading alternative matches a bare bearer credential wherever it appears,
+and the keyword alternative absorbs `bearer\s+` into its own value so a keyword-prefixed credential
+is consumed whole. The replacer is branch-aware, so the bare form keeps its `Bearer ` prefix while
+the keyword form reproduces keyword + separator:
+
+```js
+const SECRET_RE = /(bearer)(\s+)([^,}"'\s]+)|(secret|token|password|api[_ -]?key|authorization|bearer)(["']?\s*[:=]\s*)((?:bearer\s+)?[^,}"'\s]+)/gi;
+const redactSecret = (m, bearer, ws, token, keyword, sep) =>
+  (bearer ? bearer + ws + '[REDACTED]' : keyword + sep + '[REDACTED]');
+```
+
+The keyword list is unchanged, so no field that `sanitize()` already guarded lost coverage. The
+regex and replacer are byte-identical in all three consumers, so the F14 tests exercise the same
+logic in WF01 (twice) and WF06.
+
+The quote handling in the keyword alternative was **not** changed in this commit. That gap is a
+separate root cause and is tracked as F15.
+
+---
+
+## F15 — Quoted JSON secret values are not redacted
+
+**Status: OPEN · CONFIRMED · severity not yet assigned · intentionally excluded from `5c1a854`**
+
+Surfaced while verifying F14: the F14 tests pass, and a sweep of the same regex over quoted forms
+showed the keyword alternative does not fire when the secret value is a quoted JSON value.
+
+These are **not** redacted, even though every keyword involved is already on the list:
+
+| Input | Result |
+| --- | --- |
+| `{"password":"hunter2"}` | unchanged |
+| `{"api_key":"sk_live_abc123"}` | unchanged |
+| `{"refresh_token":"rt_9f8e7d6c"}` | unchanged |
+| `{"client_secret":"s3cr3t_value"}` | unchanged |
+| `"password":"hunter2"` | unchanged |
+
+One quoted form is caught, but incidentally:
+
+| Input | Result | Why |
+| --- | --- | --- |
+| `{"authorization":"Bearer abc.def.ghi"}` | `{"authorization":"Bearer [REDACTED]"}` | F14's bare-bearer alternative matches `Bearer abc.def.ghi` later in the string; the keyword form still does not fire |
+
+**Root cause.** In the keyword alternative the separator group is `(["']?\s*[:=]\s*)`. Its optional
+`["']?` consumes the quote that *opens* the value, and the value class `[^,}"'\s]+` then cannot match
+because the cursor sits on a `"`, which the class excludes. Backtracking does not rescue it: leaving
+the quote unconsumed would require `[:=]` to match `"`, which it can never do. There is no parse that
+reaches the value, so the whole alternative fails and the global scan moves on.
+
+**Affected paths.** The shared `sanitize()` in all three Code nodes. Concretely, the two destinations
+F11 and F13 closed for unquoted forms are open again for quoted values:
+
+- `06` `Build & Sanitize Error Record` → `payload: sanitize(err).slice(0, 4000)`. The object branch
+  is `JSON.stringify(v).replace(...)`, so the entire n8n error object is serialised first — any
+  JSON-quoted secret in a provider body passes through it untouched.
+- The same node's `error_message`, when the provider message embeds a JSON fragment.
+
+**Not a regression of F14.** Evaluating the committed regex over the unquoted forms still redacts
+them: `password=hunter2`, `api_key=sk_live_abc123`, `Authorization: Bearer abc.def.ghi` and bare
+`Bearer abc.def.ghi` all redact. F14 stands; this is a different root cause in the same regex.
+
+**Why it was excluded from `5c1a854`.** Changing the quote handling in the keyword alternative
+changes what `sanitize()` redacts for every field it already guards, across all three consumers, and
+that is a wider blast radius than the F13/F14 pass warranted. It is recorded here as its own finding
+rather than folded into that commit.
+
+**Remediation:** not determined. No fix is proposed here.
+
+---
+
 ## Fix order
 
-F1, F5, F9, F10, F11 and F12 are done. Revised order for what remains:
+F1, F5, F9, F10, F11, F12, F13 and F14 are done. Revised order for what remains:
 
 | # | Finding | Why |
 | --- | --- | --- |
-| 1 | **F11 residual — WF06** | `06 - Error Handler.json` still writes `error_message` unsanitised into the same `errors` tab. Now the largest known secret-leak path. |
+| 1 | **F15** | Quoted JSON secret values are still unredacted in the same `errors` write path that F11 and F13 just closed for unquoted forms. Only remaining open finding on that surface. |
 | 2 | F6 | WF03 and WF04 bodies still render `undefined` at customers and owners. |
 | 3 | F3 | Silent webhook hangs on unknown-lead booking traffic. |
 | 4 | F2 | Dangling `lead_id` handed to API callers. |
@@ -594,14 +789,16 @@ F1, F5, F9, F10, F11 and F12 are done. Revised order for what remains:
 The two structural prerequisites are met. F5 means `status_updates` is a real lifecycle audit
 trail, F1 means intake produces real outbound evidence and delivers the booking link, F9 means
 the engine actually serves more than one tenant, F10 means the `errors` tab is finally a
-usable failure ledger, and F11/F12 mean the ledger is safe to read and the booking column is
-trustworthy.
+usable failure ledger, F11/F13 mean the ledger's `error_message` is sanitised on both write paths,
+F14 closes the bearer pattern, and F12 means the booking column is trustworthy.
 
 Two things must be accounted for in the schema before trusting any metric:
 
-- **F11 residual** — `errors.error_message` is sanitised in WF01, but WF06 still writes it raw and
-  `Authorization: Bearer <jwt>` is only partially redacted. It should not be copied wholesale into
-  a measurement table until WF06 is fixed and the bearer pattern is closed.
+- **F15** — `errors.error_message` and `errors.payload` are sanitised for unquoted credential
+  forms, but quoted JSON values (`"password":"hunter2"`) still pass through on the same paths. It
+  should not be copied wholesale into a measurement table until the quoted form is redacted. F13
+  closed the WF06 write path and F14 closed the bearer pattern; F15 is what is left of the F11
+  residual.
 - **F8** — the original gap list (rejected intake, duplicate attempts, response attempts,
   follow-up failures, candidate-selection counts, rejected transitions, discarded response
   bodies, sweep run records) is unchanged, and F8 confirms those gaps are total, not partial.
@@ -609,5 +806,10 @@ Two things must be accounted for in the schema before trusting any metric:
 
 F12 no longer constrains the schema: `booking_link_sent` is now a truthful flag for every tenant.
 
-Recommended next step: fix the WF06 sanitisation gap, then re-open the `measurement_events`
-schema decision against a baseline that is finally trustworthy.
+**`measurement_events` status: not implemented.** It remains the schema decision that F8 needs, and
+nothing in `5c1a854` introduced it, narrowed it or made it implementable. No `measurement_events`
+table, node or column exists in `01–07` at this commit. The gate on it is unchanged from the
+recommendation below.
+
+Recommended next step: fix F15, then re-open the `measurement_events` schema decision against a
+baseline that is finally trustworthy.
