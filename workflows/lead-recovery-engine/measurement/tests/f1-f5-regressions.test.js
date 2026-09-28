@@ -647,6 +647,394 @@ test('F12: the fix changed one expression, not the graph', () => {
 });
 
 /* ------------------------------------------------------------------ *
+ * F13 - 06 - Error Handler persisted error_message unsanitised
+ *
+ * WF06 is the error workflow for 01-05 and 07, so its `errors` row and its
+ * admin email are the last stop for every failure in the engine. Unlike the two
+ * WF01 builders, its `sanitize()` only redacted the `typeof v === 'object'`
+ * branch and returned strings verbatim - and `error_message` was never passed
+ * through it at all. Provider auth failures echo credentials, so any secret in a
+ * failure message was written verbatim to the shared `errors` tab and emailed
+ * to the admin address.
+ *
+ * The fix hoists the shared regex to a `SECRET_RE` const, gives the string
+ * branch the same redaction the object branch already had, and routes
+ * `error_message` through `sanitize()`. The 2000-character slice, the
+ * `error_id`, the attribution fields, the payload capture and the notification
+ * wiring are all left exactly as they were.
+ * ------------------------------------------------------------------ */
+
+/** A realistic JWT: three dot-separated base64url segments. */
+const JWT =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9' +
+  '.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0' +
+  '.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+
+/** Drive WF06 with the payload shape n8n hands an error workflow. */
+function runErrorWorkflow(message, at = T0) {
+  const store = newStore();
+  const payload = {
+    execution: {
+      id: 'exec_9001',
+      url: 'https://n8n.example.com/workflow/SALWX4B52TcMFKWP/executions/9001',
+      error: { message, name: 'Error', level: 'error' },
+      lastNodeExecuted: 'Customer Acknowledgment',
+      mode: 'webhook'
+    },
+    workflow: { id: 'SALWX4B52TcMFKWP', name: '01 - Lead Intake' }
+  };
+  const eng = withClock(at, () => {
+    const e = new Engine(
+      WF.errorHandler(),
+      engineOptions(store, { now: () => new Date(at).getTime() })
+    );
+    e.runAll(payload);
+    return e;
+  });
+  return { store, eng };
+}
+
+test('F13 A: an ordinary error message is still recorded, in full and readable', () => {
+  for (const message of ORDINARY_ERRORS) {
+    const { store } = runErrorWorkflow(message);
+    const row = store.rows('errors')[0];
+    assert.ok(row, `no errors row for "${message}"`);
+    assert.equal(row.error_message, message, 'an ordinary message must survive verbatim');
+  }
+});
+
+test('F13 B: an API-key-like secret in the failure is NOT persisted', () => {
+  const { store } = runErrorWorkflow('SMTP rejected the request: api_key=LEAKED_API_KEY_123');
+  const row = store.rows('errors')[0];
+
+  assert.ok(row, 'the failure must still be recorded');
+  assert.doesNotMatch(row.error_message, /LEAKED_API_KEY_123/, 'the secret must not reach the errors sheet');
+  // The useful part of the message survives, so the row is still actionable.
+  assert.equal(row.error_message, 'SMTP rejected the request: api_key=[REDACTED]');
+});
+
+test('F13 C: a bearer credential is FULLY redacted in every realistic shape', () => {
+  const shapes = [
+    [`SMTP rejected: Authorization: Bearer ${JWT}`, 'SMTP rejected: Authorization: [REDACTED]'],
+    [`SMTP rejected: Bearer ${JWT}`, 'SMTP rejected: Bearer [REDACTED]'],
+    [`SMTP rejected: bearer ${JWT}`, 'SMTP rejected: bearer [REDACTED]'],
+    [`SMTP rejected: bearer: ${JWT}`, 'SMTP rejected: bearer: [REDACTED]'],
+    [`SMTP rejected: Authorization:${JWT}`, 'SMTP rejected: Authorization:[REDACTED]'],
+    [`SMTP rejected: token=${JWT}`, 'SMTP rejected: token=[REDACTED]'],
+    ['SMTP rejected: token=' + JWT, 'SMTP rejected: token=[REDACTED]']
+  ];
+  for (const [message, expected] of shapes) {
+    const { store } = runErrorWorkflow(message);
+    const row = store.rows('errors')[0];
+    assert.ok(row, `no errors row for: ${message.slice(0, 48)}`);
+    // The whole credential goes, not just the scheme word in front of it.
+    assert.equal(row.error_message, expected, `wrong output for: ${message.slice(0, 48)}`);
+    assert.doesNotMatch(row.error_message, /eyJhbGciOi/, 'the JWT header survived');
+    assert.doesNotMatch(row.error_message, /SflKxwRJ/, 'the JWT signature survived');
+  }
+});
+
+test('F13 C2: malformed and short bearer values are redacted, a bare keyword is not', () => {
+  const cases = [
+    ['Bearer SUPERSECRETTOKEN', 'Bearer [REDACTED]'],
+    ['Bearer x', 'Bearer [REDACTED]'],
+    ['Bearer abc.def', 'Bearer [REDACTED]'],
+    ['bearer tok', 'bearer [REDACTED]'],
+    ['bearer: tok_9', 'bearer: [REDACTED]'],
+    ['Authorization: Bearer', 'Authorization: [REDACTED]'],
+    ['bearer\tTABVALUE', 'bearer\t[REDACTED]'],
+    // A keyword with no value is not a secret and must not gain a marker.
+    ['Bearer', 'Bearer'],
+    ['Unauthorized', 'Unauthorized']
+  ];
+  for (const [message, expected] of cases) {
+    const { store } = runErrorWorkflow(message);
+    const row = store.rows('errors')[0];
+    assert.ok(row, `no errors row for ${JSON.stringify(message)}`);
+    assert.equal(row.error_message, expected, `wrong output for ${JSON.stringify(message)}`);
+  }
+});
+
+test('F13 C3: an API-key prefix is still a secret, but ordinary prose is not mangled', () => {
+  const { store } = runErrorWorkflow('\u6587\u4ef6\u8bfb\u53d6\u5931\u8d25 token=\u4ee4\u724c_ABC123');
+  assert.equal(
+    store.rows('errors')[0].error_message,
+    '\u6587\u4ef6\u8bfb\u53d6\u5931\u8d25 token=[REDACTED]',
+    'a non-ASCII secret is redacted and the surrounding text is untouched'
+  );
+
+  // Neither of these carries a secret, so both must survive byte-for-byte.
+  for (const message of [
+    'payment failed code=401 provider=resend',
+    'list sort=failed arg=--size=10',
+    'size=10 sort=name',
+    'provider said {"error":"invalid"} code=401'
+  ]) {
+    const row = runErrorWorkflow(message).store.rows('errors')[0];
+    assert.equal(row.error_message, message, `ordinary text was altered: ${message}`);
+  }
+});
+
+test('F13 D: the populated error record still carries every expected field', () => {
+  const { store, eng } = runErrorWorkflow('Customer email failed: 535 authentication failed');
+  const row = store.rows('errors')[0];
+
+  assert.ok(row, 'an errors row must be written');
+  for (const col of ERROR_COLS) {
+    assert.ok(col in row, `errors row is missing the ${col} column`);
+  }
+  assert.match(row.error_id, /^err_\d+_[a-z0-9]{6}$/, 'error_id generation is unchanged');
+  assert.equal(row.created_at, new Date(T0).toISOString(), 'created_at is unchanged');
+  assert.equal(row.workflow, '01 - Lead Intake', 'workflow attribution is unchanged');
+  assert.equal(row.node, 'Customer Acknowledgment', 'node attribution is unchanged');
+  assert.equal(row.business_id, '', 'WF06 wrote no business_id before and still does not');
+  assert.equal(row.lead_id, '', 'WF06 wrote no lead_id before and still does not');
+  assert.equal(row.execution_id, 'exec_9001', 'execution attribution is unchanged');
+  assert.equal(row.resolved, 'false', 'resolved behaviour is unchanged');
+  assert.ok(row.payload.length > 0, 'the payload is still captured');
+
+  // The graph is still trigger -> build -> append -> notify. (The engine
+  // records a trigger twice, once in runAll and once in runNode, so compare
+  // the de-duplicated sequence rather than the raw trace.)
+  const seen = eng.trace.map((t) => t.node).filter((n, i, all) => n !== all[i - 1]);
+  assert.deepEqual(seen, [
+    'When an Error Occurs',
+    'Build & Sanitize Error Record',
+    'Append Error',
+    'Admin Error Notification'
+  ]);
+});
+
+test('F13 E: the payload is still sanitised, and the 2000-char slice is unchanged', () => {
+  const { store } = runErrorWorkflow(
+    'lead capture failed: api_key=LEAKED_API_KEY_123 while reading business_config'
+  );
+  const row = store.rows('errors')[0];
+  assert.ok(row);
+
+  // The object branch of sanitize() still guards the payload.
+  assert.doesNotMatch(row.payload, /LEAKED_API_KEY_123/, 'the payload must stay sanitised');
+  assert.equal(
+    row.error_message,
+    'lead capture failed: api_key=[REDACTED] while reading business_config'
+  );
+
+  // An over-long message is still truncated, and redaction still applies.
+  const long = `api_key=HEAD_SECRET_1 ${'y'.repeat(3000)}`;
+  const cut = runErrorWorkflow(long).store.rows('errors')[0];
+  assert.equal(cut.error_message.length, 2000, 'the 2000-char slice is unchanged');
+  assert.doesNotMatch(cut.error_message, /HEAD_SECRET_1/, 'the secret must be redacted');
+});
+
+test('F13 F: the admin notification is still sent exactly once, to the same address', () => {
+  const { eng } = runErrorWorkflow('Customer email failed: 535 authentication failed');
+  assert.equal(eng.outbox.length, 1, 'exactly one admin notification');
+
+  const mail = eng.outbox[0];
+  assert.equal(mail.sent, true, 'the admin notification must still be sent');
+  assert.equal(mail.to, 'ops@lead-recovery-engine.example.com', 'the recipient is unchanged');
+  assert.match(mail.subject, /^Lead Recovery Engine/, 'the subject is unchanged');
+  assert.match(mail.subject, /Workflow Error$/, 'the subject is unchanged');
+
+  // And a secret reaches the admin only in redacted form.
+  const secret = runErrorWorkflow('SMTP rejected: api_key=LEAKED_API_KEY_123').eng.outbox[0];
+  assert.equal(secret.sent, true, 'the admin notification is still sent for a failing execution');
+  assert.doesNotMatch(
+    JSON.stringify(secret),
+    /LEAKED_API_KEY_123/,
+    'the admin email must not carry the secret'
+  );
+  assert.match(secret.html ?? secret.body ?? '', /api_key=\[REDACTED\]/, 'the admin sees the redacted form');
+});
+
+test('F13 G: persistence stays fail-safe when the message is missing or empty', () => {
+  const missing = runErrorWorkflow(undefined).store.rows('errors')[0];
+  assert.ok(missing, 'a row is written even with no message');
+  assert.equal(missing.error_message, 'unknown error', 'the documented fallback is unchanged');
+
+  const empty = runErrorWorkflow('').store.rows('errors')[0];
+  assert.ok(empty, 'a row is written for an empty message');
+  assert.equal(empty.error_message, 'unknown error', 'an empty message still falls back');
+});
+
+test('F13: the fix is confined to the one node', () => {
+  // Assert against the raw on-disk text, so a projected copy cannot satisfy it.
+  const wf = JSON.parse(WF.errorHandler().__raw);
+  assert.equal(wf.nodes.length, 4, 'WF06 must still have exactly four nodes');
+
+  const code = wf.nodes.find((n) => n.name === 'Build & Sanitize Error Record').parameters.jsCode;
+  assert.match(code, /const SECRET_RE = /, 'the regex is hoisted to a shared const');
+  assert.match(code, /const redactSecret = /, 'the shared replacer is used');
+  assert.match(
+    code,
+    /const errorMessage = sanitize\([\s\S]*?\n\)\.slice\(0, 2000\);/,
+    'error_message must be built through sanitize() and still sliced to 2000'
+  );
+  assert.match(code, /error_message: errorMessage/, 'the record still assigns error_message');
+
+  // The schema, the id, the attribution and the payload are all untouched.
+  assert.match(code, /'err_' \+\s*Date\.now\(\)/, 'error_id generation is untouched');
+  assert.match(code, /payload: sanitize\(err\)\.slice\(0, 4000\)/, 'payload handling is untouched');
+  assert.match(code, /resolved: false/, 'resolved behaviour is untouched');
+  assert.deepEqual(
+    wf.nodes
+      .find((n) => n.name === 'Append Error')
+      .parameters.fieldsUi.fieldValues.map((f) => f.fieldId),
+    ERROR_COLS,
+    'the errors-sheet column mapping is untouched'
+  );
+});
+
+/* ------------------------------------------------------------------ *
+ * F14 - the shared SECRET_RE left a bearer credential exposed
+ *
+ * The old pattern matched `authorization` first and its value group stopped at
+ * the first whitespace, so it captured the single word `Bearer` and left the
+ * JWT behind: `Authorization: Bearer <jwt>` became
+ * `Authorization: [REDACTED] <jwt>`. A bare `Bearer <jwt>`, which has no
+ * `:` or `=` after the keyword, matched nothing at all and survived whole.
+ *
+ * The fix adds a leading branch for a bare bearer credential and lets the value
+ * group itself be `Bearer <credential>`. Because SECRET_RE is textually
+ * duplicated in three Code nodes, every consumer is exercised below.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Every Code node in the engine that owns a copy of the shared sanitizer, with
+ * the way to provoke it and the label it stamps on the message. WF01 prefixes
+ * the provider message; WF06 stores it bare.
+ */
+const CONSUMERS = [
+  {
+    label: 'WF01 customer email',
+    loader: WF.intake,
+    node: 'Build Customer Email Error Record',
+    branchNode: 'Customer Acknowledgment',
+    prefix: 'customer_email_failed: '
+  },
+  {
+    label: 'WF01 owner email',
+    loader: WF.intake,
+    node: 'Build Owner Email Error Record',
+    branchNode: 'Owner Notification',
+    prefix: 'owner_email_failed: '
+  },
+  {
+    label: 'WF06 error handler',
+    loader: WF.errorHandler,
+    node: 'Build & Sanitize Error Record',
+    branchNode: null,
+    prefix: ''
+  }
+];
+
+let consumerSeq = 0;
+
+/** The error_message a given consumer persists for `message`. */
+function errorMessageFrom(consumer, message) {
+  const store = consumer.branchNode
+    ? failingIntake(`f14-${++consumerSeq}`, message, consumer.branchNode)
+    : runErrorWorkflow(message).store;
+  const row = store.rows('errors')[0];
+  assert.ok(row, `${consumer.label} wrote no errors row for: ${message.slice(0, 48)}`);
+  return row.error_message;
+}
+
+/** The SECRET_RE + redactSecret source of a consumer, for a drift check. */
+function sanitizerRegionOf(consumer) {
+  const code = consumer.loader().nodes.find((n) => n.name === consumer.node).parameters.jsCode;
+  // Trimmed: WF01 and WF06 differ only in trailing blank lines here, and the
+  // point of the check is that the sanitizer logic itself cannot drift.
+  return code.slice(code.indexOf('const SECRET_RE'), code.indexOf('function sanitize')).trim();
+}
+
+test('F14: all three consumers share one identical SECRET_RE and replacer', () => {
+  for (const c of CONSUMERS) {
+    const region = sanitizerRegionOf(c);
+    assert.match(region, /const SECRET_RE = /, `${c.label} has no hoisted SECRET_RE`);
+    assert.match(region, /const redactSecret = /, `${c.label} has no shared replacer`);
+    assert.doesNotMatch(region, /\$1\$2\[REDACTED\]/, `${c.label} still uses the old $1$2 replacer`);
+  }
+  // Guard against the three copies drifting apart again.
+  const unique = new Set(CONSUMERS.map(sanitizerRegionOf));
+  assert.equal(unique.size, 1, 'the SECRET_RE + redactSecret block must be identical in all three consumers');
+});
+
+test('F14: a realistic JWT is FULLY redacted by every consumer', () => {
+  const shapes = [
+    `provider auth failed: Authorization: Bearer ${JWT}`,
+    `provider auth failed: Bearer ${JWT}`,
+    'provider auth failed: bearer: ' + JWT,
+    `provider auth failed: token=${JWT}`
+  ];
+  for (const c of CONSUMERS) {
+    for (const message of shapes) {
+      const text = errorMessageFrom(c, message);
+      assert.doesNotMatch(text, /eyJhbGciOi/, `${c.label} leaked the JWT header: ${text.slice(0, 80)}`);
+      assert.doesNotMatch(text, /SflKxwRJ/, `${c.label} leaked the JWT signature: ${text.slice(0, 80)}`);
+      assert.match(text, /\[REDACTED\]/, `${c.label} produced no redaction marker: ${text.slice(0, 80)}`);
+      assert.ok(
+        text.startsWith(c.prefix + 'provider auth failed'),
+        `${c.label} lost the context: ${text.slice(0, 80)}`
+      );
+    }
+  }
+});
+
+test('F14: malformed and short bearer values are handled by every consumer', () => {
+  const cases = [
+    ['Bearer SUPERSECRETTOKEN', 'Bearer [REDACTED]'],
+    ['Bearer x', 'Bearer [REDACTED]'],
+    ['Bearer abc.def', 'Bearer [REDACTED]'],
+    ['bearer tok', 'bearer [REDACTED]'],
+    ['bearer: tok_9', 'bearer: [REDACTED]'],
+    ['Authorization: Bearer', 'Authorization: [REDACTED]'],
+    ['bearer\tTABVALUE', 'bearer\t[REDACTED]'],
+    // A keyword with no value is not a secret.
+    ['Bearer', 'Bearer'],
+    ['Unauthorized', 'Unauthorized']
+  ];
+  for (const c of CONSUMERS) {
+    for (const [message, expected] of cases) {
+      assert.equal(
+        errorMessageFrom(c, message),
+        c.prefix + expected,
+        `${c.label} mishandled ${JSON.stringify(message)}`
+      );
+    }
+  }
+});
+
+test('F14: the pre-existing secret patterns still work in every consumer', () => {
+  for (const c of CONSUMERS) {
+    for (const [i, [message, secret]] of SANITIZER_PATTERNS.entries()) {
+      const text = errorMessageFrom(c, message);
+      assert.doesNotMatch(text, new RegExp(secret), `${c.label} regressed on pattern ${i} (${message}): ${text}`);
+      assert.match(text, /\[REDACTED\]/, `${c.label} lost the marker on pattern ${i}`);
+    }
+  }
+});
+
+test('F14: ordinary error text is NOT over-redacted by any consumer', () => {
+  const ordinary = [
+    ...ORDINARY_ERRORS,
+    'Customer email failed: 535 authentication failed',
+    'The authorization process was delayed by 5 minutes',
+    'Execution failed: node "Code in JavaScript" threw a TypeError',
+    'Unauthorized',
+    'payment failed code=401 provider=resend',
+    'Workflow "05 - Follow-up Sweeper" not connected'
+  ];
+  for (const c of CONSUMERS) {
+    for (const message of ordinary) {
+      const text = errorMessageFrom(c, message);
+      assert.equal(text, c.prefix + message, `${c.label} altered an ordinary message: ${text}`);
+      assert.doesNotMatch(text, /\[REDACTED\]/, `${c.label} redacted nothing-worthy: ${message}`);
+    }
+  }
+});
+
+/* ------------------------------------------------------------------ *
  * F9 - intake resolved business_config by position, not by tenant
  * ------------------------------------------------------------------ */
 
