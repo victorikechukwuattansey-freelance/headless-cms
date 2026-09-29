@@ -14,17 +14,18 @@ const { referenceWorkflow, CODE_NODE_NAMES } = require('../src/prospect-finder-w
 
 /*
  * Frozen-by-convention hash anchor — the current artifact fingerprint
- * (revision R9, pairedItem lineage fix — replaces the R8 A.12 anchor; the A.12
- * phone-key changes are retained, only `Dedup & Prepare Verified` gained
- * explicit `pairedItem` on its emitted items). This guard FAILS if any
- * hand-edit changes the artifact without rebuilding and updating this anchor.
- * When you intentionally change the workflow through the builder (spec or
- * embedded code edit + build), update this constant to the new artifact hash
- * (see reports/PROSPECT-FINDER-GPL-PREFLIGHT.md §12.3 revision log,
+ * (revision R10, positivePatterns widening — replaces the R9 pairedItem lineage
+ * anchor; the R9 `pairedItem` changes are retained, only `Process FSQ`
+ * `positivePatterns` gained the additional common-HVAC-phrasing regexes).
+ * This guard FAILS if any hand-edit changes the artifact without rebuilding
+ * and updating this anchor. When you intentionally change the workflow through
+ * the builder (spec or embedded code edit + build), update this constant to the
+ * new artifact hash (see reports/PROSPECT-FINDER-GPL-PREFLIGHT.md §12.3
+ * revision log,
  * reports/PROSPECT-FINDER-A12-PHONE-NORMALIZATION-REPORT.md, and
  * reports/PROSPECT-FINDER-PAIRED-ITEM-LINEAGE-FIX-REPORT.md).
  */
-const ARTIFACT_HASH = '30a5020506850b079eea48f3932c41bf4fc20c32e224f81c059ee6a9162f2308';
+const ARTIFACT_HASH = '601f29ca6479fd08da132acb1c8fc667239d7f04a405f32c5c7094e0048c8284';
 
 const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 
@@ -54,7 +55,7 @@ describe('Prospect Finder deterministic builder', () => {
   it('emits the artifact byte-for-byte (no regeneration drift)', () => {
     const built = serialize(prospectFinderWorkflow());
     assert.equal(built, artifactBytes(), 'builder output must equal the shipped artifact bytes');
-    assert.equal(Buffer.byteLength(built, 'utf8'), 88855);
+    assert.equal(Buffer.byteLength(built, 'utf8'), 89207);
     assert.equal(sha256(built), sha256(artifactBytes()));
   });
 

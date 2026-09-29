@@ -33,7 +33,11 @@
  *  so the missing `pairedItem` broke `$('Set Status Running').item` in
  *  `Update Status Completed` ("Paired item data ... is unavailable"). No dedupe
  *  business logic, field, or topology change. Current artifact SHA-256 is
- *  computed by the builder.
+ *  computed by the builder. Revised for R10: positivePatterns widened to
+ *  recognize common HVAC phrasings (Air Solutions/Air Cond/Climate Control/
+ *  Mechanical/Aire/Heating & A/C/etc.) that were previously marked REVIEW by
+ *  the hvac_category_without_strong_name_match branch. The three qualification
+ *  branches and the REVIEW bucket for genuinely ambiguous names are unchanged.
  */
 
 const CANONICAL_PHONE_NORMALIZER = [
@@ -228,12 +232,20 @@ const CODE_BY_NODE = {
     "  /\\bhvac\\b/i,",
     "  /\\bair\\s*conditioning\\b/i,",
     "  /\\bair\\s*conditioner\\b/i,",
+    "  /\\bair\\s*cond\\b/i,",
     "  /\\bheating\\s*(?:and|&)\\s*air\\b/i,",
     "  /\\bheating\\s*(?:and|&)\\s*cooling\\b/i,",
+    "  /\\bcooling\\s*(?:and|&)\\s*heating\\b/i,",
+    "  /\\bheating\\s*(?:and|&)\\s*(?:a\\/?c|ac)\\b/i,",
     "  /\\bair\\s*(?:ac|a\\/c)\\s*(?:and|&)\\s*(?:heating|heat|conditioning)\\b/i,",
     "  /\\bheating\\s*(?:and|&)\\s*(?:air|cooling)\\b/i,",
     "  /\\bair\\s*(?:and|&)\\s*heat\\b/i,",
     "  /\\bair\\s*repair\\b/i,",
+    "  /\\bair\\s*(?:solutions?|services?|choice|control|masters?|flow|works?|pro|quality|specialists?|balance|systems?)\\b/i,",
+    "  /\\benvironmental\\s*air\\b/i,",
+    "  /\\bclimate\\s*control\\b/i,",
+    "  /\\bmechanical\\b/i,",
+    "  /\\baire\\b/i,",
     "];",
     "",
     "const rejectPatterns = [",
