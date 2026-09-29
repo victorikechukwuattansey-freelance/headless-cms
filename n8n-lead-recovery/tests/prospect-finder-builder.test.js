@@ -14,9 +14,9 @@ const { referenceWorkflow, CODE_NODE_NAMES } = require('../src/prospect-finder-w
 
 /*
  * Frozen-by-convention hash anchor — the current artifact fingerprint
- * (revision R10, positivePatterns widening — replaces the R9 pairedItem lineage
- * anchor; the R9 `pairedItem` changes are retained, only `Process FSQ`
- * `positivePatterns` gained the additional common-HVAC-phrasing regexes).
+ * (revision R11, positivePatterns refinement — replaces the R10 widening anchor;
+ * the R10 additions are retained, only `/\bmechanical\b/i` was removed
+ * (contradicted reviewPatterns) and `/\bair\b/i` added (bare "Air" names)).
  * This guard FAILS if any hand-edit changes the artifact without rebuilding
  * and updating this anchor. When you intentionally change the workflow through
  * the builder (spec or embedded code edit + build), update this constant to the
@@ -25,7 +25,7 @@ const { referenceWorkflow, CODE_NODE_NAMES } = require('../src/prospect-finder-w
  * reports/PROSPECT-FINDER-A12-PHONE-NORMALIZATION-REPORT.md, and
  * reports/PROSPECT-FINDER-PAIRED-ITEM-LINEAGE-FIX-REPORT.md).
  */
-const ARTIFACT_HASH = '601f29ca6479fd08da132acb1c8fc667239d7f04a405f32c5c7094e0048c8284';
+const ARTIFACT_HASH = 'b2623f7205c5a3d1eb13b1ccd26abbf851fc8f7001a7ca766b60f18aa283f557';
 
 const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 
@@ -55,7 +55,7 @@ describe('Prospect Finder deterministic builder', () => {
   it('emits the artifact byte-for-byte (no regeneration drift)', () => {
     const built = serialize(prospectFinderWorkflow());
     assert.equal(built, artifactBytes(), 'builder output must equal the shipped artifact bytes');
-    assert.equal(Buffer.byteLength(built, 'utf8'), 89207);
+    assert.equal(Buffer.byteLength(built, 'utf8'), 89200);
     assert.equal(sha256(built), sha256(artifactBytes()));
   });
 

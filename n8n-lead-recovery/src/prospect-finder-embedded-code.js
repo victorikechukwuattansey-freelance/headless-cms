@@ -38,6 +38,12 @@
  *  Mechanical/Aire/Heating & A/C/etc.) that were previously marked REVIEW by
  *  the hvac_category_without_strong_name_match branch. The three qualification
  *  branches and the REVIEW bucket for genuinely ambiguous names are unchanged.
+ *  Revised for R11: positivePatterns — removed /\bmechanical\b/i (it
+ *  contradicted the same pattern in reviewPatterns, causing mechanical-
+ *  named businesses to match both lists) and added /\bair\b/i (matches
+ *  business names ending in bare "Air"). reviewPatterns is unchanged;
+ *  mechanical contractors stay REVIEW via the category-without-name
+ *  branch, which is C-B's intent.
  */
 
 const CANONICAL_PHONE_NORMALIZER = [
@@ -244,8 +250,8 @@ const CODE_BY_NODE = {
     "  /\\bair\\s*(?:solutions?|services?|choice|control|masters?|flow|works?|pro|quality|specialists?|balance|systems?)\\b/i,",
     "  /\\benvironmental\\s*air\\b/i,",
     "  /\\bclimate\\s*control\\b/i,",
-    "  /\\bmechanical\\b/i,",
     "  /\\baire\\b/i,",
+    "  /\\bair\\b/i,",
     "];",
     "",
     "const rejectPatterns = [",
