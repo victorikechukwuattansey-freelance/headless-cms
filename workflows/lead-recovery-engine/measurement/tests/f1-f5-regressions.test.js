@@ -1035,6 +1035,231 @@ test('F14: ordinary error text is NOT over-redacted by any consumer', () => {
 });
 
 /* ------------------------------------------------------------------ *
+ * F15 - a quoted secret reached the errors sheet
+ * ------------------------------------------------------------------ *
+ *
+ * The shared value group was `[^,}"'\s]+`: it stopped dead on `"`, `'` and a
+ * backtick, so a provider that quoted its secret defeated the sanitizer
+ * completely. `api_key="SECRET"` and `{"api_key":"SECRET"}` both persisted the
+ * credential verbatim - the quote became the boundary the value could not
+ * cross, and the *whole* secret survived.
+ *
+ * The fix teaches the value group the three quoted-literal shapes, and makes
+ * `redactSecret` re-emit the quote it found so a JSON payload stays
+ * well-formed. `Bearer <credential>` handling from F14 is untouched.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Quoting and delimiter forms a provider can emit, each with the exact token
+ * that must not survive. Every entry is a shape the pre-F15 pattern could not
+ * reach, because its value began with a quote character.
+ */
+const QUOTED_SECRET_FORMS = [
+  // Double-quoted value.
+  ['api_key="LEAKED_DQ_1"', 'LEAKED_DQ_1'],
+  ['{"api_key":"LEAKED_JSON_2"}', 'LEAKED_JSON_2'],
+  ['token: "LEAKED_COLON_DQ_3"', 'LEAKED_COLON_DQ_3'],
+  // Single-quoted value.
+  ["password='LEAKED_SQ_4'", 'LEAKED_SQ_4'],
+  ["{\"api_key\": 'LEAKED_JSON_SQ_5'}", 'LEAKED_JSON_SQ_5'],
+  // Backtick value.
+  ['api_key=`LEAKED_BT_6`', 'LEAKED_BT_6'],
+  ['password=`LEAKED_BT_7`', 'LEAKED_BT_7'],
+  // Quoted KEY, so the quote sits on the separator side.
+  ['"api_key":"LEAKED_QKEY_8"', 'LEAKED_QKEY_8'],
+  ["'token':'LEAKED_SQKEY_9'", 'LEAKED_SQKEY_9'],
+  // A bearer pair inside quotes: the whole pair must be consumed, not just "Bearer".
+  ['{"Authorization":"Bearer LEAKED_AUTHBQ_10"}', 'LEAKED_AUTHBQ_10'],
+  ['{"token":"bearer LEAKED_LOWERBQ_11"}', 'LEAKED_LOWERBQ_11'],
+  // Pretty-printed, multi-line JSON.
+  ['{\n  "client_secret": "LEAKED_PRETTY_12",\n  "retries": 3\n}', 'LEAKED_PRETTY_12'],
+  // A quoted secret sharing a line with unrelated quoted prose.
+  ['{"note":"auth failed","api_key":"LEAKED_WITHPROSE_13"}', 'LEAKED_WITHPROSE_13'],
+  // Nested object, and an array of objects.
+  ['{"outer":{"api_key":"LEAKED_NEST_14"}}', 'LEAKED_NEST_14'],
+  ['{"items":[{"password":"LEAKED_ARR_15"},{"api_key":"LEAKED_ARR_16"}]}', 'LEAKED_ARR_16'],
+  // Whitespace around the separator, plus a quoted value.
+  ['api-key  =  "LEAKED_SPACED_17"', 'LEAKED_SPACED_17'],
+  ['"bearer": "LEAKED_BEARERKEY_18"', 'LEAKED_BEARERKEY_18'],
+  // An escaped quote inside the quoted value.
+  ['{"api_key":"LEAKED_ESC_19\\"X\\""}', 'LEAKED_ESC_19']
+];
+
+/**
+ * One message holding every variant at once, so a single pass can be checked
+ * for the whole family of secrets rather than form by form.
+ */
+function f15CombinedMessage() {
+  const variants = [
+    '{"api_key":"LEAKED_COMB_01","nested":{"password":"LEAKED_COMB_02"}}',
+    'api-key = "LEAKED_COMB_03"',
+    "client_secret='LEAKED_COMB_04'",
+    'password=`LEAKED_COMB_05`',
+    '"bearer": "LEAKED_COMB_06"',
+    '{"Authorization":"Bearer LEAKED_COMB_07"}',
+    'token=LEAKED_COMB_08',
+    'Bearer LEAKED_COMB_09',
+    '{\n  "client_secret": "LEAKED_COMB_10",\n  "retries": 3\n}',
+    'X-Api-Key: LEAKED_COMB_11',
+    'api_key=LEAKED_COMB_12',
+    'bearer: LEAKED_COMB_13'
+  ];
+  return 'provider auth failed: ' + variants.join(' | ');
+}
+
+/** Every secret token the suite knows about, as one alternation. */
+const ALL_KNOWN_SECRETS = [
+  ...SANITIZER_PATTERNS.map(([, s]) => s),
+  ...QUOTED_SECRET_FORMS.map(([, s]) => s)
+];
+const SECRET_LOOKALIKE = new RegExp(
+  ALL_KNOWN_SECRETS.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+);
+
+test('F15: every quoted form is redacted in every consumer', () => {
+  for (const c of CONSUMERS) {
+    for (const [i, [message, secret]] of QUOTED_SECRET_FORMS.entries()) {
+      const text = errorMessageFrom(c, message);
+      assert.doesNotMatch(
+        text,
+        new RegExp(secret),
+        `${c.label} leaked ${secret} from quoted form ${i}: ${text}`
+      );
+      assert.match(text, /\[REDACTED\]/, `${c.label} produced no marker for quoted form ${i}`);
+      // The surrounding context is still there, so the row stays actionable.
+      assert.ok(
+        text.startsWith(c.prefix),
+        `${c.label} lost the context for quoted form ${i}: ${text}`
+      );
+    }
+  }
+});
+
+test('F15: the quote style is preserved, so a redacted JSON body still parses', () => {
+  // [message, expected output, is the result real JSON]
+  const cases = [
+    ['{"api_key":"LEAKED_WF_1"}', '{"api_key":"[REDACTED]"}', true],
+    ["{'api_key':'LEAKED_WF_2'}", "{'api_key':'[REDACTED]'}", false],
+    ['{"api_key":"LEAKED_WF_3\\"X\\""}', '{"api_key":"[REDACTED]"}', true]
+  ];
+  for (const [message, expected, isJson] of cases) {
+    const { store } = runErrorWorkflow(message);
+    const text = store.rows('errors')[0].error_message;
+    assert.equal(text, expected, `quote style was not preserved: ${text}`);
+    if (isJson) {
+      assert.doesNotThrow(
+        () => JSON.parse(text),
+        `redaction broke the JSON body: ${text}`
+      );
+    }
+  }
+});
+
+/** Every secret token embedded in a message, so a check cannot go vacuous. */
+function secretsIn(message) {
+  return [...new Set(message.match(/LEAKED_[A-Z0-9_]+/g) || [])];
+}
+
+test('F15: no known secret pattern survives the combined all-variants fixture', () => {
+  const message = f15CombinedMessage();
+  // Derived from the fixture itself, so adding a variant cannot silently slip
+  // past a hand-maintained list.
+  const tokens = secretsIn(message);
+  assert.ok(
+    tokens.length >= 13,
+    `the fixture must carry every variant, found only ${tokens.length}: ${tokens.join(', ')}`
+  );
+
+  for (const c of CONSUMERS) {
+    const text = errorMessageFrom(c, message);
+
+    for (const secret of tokens) {
+      assert.doesNotMatch(
+        text,
+        new RegExp(secret),
+        `${c.label} leaked ${secret} from the combined fixture`
+      );
+    }
+    // The alternation over every secret the suite knows about: nothing
+    // secret-shaped may remain anywhere in the output.
+    const found = text.match(SECRET_LOOKALIKE);
+    assert.equal(found, null, `${c.label} leaked a known pattern: ${text}`);
+
+    // The redaction actually happened - a clean output because nothing was
+    // matched would be a false pass.
+    assert.match(text, /\[REDACTED\]/, `${c.label} redacted nothing at all`);
+    // The row is still readable.
+    assert.ok(
+      text.startsWith(c.prefix + 'provider auth failed'),
+      `${c.label} lost context: ${text.slice(0, 80)}`
+    );
+  }
+});
+
+test('F15: the object branch sanitises a quoted secret and stays valid JSON', () => {
+  const { store } = runErrorWorkflow('lead capture failed: api_key="LEAKED_PAYLOAD_1" reading config');
+  const row = store.rows('errors')[0];
+  assert.ok(row);
+
+  // payload is JSON.stringify(err) run through the object branch, so the
+  // secret is nested inside an escaped-quoted JSON string.
+  assert.doesNotMatch(row.payload, /LEAKED_PAYLOAD_1/, 'the payload must stay sanitised');
+  assert.doesNotMatch(row.error_message, /LEAKED_PAYLOAD_1/, 'the message must stay sanitised');
+  assert.doesNotThrow(() => JSON.parse(row.payload), `payload is no longer valid JSON: ${row.payload}`);
+});
+
+test('F15: the three consumers agree byte-for-byte on the same input', () => {
+  const inputs = [f15CombinedMessage(), ...QUOTED_SECRET_FORMS.map(([m]) => m)];
+  for (const message of inputs) {
+    const rendered = CONSUMERS.map((c) => ({
+      label: c.label,
+      text: errorMessageFrom(c, message)
+    }));
+    // Drop the consumer-specific prefix WF01 adds, so only the sanitizer's
+    // own output is compared. This asserts behaviour, not source text.
+    const bodies = rendered.map((r) => r.text.slice(CONSUMERS.find((c) => c.label === r.label).prefix.length));
+    assert.equal(
+      new Set(bodies).size,
+      1,
+      `consumers disagreed on ${JSON.stringify(message.slice(0, 60))}: ${JSON.stringify(rendered)}`
+    );
+  }
+});
+
+test('F15: the shared block, sanitize() included, is byte-identical in all three', () => {
+  const blocks = CONSUMERS.map((c) => {
+    const code = c.loader().nodes.find((n) => n.name === c.node).parameters.jsCode;
+    const start = code.indexOf('const SECRET_RE');
+    const fn = code.indexOf('function sanitize');
+    // through the closing brace of sanitize(), so whitespace drift is caught too
+    return code.slice(start, code.indexOf('\n}', fn) + 2);
+  });
+  assert.equal(
+    new Set(blocks).size,
+    1,
+    'the SECRET_RE + redactSecret + sanitize block must be byte-identical in all three consumers'
+  );
+});
+
+test('F15: ordinary text, including quoted prose, is still NOT redacted', () => {
+  const ordinary = [
+    'the request body was {"retries": 3, "ok": true}',
+    'node "Code in JavaScript" returned {"code": 401}',
+    'smtp replied: {"message":"temporary failure"}',
+    'The authorization service timed out after 5s',
+    'Customer email failed: 535 authentication failed',
+    'payment failed code=401 provider=resend'
+  ];
+  for (const c of CONSUMERS) {
+    for (const message of ordinary) {
+      const text = errorMessageFrom(c, message);
+      assert.equal(text, c.prefix + message, `${c.label} altered ordinary text: ${text}`);
+      assert.doesNotMatch(text, /\[REDACTED\]/, `${c.label} over-redacted: ${message}`);
+    }
+  }
+});
+
+/* ------------------------------------------------------------------ *
  * F9 - intake resolved business_config by position, not by tenant
  * ------------------------------------------------------------------ */
 
