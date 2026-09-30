@@ -39,7 +39,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { Engine } from '../src/engine.js';
-import { newStore, engineOptions, WF, webhookInput, SECRET } from '../src/fixtures.js';
+import { newStore, engineOptions, WF, webhookInput, scheduleInput, SECRET } from '../src/fixtures.js';
 import { withClock } from '../src/clock.js';
 
 const T0 = '2026-09-01T09:00:00.000Z';
@@ -1447,3 +1447,392 @@ test('F5: the lead row and the 200 response are unchanged by the fix', () => {
 });
 
 void SECRET;
+
+/* ------------------------------------------------------------------ *
+ * F16 - 05 - Follow-up Sweeper: a failed send was a silent infinite retry
+ *
+ * The sweeper's `Send Follow-up Email` node uses onError=continueErrorOutput
+ * so one bad recipient never blocks the other candidates, and that is correct.
+ * But its error branch terminated in a `noOp`, so a persistently failing
+ * address was re-selected on EVERY hourly run, forever:
+ *
+ *   - followup_count is incremented only on the SUCCESS branch, and it counts
+ *     real customer contacts, so a failing address never advanced it. That made
+ *     the `followup_count < max_followups` eligibility gate structurally
+ *     unreachable for a failing lead: the guard existed, but nothing could
+ *     ever move the number it compares against.
+ *   - the failure left no trace at all - no errors row, so the operator could
+ *     not see it either.
+ *
+ * The fix records the failure (sanitised, via the shared F14/F15 block),
+ * increments a dedicated `followup_fail_count`, and retires the lead with
+ * status `failed` once a ceiling is reached. `failed` is deliberately distinct
+ * from `no_response`: no_response means the customer was reached and chose not
+ * to reply, whereas `failed` means we never managed to reach them.
+ *
+ * followup_count is NOT touched on the failure path. A transient SMTP outage
+ * must not consume the customer's real follow-up allowance.
+ * ------------------------------------------------------------------ */
+
+/** A send that always fails, for the emailSend node's injected fault. */
+const ALWAYS_FAILS = { emailFault: () => new Error('SMTP 550 mailbox unavailable') };
+
+/** Drive the sweeper at a given clock, returning the engine (for its outbox). */
+function runSweep(store, at, opts = {}) {
+  return withClock(at, () => {
+    const eng = new Engine(
+      WF.sweeper(),
+      engineOptions(store, { now: () => new Date(at).getTime(), ...opts })
+    );
+    eng.runAll(scheduleInput());
+    return eng;
+  });
+}
+
+/**
+ * A store holding one fresh lead under test, plus the seeded historical lead.
+ *
+ * The historical lead is NOT suppressed: WF01's duplicate check depends on
+ * reading at least one row, so an empty `leads` tab means intake silently
+ * creates nothing. Every assertion below therefore filters by lead_id rather
+ * than assuming the tab holds a single row.
+ */
+function leadUnderTest(sourceId, at = T0) {
+  const store = newStore();
+  const intake = runIntake(store, intakeBody({ source_id: sourceId }), at);
+  const lead = store.rows('leads').find((r) => r.source_id === sourceId);
+  assert.ok(lead, `intake must have created the lead under test (${sourceId})`);
+  return { store, intake, leadId: lead.lead_id, lead, email: lead.email };
+}
+
+const leadNow = (store, leadId) => store.rows('leads').find((r) => r.lead_id === leadId);
+
+const errorRowsFor = (store, leadId) => store.rows('errors').filter((r) => r.lead_id === leadId);
+
+/** The outbox entries addressed to this lead, so the seeded lead is ignored. */
+const sendsFor = (eng, email) => eng.outbox.filter((e) => e.to === email);
+
+test('F16: a failed follow-up send increments the failure counter', () => {
+  const { store, leadId, email } = leadUnderTest('f16-increments');
+
+  // The lead is only due 24h after intake, per followup_delay_hours.
+  const eng = runSweep(store, '2026-09-02T09:00:00.000Z', ALWAYS_FAILS);
+
+  // The send really was attempted and really did fail.
+  const sends = sendsFor(eng, email);
+  assert.equal(sends.length, 1, 'the follow-up send must have been attempted');
+  assert.equal(sends[0].sent, false, 'and it must have failed');
+
+  const after = leadNow(store, leadId);
+  assert.equal(after.followup_fail_count, '1', 'the failure must be counted');
+
+  // ...and the counter is a real counter, not a constant: a second failure is 2.
+  runSweep(store, '2026-09-02T10:00:00.000Z', ALWAYS_FAILS);
+  assert.equal(leadNow(store, leadId).followup_fail_count, '2', 'the second failure must count again');
+});
+
+test('F16: a lead stops being selected once the failure ceiling is reached', () => {
+  const { store, leadId, email } = leadUnderTest('f16-ceiling');
+
+  // max_followups is 3, so the ceiling is max(24, 3*4) = 24.
+  for (let i = 0; i < 24; i += 1) {
+    runSweep(store, new Date(Date.parse(T0) + (24 + i) * 3600000).toISOString(), ALWAYS_FAILS);
+  }
+
+  const retired = leadNow(store, leadId);
+  assert.equal(retired.followup_fail_count, '24', 'the ceiling is 24 for a max_followups of 3');
+  assert.equal(retired.status, 'failed', 'the lead is retired at the ceiling');
+  assert.equal(retired.next_followup_at, '', 'and it is unscheduled');
+
+  // The decisive assertion: one more sweep must not touch it at all. Before
+  // the fix this was unbounded - the lead was re-selected every hour forever.
+  const after = runSweep(store, new Date(Date.parse(T0) + 500 * 3600000).toISOString(), ALWAYS_FAILS);
+  assert.equal(
+    sendsFor(after, email).length,
+    0,
+    'a retired lead must never be selected again'
+  );
+  assert.equal(
+    leadNow(store, leadId).followup_fail_count,
+    '24',
+    'and its counter must not creep past the ceiling'
+  );
+});
+
+test('F16: a persistently failing lead never reaches status no_response', () => {
+  const { store, leadId } = leadUnderTest('f16-not-no-response');
+
+  for (let i = 0; i < 24; i += 1) {
+    runSweep(store, new Date(Date.parse(T0) + (24 + i) * 3600000).toISOString(), ALWAYS_FAILS);
+  }
+
+  const retired = leadNow(store, leadId);
+  // The two states mean different things and must not be conflated.
+  assert.equal(retired.status, 'failed', 'a delivery failure is `failed`');
+  assert.notEqual(
+    retired.status,
+    'no_response',
+    '`no_response` is reserved for a customer who was reached and did not reply'
+  );
+  // A retired lead is terminal: the sweeper must not resurrect it either.
+  runSweep(store, new Date(Date.parse(T0) + 500 * 3600000).toISOString(), {});
+  assert.equal(leadNow(store, leadId).status, 'failed', 'a retired lead stays retired');
+});
+
+test('F16: a failed follow-up send writes a fully populated errors row', () => {
+  const { store, leadId, intake } = leadUnderTest('f16-errors-row');
+  const eng = runSweep(store, '2026-09-02T09:00:00.000Z', ALWAYS_FAILS);
+
+  const rows = errorRowsFor(store, leadId);
+  assert.equal(rows.length, 1, 'exactly one errors row is written per failed send');
+  const row = rows[0];
+
+  // The same ten columns the other error consumers write.
+  assert.deepEqual(
+    Object.keys(row),
+    ['error_id', 'created_at', 'workflow', 'node', 'business_id', 'lead_id', 'error_message', 'execution_id', 'payload', 'resolved'],
+    'the errors row must use the shared ten-column contract'
+  );
+
+  assert.ok(row.error_id.startsWith('err_'), 'error_id is generated');
+  assert.equal(row.created_at, '2026-09-02T09:00:00.000Z', 'created_at uses the run clock');
+  assert.equal(row.workflow, '05 - Follow-up Sweeper', 'the failing workflow is attributed');
+  assert.equal(row.node, 'Send Follow-up Email', 'the failing node is attributed');
+  assert.equal(row.business_id, 'biz_lonestar_hvac', 'business_id is recorded');
+  assert.equal(row.lead_id, leadId, 'lead_id is recorded');
+  assert.equal(row.execution_id, eng.executionId, 'execution_id matches the execution');
+  assert.equal(row.resolved, 'false', 'a new error starts unresolved');
+
+  // The message must name the failure and say how far into the retry budget
+  // it is, otherwise an operator cannot triage it.
+  assert.match(row.error_message, /followup_email_failed/, 'the message is categorised');
+  assert.match(row.error_message, /attempt 1\/24/, 'the attempt and ceiling are reported');
+  assert.match(row.error_message, /SMTP 550 mailbox unavailable/, 'the provider reason survives');
+
+  // The payload is machine-readable and carries the retry state.
+  const payload = JSON.parse(row.payload);
+  assert.equal(payload.lead_id, leadId);
+  assert.equal(payload.followup_fail_count, 1);
+  assert.equal(payload.followup_fail_ceiling, 24);
+  assert.equal(payload.followup_count, 0, 'followup_count is still zero - no contact happened');
+
+  void intake;
+});
+
+test('F16: no secret from a provider error reaches the errors row', () => {
+  const SECRETY = 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.SUPERSECRETPART.signature';
+  const { store, leadId } = leadUnderTest('f16-secret');
+
+  runSweep(store, '2026-09-02T09:00:00.000Z', {
+    emailFault: () => new Error(`535 auth failed: ${SECRETY} (api_key=sk_live_9f3a2b7c1d)`)
+  });
+
+  const row = errorRowsFor(store, leadId)[0];
+  assert.ok(row, 'the failure is still recorded');
+
+  // error_message carries the provider's text, so it is the field that could
+  // leak a credential. It must be redacted, and still readable.
+  assert.doesNotMatch(
+    row.error_message,
+    /eyJhbGciOiJIUzI1NiJ9|SUPERSECRETPART|sk_live_9f3a2b7c1d/,
+    'error_message must not carry a credential'
+  );
+  assert.match(row.error_message, /\[REDACTED\]/, 'error_message must show the redaction happened');
+  assert.match(row.error_message, /535 auth failed/, 'the failure reason is still readable');
+
+  // The payload is built from a fixed set of non-secret fields rather than
+  // from the provider's text, so it has nothing to redact - but it must still
+  // never echo the credential.
+  assert.doesNotMatch(
+    row.payload,
+    /eyJhbGciOiJIUzI1NiJ9|SUPERSECRETPART|sk_live_9f3a2b7c1d/,
+    'payload must not carry a credential'
+  );
+  const payload = JSON.parse(row.payload);
+  assert.equal(payload.lead_id, leadId, 'the payload stays machine-readable after sanitising');
+});
+
+test('F16: the success path is unchanged - followup_count still counts only successful sends', () => {
+  const { store, leadId, email } = leadUnderTest('f16-success-unchanged');
+
+  // Three clean sweeps. Each must advance followup_count and leave the
+  // failure counter completely alone.
+  for (let i = 0; i < 3; i += 1) {
+    const eng = runSweep(store, new Date(Date.parse(T0) + (24 + i * 24) * 3600000).toISOString(), {});
+    const sends = sendsFor(eng, email);
+    assert.equal(sends.length, 1, 'each sweep sends');
+    assert.equal(sends[0].sent, true, 'and each send succeeds');
+    const after = leadNow(store, leadId);
+    assert.equal(after.followup_count, String(i + 1), `followup_count is ${i + 1} after ${i + 1} sends`);
+    assert.equal(after.followup_fail_count, '', 'a success never touches the failure counter');
+  }
+
+  const final = leadNow(store, leadId);
+  assert.equal(final.status, 'no_response', 'the existing terminal transition still happens');
+  assert.equal(final.followup_count, '3', 'the allowance is spent exactly as before');
+  assert.equal(errorRowsFor(store, leadId).length, 0, 'a clean run writes no errors rows');
+});
+
+test('F16: a transient failure followed by a success still advances normally', () => {
+  const { store, leadId, email } = leadUnderTest('f16-transient');
+
+  const failed = runSweep(store, '2026-09-02T09:00:00.000Z', ALWAYS_FAILS);
+  assert.equal(sendsFor(failed, email)[0].sent, false);
+
+  const afterFailure = leadNow(store, leadId);
+  assert.equal(afterFailure.followup_fail_count, '1', 'the failure is counted');
+  assert.equal(afterFailure.followup_count, '0', 'but no real contact happened, so it is not counted');
+  assert.equal(afterFailure.status, 'new', 'and the lead is untouched otherwise');
+
+  // The very next sweep succeeds, exactly as it would have before the fix.
+  const recovered = runSweep(store, '2026-09-02T10:00:00.000Z', {});
+  assert.equal(sendsFor(recovered, email)[0].sent, true, 'the retry gets through');
+  const afterSuccess = leadNow(store, leadId);
+  assert.equal(afterSuccess.followup_count, '1', 'the successful contact is counted');
+  assert.equal(afterSuccess.followup_fail_count, '1', 'the failure history is not erased, only the ceiling is what matters');
+  assert.notEqual(afterSuccess.status, 'failed', 'one blip never retires a lead');
+});
+
+  test('F16: the fix is confined to WF05\'s error path', () => {
+  // Assert against the raw on-disk text, so a projected copy cannot satisfy it.
+  const wf = JSON.parse(WF.sweeper().__raw);
+
+  // The success path is byte-for-byte the code the fix did not need to touch.
+  const advance = wf.nodes.find((n) => n.name === 'Advance Follow-up State').parameters.jsCode;
+  assert.doesNotMatch(
+    advance,
+    /followup_fail_count/,
+    'Advance Follow-up State must not learn about the failure counter'
+  );
+  assert.match(
+    advance,
+    /const count = \(Number\(j\.followup_count \?\? source\.followup_count \?\? 0\) \|\| 0\) \+ 1;/,
+    'the success path still increments followup_count by exactly one'
+  );
+  assert.match(advance, /followup_count: count,/, 'and still writes it to the row');
+
+  const update = wf.nodes.find((n) => n.name === 'Update Lead Follow-up State').parameters.fieldsUi;
+  assert.deepEqual(
+    update.values.map((v) => v.column),
+    ['followup_count', 'last_contact_at', 'next_followup_at', 'status', 'updated_at'],
+    'the existing success-path write is unchanged'
+  );
+
+  // The eligibility gate itself is unchanged apart from the new terminal status.
+  const select = wf.nodes.find((n) => n.name === 'Select Follow-up Candidates').parameters.jsCode;
+  assert.match(select, /if \(!\(count < max\)\) continue;/, 'followup_count < max_followups is still the gate');
+  assert.match(
+    select,
+    /if \(\['booked', 'lost', 'closed', 'no_response', 'failed'\]\.indexOf\(status\) !== -1\) continue;/,
+    'only `failed` is added to the terminal exclusion list'
+  );
+
+  // The failed-lead status is accepted and terminal in the status workflow.
+  const status = JSON.parse(WF.status().__raw);
+  const resolve = status.nodes
+    .find((n) => n.name === 'Resolve Lead, Config & Validate Status')
+    .parameters.jsCode;
+  assert.match(
+    resolve,
+    /const ALLOWED = \[[^\]]*'failed'\]/,
+    'WF04 must accept `failed` as a new_status'
+  );
+  assert.match(
+    resolve,
+    /_terminal: \['booked', 'lost', 'closed', 'no_response', 'failed'\]/,
+    '`failed` must be terminal in WF04, so a status change cannot resurrect a retired lead'
+  );
+});
+
+test('F16: the fix is confined to the new nodes', () => {
+  const wf = JSON.parse(WF.sweeper().__raw);
+
+  // The dead-end is gone and the new chain exists.
+  assert.equal(
+    wf.nodes.some((n) => n.name === 'End Failed Sends'),
+    false,
+    'the noOp the error branch used to terminate in must be removed'
+  );
+  for (const name of ['Build Failed Follow-up Record', 'Append Follow-up Error', 'Update Lead Follow-up Retry']) {
+    assert.ok(
+      wf.nodes.some((n) => n.name === name),
+      `${name} must exist`
+    );
+  }
+
+  // Both writes hang off the Code node, not off each other. A Sheets append
+  // returns the appended ROW, so chaining the leads update after the errors
+  // append would resolve every retry field to '' and wipe the lead's status.
+  const fanout = wf.connections['Build Failed Follow-up Record'].main[0];
+  assert.deepEqual(
+    fanout.map((t) => t.node).sort(),
+    ['Append Follow-up Error', 'Update Lead Follow-up Retry'],
+    'both writes must read the Code node output'
+  );
+  assert.equal(
+    wf.connections['Append Follow-up Error'],
+    undefined,
+    'the errors append must not feed the leads update'
+  );
+
+  // The two writes are declared, and the retry write is a partial update that
+  // never touches followup_count - that column means "real contacts".
+  const retry = wf.nodes.find((n) => n.name === 'Update Lead Follow-up Retry').parameters;
+  assert.equal(retry.operation, 'update', 'the retry state is an update, not an append');
+  assert.equal(retry.columnToMatchOn, 'lead_id', 'matched by lead_id');
+  assert.deepEqual(
+    retry.fieldsUi.values.map((v) => v.column),
+    ['followup_fail_count', 'status', 'next_followup_at', 'updated_at'],
+    'only the failure columns are written'
+  );
+  assert.equal(
+    retry.fieldsUi.values.some((v) => v.column === 'followup_count'),
+    false,
+    'a failed send must never consume the customer follow-up allowance'
+  );
+
+  // The errors append uses the same ten columns as every other consumer.
+  const append = wf.nodes.find((n) => n.name === 'Append Follow-up Error').parameters;
+  assert.deepEqual(
+    append.fieldsUi.fieldValues.map((v) => v.fieldId),
+    ['error_id', 'created_at', 'workflow', 'node', 'business_id', 'lead_id', 'error_message', 'execution_id', 'payload', 'resolved'],
+    'the shared ten-column errors contract is reused'
+  );
+
+  // The sanitize block is the shared F14/F15 one, not a fourth variant.
+  const code = wf.nodes.find((n) => n.name === 'Build Failed Follow-up Record').parameters.jsCode;
+  const start = code.indexOf('const SECRET_RE');
+  const fn = code.indexOf('function sanitize');
+  const block = code.slice(start, code.indexOf('\n}', fn) + 2);
+  const intake = JSON.parse(WF.intake().__raw);
+  const ref = intake.nodes.find((n) => n.name === 'Build Customer Email Error Record').parameters.jsCode;
+  const refStart = ref.indexOf('const SECRET_RE');
+  const refFn = ref.indexOf('function sanitize');
+  assert.equal(
+    block,
+    ref.slice(refStart, ref.indexOf('\n}', refFn) + 2),
+    'the sanitize block must be reused byte-for-byte, not re-implemented'
+  );
+
+  // The default-on-read and the ceiling are spelled exactly as reviewed.
+  assert.match(
+    code,
+    /const nextFailCount = Number\(lead\.followup_fail_count \|\| 0\) \+ 1;/,
+    'an absent followup_fail_count must default to 0 on read'
+  );
+  assert.match(
+    code,
+    /Math\.max\(24, Number\(config\.max_followups \|\| 3\) \* 4\)/,
+    'the ceiling has a hard floor of 24 and scales with max_followups'
+  );
+  assert.match(
+    code,
+    /status: reachedCeiling \? 'failed' : lead\.status/,
+    'only the ceiling changes the status'
+  );
+  assert.match(
+    code,
+    /next_followup_at: reachedCeiling \? '' : lead\.next_followup_at/,
+    'only the ceiling unschedules the lead'
+  );
+});

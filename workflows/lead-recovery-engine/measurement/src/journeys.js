@@ -312,11 +312,49 @@ export function journeyH_Failures() {
   const store = newStore();
 
   // H1: follow-up email fails -> is the failure recorded anywhere?
+  // F16: this used to dead-end at a noOp, so a persistently failing address was
+  // re-selected every hour forever. It must now record the error, count the
+  // consecutive failure, and keep retrying until the ceiling retires the lead.
   const failEmailStore = newStore();
   const intake = fire(failEmailStore, 'intake', intakeBody({ source_id: 'journey-h1' }), T0);
-  const failedSweep = sweep(failEmailStore, hoursAfter(T0, 24), {
-    emailFault: () => new Error('SMTP 550 mailbox unavailable')
-  });
+  const alwaysFails = { emailFault: () => new Error('SMTP 550 mailbox unavailable') };
+  const failedSweep = sweep(failEmailStore, hoursAfter(T0, 24), alwaysFails);
+
+  const leadAfterFirstFailure = () => {
+    const l = failEmailStore.rows('leads').find((r) => r.source_id === 'journey-h1');
+    return {
+      status: l.status,
+      followup_count: l.followup_count,
+      followup_fail_count: l.followup_fail_count,
+      next_followup_at: l.next_followup_at
+    };
+  };
+  const afterFirstFailure = leadAfterFirstFailure();
+
+  // Snapshot the first sweep's errors rows before the extra sweeps add more,
+  // so this journey stays readable. Both due leads fail, so there are two.
+  const errorsAfterFirstSweep = failEmailStore.rows('errors').map((r) => ({ ...r }));
+
+  // Drive the same lead to the ceiling. The business default is max_followups
+  // 3, so the floor of 24 applies; 24 more failing sweeps reach it.
+  for (let i = 0; i < 24; i += 1) sweep(failEmailStore, hoursAfter(T0, 48 + i), alwaysFails);
+  const afterCeiling = leadAfterFirstFailure();
+
+  // A healthy transient failure: one failing sweep then a successful one.
+  const transientStore = newStore();
+  fire(transientStore, 'intake', intakeBody({ source_id: 'journey-h2' }), T0);
+  sweep(transientStore, hoursAfter(T0, 24), alwaysFails);
+  const transientLead = () => {
+    const l = transientStore.rows('leads').find((r) => r.source_id === 'journey-h2');
+    return {
+      status: l.status,
+      followup_count: l.followup_count,
+      followup_fail_count: l.followup_fail_count
+    };
+  };
+  const afterTransientFailure = transientLead();
+  const recoverySweep = sweep(transientStore, hoursAfter(T0, 48), {});
+  const afterRecovery = transientLead();
 
   // H2: Sheets append fails -> does the engine falsely report success?
   const downStore = newStore();
@@ -329,7 +367,16 @@ export function journeyH_Failures() {
     intakeResponse: intake.response(),
     followupSendAttempted: failedSweep.outbox.length,
     followupSendFailed: failedSweep.outbox.filter((e) => !e.sent).length,
-    errorsAfterFailedSend: failEmailStore.rows('errors'),
+    // F16: the failed send is now recorded, so this is no longer empty. The
+    // first sweep alone is shown - 24 further failing sweeps follow below.
+    errorsAfterFailedSend: errorsAfterFirstSweep,
+    // F16: a failure must count WITHOUT consuming the customer's real
+    // follow-up allowance, and must not retire the lead early.
+    afterFirstFailure,
+    afterCeiling,
+    afterTransientFailure,
+    afterRecovery,
+    recoverySendSucceeded: recoverySweep.outbox.every((e) => e.sent),
     sheetsDown: { store: downStore }
   };
 }

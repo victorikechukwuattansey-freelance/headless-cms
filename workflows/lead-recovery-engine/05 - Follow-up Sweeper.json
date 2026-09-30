@@ -94,7 +94,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const leads = $('Get Leads Requiring Follow-up').all();\nconst configs = $('Get Active Businesses').all();\nconst now = Date.now();\nconst EMAIL_RE = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\nfunction esc(v) {\n  return String(v == null ? '' : v)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}\n\nconst candidates = [];\nfor (const l of leads) {\n  const j = l.json;\n  const bid = String(j.business_id || '').trim();\n  const cfgRow = configs.find(\n    (c) => String(c.json.business_id || '').trim() === bid\n  );\n  if (!cfgRow) continue;\n  const cj = cfgRow.json;\n\n  // Business must be active.\n  if (String(cj.active || '').trim().toLowerCase() !== 'true') continue;\n\n  // Status must not be terminal.\n  const status = String(j.status || '').trim().toLowerCase();\n  if (['booked', 'lost', 'closed', 'no_response'].indexOf(status) !== -1) continue;\n\n  // followup_count < max_followups.\n  const count = Number(j.followup_count || 0) || 0;\n  const max = Number(cj.max_followups || 3) || 3;\n  if (!(count < max)) continue;\n\n  // next_followup_at must exist and be <= now.\n  const rawNext = String(j.next_followup_at || '').trim();\n  if (!rawNext) continue;\n  const nextTs = new Date(rawNext).getTime();\n  if (!isFinite(nextTs) || nextTs > now) continue;\n\n  // Valid email required.\n  const email = String(j.email || '').trim();\n  if (!EMAIL_RE.test(email)) continue;\n\n  candidates.push({\n    json: Object.assign({}, j, {\n      email: email,\n      business_name: cj.business_name || '',\n      owner_name: cj.owner_name || '',\n      from_email: cj.from_email || '',\n      reply_to_email: cj.reply_to_email || '',\n      followup_delay_hours: Number(cj.followup_delay_hours || 24) || 24,\n      max_followups: max,\n      _esc_name: esc(j.name),\n      _esc_business_name: esc(cj.business_name || ''),\n      _esc_service: esc(j.service),\n      _esc_booking_link: esc(j.booking_link),\n      _noCandidates: false\n    })\n  });\n}\n\nif (candidates.length === 0) {\n  return [{ json: { _noCandidates: true } }];\n}\nreturn candidates;"
+        "jsCode": "const leads = $('Get Leads Requiring Follow-up').all();\nconst configs = $('Get Active Businesses').all();\nconst now = Date.now();\nconst EMAIL_RE = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\nfunction esc(v) {\n  return String(v == null ? '' : v)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}\n\nconst candidates = [];\nfor (const l of leads) {\n  const j = l.json;\n  const bid = String(j.business_id || '').trim();\n  const cfgRow = configs.find(\n    (c) => String(c.json.business_id || '').trim() === bid\n  );\n  if (!cfgRow) continue;\n  const cj = cfgRow.json;\n\n  // Business must be active.\n  if (String(cj.active || '').trim().toLowerCase() !== 'true') continue;\n\n  // Status must not be terminal.\n  const status = String(j.status || '').trim().toLowerCase();\n  if (['booked', 'lost', 'closed', 'no_response', 'failed'].indexOf(status) !== -1) continue;\n\n  // followup_count < max_followups.\n  const count = Number(j.followup_count || 0) || 0;\n  const max = Number(cj.max_followups || 3) || 3;\n  if (!(count < max)) continue;\n\n  // next_followup_at must exist and be <= now.\n  const rawNext = String(j.next_followup_at || '').trim();\n  if (!rawNext) continue;\n  const nextTs = new Date(rawNext).getTime();\n  if (!isFinite(nextTs) || nextTs > now) continue;\n\n  // Valid email required.\n  const email = String(j.email || '').trim();\n  if (!EMAIL_RE.test(email)) continue;\n\n  candidates.push({\n    json: Object.assign({}, j, {\n      email: email,\n      business_name: cj.business_name || '',\n      owner_name: cj.owner_name || '',\n      from_email: cj.from_email || '',\n      reply_to_email: cj.reply_to_email || '',\n      followup_delay_hours: Number(cj.followup_delay_hours || 24) || 24,\n      max_followups: max,\n      _esc_name: esc(j.name),\n      _esc_business_name: esc(cj.business_name || ''),\n      _esc_service: esc(j.service),\n      _esc_booking_link: esc(j.booking_link),\n      _noCandidates: false\n    })\n  });\n}\n\nif (candidates.length === 0) {\n  return [{ json: { _noCandidates: true } }];\n}\nreturn candidates;"
       },
       "id": "f5c38cfd-c449-40a5-a09d-315e26964d0d",
       "name": "Select Follow-up Candidates",
@@ -182,18 +182,6 @@
       "notes": "FRESH native Email Send node (replaces obsolete n8n-nodes-base.sendEmail). Same proven SMTP credential. Reply-To reaches the business. n8n attribution disabled. onError isolates per-item failures: a bad recipient never blocks other candidates and never advances state."
     },
     {
-      "parameters": {},
-      "id": "f18f4891-c00e-4e24-92fa-d308370a6e7e",
-      "name": "End Failed Sends",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        1248,
-        320
-      ],
-      "notes": "Error-output sink for failed sends. CRITICAL: failed leads skip Advance Follow-up State entirely, so followup_count and next_followup_at remain untouched and the lead is retried next sweep (TEST 7 isolation)."
-    },
-    {
       "parameters": {
         "jsCode": "const candidates = $('Select Follow-up Candidates').all();\n\nreturn $input.all().map((it, index) => {\n  const j = it.json;\n\n  // Prefer lead_id already present on the current item.\n  // If the Email node stripped it, recover it from the\n  // corresponding eligible-follow-up item.\n  const source = candidates[index]?.json || {};\n  const leadId = String(j.lead_id || source.lead_id || '').trim();\n\n  if (!leadId) {\n    throw new Error(\n      `Missing lead_id in Advance Follow-up State. Item ${index + 1} has no lead_id.`\n    );\n  }\n\n  const count = (Number(j.followup_count ?? source.followup_count ?? 0) || 0) + 1;\n  const max = Number(j.max_followups ?? source.max_followups ?? 3) || 3;\n  const delay = Number(j.followup_delay_hours ?? source.followup_delay_hours ?? 24) || 24;\n\n  const nowIso = new Date().toISOString();\n  const reachedMax = count >= max;\n\n  return {\n    json: {\n      ...source,\n      ...j,\n\n      lead_id: leadId,\n      followup_count: count,\n      last_contact_at: nowIso,\n      next_followup_at: reachedMax\n        ? ''\n        : new Date(Date.now() + delay * 3600 * 1000).toISOString(),\n      status: reachedMax\n        ? 'no_response'\n        : String(j.status ?? source.status ?? 'new'),\n      updated_at: nowIso\n    }\n  };\n});"
       },
@@ -267,6 +255,156 @@
         }
       },
       "notes": "Persists advanced state per candidate row matched by Column to Match On = lead_id ($json is the deterministic output of the preceding Code node — never Sheets output shape, never row_number)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// F16 - WF05 failed follow-up sends used to dead-end at a noOp, so a\n// persistently failing address was re-selected every hour forever and\n// followup_count (which only ever counts SUCCESSFUL sends) never moved, making\n// max_followups structurally unreachable. This node records the failure, counts\n// total delivery failures in its own field, and retires the lead once the ceiling is\n// reached. followup_count is deliberately NOT touched here: it stays a record of\n// real contacts, so a transient SMTP failure cannot burn the customer's allowance.\nconst candidates = $('Select Follow-up Candidates').all();\nconst configs = $('Get Active Businesses').all();\nconst SECRET_RE = /(bearer)(\\s+)([^,}\"'`\\s]+)|(secret|token|password|api[_ -]?key|authorization|bearer)((?:\\\\?[\"'])?\\s*[:=]\\s*)(\"(?:[^\"\\\\]|\\\\.)*\"|\\\\\"(?:[^\"\\\\]|\\\\.)*?\\\\\"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`|bearer\\s+[^,}\"'`\\s]+|[^,}\"'`\\s]+)/gi;\n// Redacts a secret whatever delimiter or quoting surrounds it, so the shape a\n// provider happens to emit cannot decide whether the value is reached. The value\n// may be a double-quoted, single-quoted or backtick literal, a JSON-escaped\n// double-quoted literal (which is what JSON.stringify hands the object branch),\n// a `Bearer <credential>` pair, or a bare token. `redactSecret` re-emits the\n// leading delimiter it found, quote and backslash included, so a redacted JSON\n// payload stays well-formed and parseable instead of being cut in half. The\n// leading branch still catches a bare \"Bearer <credential>\" with no keyword\n// separator, and the value group may itself be \"Bearer <credential>\", so a\n// header-style \"Authorization: Bearer <jwt>\" is consumed whole rather than\n// leaving the JWT behind.\nconst redactSecret = (m, bearer, ws, token, keyword, sep, value) => {\n  if (bearer) return bearer + ws + '[REDACTED]';\n  const open = /^(\\\\?[\"'`])/.exec(value);\n  const q = open ? open[1] : '';\n  return keyword + sep + q + '[REDACTED]' + q;\n};\nfunction sanitize(v){\n  if (v === null || v === undefined) return '';\n  if (typeof v === 'object') return JSON.stringify(v).replace(SECRET_RE, redactSecret);\n  return String(v).replace(SECRET_RE, redactSecret);\n}\n\nreturn $input.all().map((it, index) => {\n  const j = it.json;\n\n  // The error item carries the candidate, but recover it the same defensive way\n  // 'Advance Follow-up State' does so a stripped field cannot throw here.\n  const source = candidates[index]?.json || {};\n\n  const bid = String(j.business_id ?? source.business_id ?? '').trim();\n  const lead = {\n    lead_id: String(j.lead_id ?? source.lead_id ?? '').trim(),\n    business_id: bid,\n    status: String(j.status ?? source.status ?? ''),\n    next_followup_at: String(j.next_followup_at ?? source.next_followup_at ?? ''),\n    followup_fail_count: j.followup_fail_count ?? source.followup_fail_count ?? ''\n  };\n  if (!lead.lead_id) {\n    throw new Error(\n      `Missing lead_id in Build Failed Follow-up Record. Item ${index + 1} has no lead_id.`\n    );\n  }\n\n  const cfg = configs.find((c) => String(c.json.business_id || '').trim() === bid);\n  const config = cfg ? cfg.json : {};\n  const max = Number(j.max_followups ?? source.max_followups ?? config.max_followups ?? 3) || 3;\n\n  // Ceiling is a hard default, deliberately far above max_followups: a\n  // temporary provider outage must not consume the customer's real follow-ups.\n  const ceiling = Math.max(24, Number(config.max_followups || 3) * 4);\n\n  // The field is absent on every pre-existing row, so it defaults on read.\n  // WF01/WF03 are NOT changed: absent means 0.\n  const nextFailCount = Number(lead.followup_fail_count || 0) + 1;\n  const reachedCeiling = nextFailCount >= ceiling;\n  const nowIso = new Date().toISOString();\n\n  const rawErr = j.error !== undefined ? j.error : j._emailError;\n  const msg =\n    typeof rawErr === 'object' && rawErr !== null\n      ? String(rawErr.message || JSON.stringify(rawErr))\n      : String(rawErr || 'unknown follow-up email error');\n\n  return {\n    json: {\n      lead_id: lead.lead_id,\n      business_id: bid,\n      followup_fail_count: nextFailCount,\n      followup_fail_ceiling: ceiling,\n      failed_attempts_remaining: Math.max(0, ceiling - nextFailCount),\n      // Unchanged until the ceiling is reached, so the partial update is a\n      // no-op for these two columns on an ordinary failure.\n      status: reachedCeiling ? 'failed' : lead.status,\n      next_followup_at: reachedCeiling ? '' : lead.next_followup_at,\n      updated_at: nowIso,\n      error_id: 'err_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n      created_at: nowIso,\n      workflow: '05 - Follow-up Sweeper',\n      node: 'Send Follow-up Email',\n      error_message: sanitize(\n        'followup_email_failed (attempt ' + nextFailCount + '/' + ceiling + ', followup_count ' +\n        String(j.followup_count ?? source.followup_count ?? 0) + '/' + max + '): ' + msg\n      ).slice(0, 2000),\n      execution_id: $execution.id,\n      payload: sanitize({\n        lead_id: lead.lead_id,\n        business_id: bid,\n        followup_count: Number(j.followup_count ?? source.followup_count ?? 0) || 0,\n        max_followups: max,\n        followup_fail_count: nextFailCount,\n        followup_fail_ceiling: ceiling\n      }).slice(0, 4000),\n      resolved: false\n    }\n  };\n});\n"
+      },
+      "id": "f16b1c40-0001-4a10-9c01-0000000000f1",
+      "name": "Build Failed Follow-up Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        320
+      ],
+      "notes": "F16 error path, step 1 of 3. Records a sanitized errors row and computes the next total delivery-failure count. followup_count is intentionally left alone so it keeps counting successful sends only. The ceiling is a hard default far above max_followups, so a transient SMTP outage cannot consume the customer's real follow-up allowance. At the ceiling the lead is retired with status='failed' (distinct from no_response, which means the customer really never replied) and next_followup_at is cleared so it is no longer selected."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2001101880,
+          "mode": "list",
+          "cachedResultName": "errors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=2001101880"
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "error_id",
+              "fieldValue": "={{ $json.error_id }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "workflow",
+              "fieldValue": "={{ $json.workflow }}"
+            },
+            {
+              "fieldId": "node",
+              "fieldValue": "={{ $json.node }}"
+            },
+            {
+              "fieldId": "business_id",
+              "fieldValue": "={{ $json.business_id }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.error_message }}"
+            },
+            {
+              "fieldId": "execution_id",
+              "fieldValue": "={{ $json.execution_id }}"
+            },
+            {
+              "fieldId": "payload",
+              "fieldValue": "={{ $json.payload }}"
+            },
+            {
+              "fieldId": "resolved",
+              "fieldValue": "={{ $json.resolved }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f16b1c40-0002-4a10-9c01-0000000000f2",
+      "name": "Append Follow-up Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        1456,
+        320
+      ],
+      "notes": "F16 error path, step 2 of 3. Appends the same ten-column errors row the WF01 and WF06 consumers write, so a failed follow-up is visible instead of silent.",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "1",
+          "name": "Lead Engine Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327828692,
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit#gid=1327828692"
+        },
+        "columnToMatchOn": "lead_id",
+        "valueToMatchOn": "={{ $json.lead_id }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "followup_fail_count",
+              "fieldValue": "={{ $json.followup_fail_count }}"
+            },
+            {
+              "column": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "column": "next_followup_at",
+              "fieldValue": "={{ $json.next_followup_at }}"
+            },
+            {
+              "column": "updated_at",
+              "fieldValue": "={{ $json.updated_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f16b1c40-0003-4a10-9c01-0000000000f3",
+      "name": "Update Lead Follow-up Retry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        1664,
+        320
+      ],
+      "notes": "F16 error path, step 3 of 3. Partial update matched by lead_id. status and next_followup_at are written back unchanged unless the failure ceiling was reached, so an ordinary failure only advances the retry counter and leaves the follow-up schedule exactly as the success path would.",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "1",
+          "name": "Lead Engine Sheets"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -344,7 +482,7 @@
         ],
         [
           {
-            "node": "End Failed Sends",
+            "node": "Build Failed Follow-up Record",
             "type": "main",
             "index": 0
           }
@@ -356,6 +494,22 @@
         [
           {
             "node": "Update Lead Follow-up State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Failed Follow-up Record": {
+      "main": [
+        [
+          {
+            "node": "Append Follow-up Error",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Lead Follow-up Retry",
             "type": "main",
             "index": 0
           }

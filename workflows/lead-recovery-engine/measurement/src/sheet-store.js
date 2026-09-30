@@ -18,7 +18,12 @@ export const HEADERS = {
     'urgency', 'score', 'status', 'booking_link', 'booking_link_sent', 'booked',
     'booked_at', 'booking_id', 'owner_notified', 'followup_count',
     'next_followup_at', 'last_contact_at', 'last_customer_response_at',
-    'idempotency_key', 'notes'
+    'idempotency_key', 'notes',
+    // F16: consecutive-failed-follow-up counter. Bounded separately from
+    // followup_count (which only ever counts SUCCESSFUL sends) so a transient
+    // SMTP failure cannot burn the customer's real follow-up allowance, while
+    // a permanently undeliverable address can still be retired.
+    'followup_fail_count'
   ],
   business_config: [
     'business_id', 'business_name', 'active', 'owner_name', 'owner_email',
