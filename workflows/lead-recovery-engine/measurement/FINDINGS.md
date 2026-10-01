@@ -1,8 +1,9 @@
 # Lead Recovery Engine — Execution Findings (Pilots 1–3)
 
 **Date:** 2026-09-27
-**Updated:** 2026-09-28 — reconciled against committed production at `5c1a854`. F11, F12, F13 and
-F14 are resolved; F15, F16 and F17 are open. F16 and F17 were added from
+**Updated:** 2026-09-30 — F16 is **RESOLVED** by `0e30562`; F15, F17 and the new F18 are open.
+Retained history: reconciled against committed production at `5c1a854`, where F11, F12, F13 and F14
+were resolved and F15, F16 and F17 were open. F16 and F17 were added from
 `measurement/EVIDENCE_MATRIX.md` (`c0f8e5b`, a docs-only commit); production JSON is unchanged at
 `5c1a854`. Later the same day, F8 was reconciled against that matrix: the general
 `measurement_events` question is **closed**, and F8's residual production behaviour stays open.
@@ -32,8 +33,9 @@ copied verbatim from the live tab contracts.
 | **F13** | **RESOLVED 2026-09-28** | `error_message` is now sanitised in `06 - Error Handler.json`, and its string branch redacts like its object branch. Commit `5c1a854`. |
 | **F14** | **RESOLVED 2026-09-28** | The shared `SECRET_RE` now consumes a bare or header-style Bearer credential whole, in all three consumers. Commit `5c1a854`. |
 | **F15** | **open** | Quoted JSON secret values (`"password":"hunter2"`) are still not redacted. Deliberately excluded from `5c1a854`. |
-| **F16** | **open** | WF05's follow-up failure path leaves lead state untouched, so a lead that keeps failing is retried hourly, forever, with nothing recorded. Classification: production reliability defect. Severity: not yet assigned. |
+| **F16** | **RESOLVED 2026-09-30** | WF05's follow-up failure path now records the failure, counts it in a new `followup_fail_count` field, and retires the lead as `failed` at a ceiling of `Math.max(24, Number(config.max_followups || 3) * 4)`. Commit `0e30562`. One consequence was surfaced rather than fixed, as F18. |
 | **F17** | **open** | WF05 writes no `status_updates` row for the terminal transition, so the transition that closes the follow-up lifecycle is the one the audit trail does not record. Classification: audit-trail defect. Severity: not yet assigned. |
+| **F18** | **open** | `followup_fail_count` uses total-accumulation, not consecutive-failure semantics; a lead with intermittent failures can be retired despite successful contacts. Classification: semantic edge case introduced by the F16 fix. Severity: not yet assigned. |
 
 ### F1 side effect on F6
 
@@ -152,11 +154,11 @@ so the three behavioural tests for F14 run the same logic in WF01 (twice) and WF
 
 ## Status summary
 
-Restates the resolution log above for `5c1a854`; the log remains the source of truth.
+Restates the resolution log above for `0e30562`; the log remains the source of truth.
 
-**Resolved — 8 findings, no further work claimed:** F1, F5, F9, F10, F11, F12, F13, F14.
+**Resolved — 9 findings, no further work claimed:** F1, F5, F9, F10, F11, F12, F13, F14, F16.
 
-**Open — 9 findings, carried forward.** The second column is the reason each one is still open, so a
+**Open — 8 findings, carried forward.** The second column is the reason each one is still open, so a
 deliberately deferred item is not read as an active regression.
 
 | ID | Why still open | Deferred? |
@@ -168,8 +170,8 @@ deliberately deferred item is not read as an active regression.
 | F7 | `Update Lead Response` does not bump `updated_at` | yes — out of scope |
 | F8 | Rejected and duplicate traffic still writes no rows anywhere | **partly** — the `measurement_events` question beneath it is **closed**; the behaviour itself is still unfixed |
 | F15 | Quoted JSON secret values are not redacted | yes — deliberately excluded from `5c1a854` |
-| F16 | WF05 fails silently and leaves the lead re-eligible forever | **no — active production defect** |
 | F17 | WF05 records no `status_updates` row for the terminal transition | **no — active audit-trail defect** |
+| F18 | `followup_fail_count` accumulates total failures, not a consecutive streak | **no — semantic edge case, and a fix would touch the success path** |
 
 **`measurement_events` — CLOSED as a requirement, and never implemented.** The general
 event store contemplated by F8 is **not required for the pilot**: `measurement/EVIDENCE_MATRIX.md`
@@ -797,7 +799,10 @@ rather than folded into that commit.
 
 ## F16 — WF05 fails follow-up sends silently and leaves the lead re-eligible forever
 
-**Status: OPEN · CONFIRMED · classification: production reliability defect · severity not yet assigned**
+**Status: RESOLVED 2026-09-30 · CONFIRMED · classification: production reliability defect · commit `0e30562`**
+
+Severity was not separately triaged for this one; it was closed as a known active defect without a
+re-rating pass. The analysis below is retained as written, describing the behaviour before the fix.
 
 Surfaced from `measurement/EVIDENCE_MATRIX.md`, which rated the claim *follow-up actually sent —
 attempts* as **NO**. Read as a measurement question the gap is survivable; read as a statement about
@@ -856,6 +861,75 @@ failure path declines to write.
 
 **Remediation:** not determined. No fix is proposed here.
 
+### Resolution — F16 (2026-09-30, commit `0e30562`)
+
+**Option (c) was chosen.** A new `followup_fail_count` field on `leads`, maintained by a Code node on
+the error path only, which records a sanitised `errors` row and retires the lead as `failed` once a
+failure ceiling is reached:
+
+```js
+const ceiling = Math.max(24, Number(config.max_followups || 3) * 4);
+```
+
+The terminal status is `failed`, deliberately distinct from `no_response`, because `no_response` is a
+claim that the customer never replied. A lead retired for send failures never made that claim, and
+conflating the two would corrupt the measurement layer's non-response metric.
+
+**Options rejected.**
+
+- **(a) Increment `followup_count` on failure and let `Advance Follow-up State` reach `no_response`
+  naturally** — rejected because it would fabricate a customer non-response out of an infrastructure
+  failure. The engine would assert something untrue about a customer.
+- **(b) Write an `errors` row but leave the retry loop as it was** — rejected as a non-fix. It makes
+  the failure visible while leaving the unbounded hourly retry and the unreachable `max_followups`
+  in place, which is the actual defect.
+- **(c) A dedicated failure counter on the error path** — chosen because it preserves `followup_count`
+  as a record of real contacts (so a transient SMTP failure cannot burn the customer's follow-up
+  allowance) while bounding retries through the same `reachedMax` threshold pattern
+  `Advance Follow-up State` already uses.
+
+`followup_count` is therefore never touched on the failure path, and a lead whose sends fail
+transiently recovers normally on the next sweep.
+
+**The two writes fan out rather than chain.** `Append Follow-up Error` and
+`Update Lead Follow-up Retry` are both connected directly to the output of
+`Build Failed Follow-up Record`, in parallel, because n8n's `googleSheets` **append** node returns the
+**appended sheet row** as its output. Chaining them would have fed the appended `errors` row into the
+lead update as `$json`, so the update node would have written the error record's values over the
+lead's row. The fan-out is what makes the partial update read from the Code node's item.
+
+**Scope of the fix.**
+
+| File | Change |
+| --- | --- |
+| `05 - Follow-up Sweeper.json` | error path rebuilt: `End Failed Sends` removed; `Build Failed Follow-up Record`, `Append Follow-up Error`, `Update Lead Follow-up Retry` added, fanned out |
+| `04 - Status Update.json` | `'failed'` added to the allowed-status list and the terminal-status list |
+| `measurement/src/sheet-store.js` | `followup_fail_count` added to the `leads` header contract |
+| `measurement/src/journeys.js` | Journey H extended to cover the failure, the ceiling and the recovery |
+| `measurement/tests/f1-f5-regressions.test.js` | 9 tests added |
+
+**Verification.** 67/67 tests pass. Non-vacuity was established by re-running the 9 new tests against
+the pre-fix WF04 and WF05: **8 of 9 fail**, each on a defect-specific assertion, and the ninth — the
+guard asserting the success path is unchanged — correctly passes both before and after, which is what
+a regression guard should do. All 9 journeys pass, and the smoke run exits 0.
+
+**Not verified offline:** the deploy-time header requirement below, which can only be confirmed
+against the live Google Sheet.
+
+### Deployment prerequisite — add `followup_fail_count` to `leads` first
+
+The real Google Sheet `leads` tab **must** have `followup_fail_count` in its header **before** WF05 is
+imported into the live n8n instance. `Update Lead Follow-up Retry` is a partial update that writes
+that column by name, so on a live tab lacking the column the update fails at runtime and the failure
+path breaks in production even though it is correct in the harness.
+
+This is a deploy-time requirement, not a code change. The harness is not at risk: it copies its
+headers from the contract in `measurement/src/sheet-store.js`, which was updated in the same commit.
+Order the sheet change ahead of the workflow import.
+
+One further consequence was surfaced by the fix rather than addressed by it, and is tracked as F18
+below.
+
 ---
 
 ## F17 — WF05 records no `status_updates` row for the terminal transition
@@ -900,28 +974,76 @@ attempts from `N + M` attempts.
 
 ---
 
+## F18 — `followup_fail_count` is a total, not a consecutive-failure streak
+
+**Status: OPEN · CONFIRMED · classification: semantic edge case introduced by the F16 fix · severity not yet assigned**
+
+Surfaced by the F16 fix, and not by anything preceding it: the counter that bounds follow-up retries
+was specified and implemented as a total accumulation, and that choice has a consequence worth
+recording rather than shipping silently.
+
+**The behaviour.** `Build Failed Follow-up Record` increments `followup_fail_count` on every failed
+send and decrements nothing. A success does not reset it. So the ceiling test is
+`followup_fail_count >= ceiling`, over the lead's whole lifetime, not over consecutive failures. A
+lead that alternates — fail, succeed, fail, succeed — accumulates failures indefinitely while its
+`followup_count` records the successes, and will eventually be retired as `failed` on the strength of
+failures that were not consecutive.
+
+**Consequence.** A lead with intermittent sends can be retired even though it received some emails.
+The two counters disagree in the terminal state: `followup_count = 1` and `followup_fail_count = 24`
+is reachable, and it means "one message got through, twenty-four sends did not" rather than
+"twenty-four attempts in a row failed".
+
+**Why it was not fixed in F16.** Consecutive-failure semantics require a reset on success, and the
+reset can only be written in `Update Lead Follow-up State` — the success path. F16 was explicitly
+scoped to leave the success path untouched, because the entire guarantee of that fix is that
+`followup_count` keeps its meaning and a transient failure cannot burn the customer's allowance.
+Adding a `followup_fail_count: 0` write to the success path is a change to the most heavily
+regressed surface in the engine, and it is a different change from the one F16 authorised. The
+consequence was therefore surfaced as a separate finding rather than absorbed into the commit.
+
+**Why it is not a pilot blocker.** Two independent reasons.
+
+1. **The ratio required is extreme.** To retire a lead, a tenant must accumulate 24 failed sends
+   against at most 3 successful ones — and `followup_count` is itself capped at `max_followups`
+   (default 3), so the successful-contact count can never exceed 3 while the failure count reaches 24.
+   That is a failure ratio worse than 8:1 sustained across many leads. At that point, concluding the
+   lead is unreachable is a defensible reading of the evidence, not a distortion of it.
+2. **The terminal status is `failed`, not `no_response`.** The measurement layer therefore does not
+   read this as a customer non-response. A lead retired this way is not counted among non-responses,
+   so the non-response metric stays truthful. F18 degrades the *reason* a lead was retired, not the
+   fact of retirement, and the retirement itself is the correct outcome for a lead that has failed to
+   be reached 24 times.
+
+**Remediation:** not determined. Candidate: streak semantics, with `followup_fail_count` reset to 0 in
+`Update Lead Follow-up State` on a successful send, so the ceiling counts consecutive failures only.
+That fix is small but belongs on the success path and needs its own regression pass over the
+`followup_count` tests before it can be adopted.
+
+---
+
 ## Fix order
 
-F1, F5, F9, F10, F11, F12, F13 and F14 are done. Revised order for what remains:
+F1, F5, F9, F10, F11, F12, F13, F14 and F16 are done. Revised order for what remains:
 
 | # | Finding | Why |
 | --- | --- | --- |
-| 1 | **F15** | Quoted JSON secret values are still unredacted in the same `errors` write path that F11 and F13 just closed for unquoted forms. Only remaining open finding on that surface. |
-| 2 | **F16** | Unbounded hourly retry of a failing follow-up, with no state change and no record anywhere. The only open finding whose failure mode is repetition rather than absence. |
-| 3 | **F17** | The transition that closes the follow-up lifecycle is the one transition `status_updates` does not record. Cheaper to fix than F16 and shares its surface. |
-| 4 | F6 | WF03 and WF04 bodies still render `undefined` at customers and owners. |
-| 5 | F3 | Silent webhook hangs on unknown-lead booking traffic. |
-| 6 | F2 | Dangling `lead_id` handed to API callers. |
-| 7 | F8 | Rejected/duplicate traffic still writes no rows. No longer blocked on `measurement_events` — that question is closed; needs a small ingress record instead. |
-| 8 | F4 | Confirm n8n zero-item semantics live; fix only if the halt is real. |
-| 9 | F7 | Cosmetic staleness signal. |
+| 1 | **F17** | The transition that closes the follow-up lifecycle is the one transition `status_updates` does not record. Cheaper to fix than F16 was, and shares its surface. With F16 closed it is the only remaining active defect in the follow-up lifecycle. |
+| 2 | **F15** | Quoted JSON secret values are still unredacted in the same `errors` write path that F11 and F13 closed for unquoted forms. Only remaining open finding on that surface. |
+| 3 | F6 | WF03 and WF04 bodies still render `undefined` at customers and owners. |
+| 4 | F3 | Silent webhook hangs on unknown-lead booking traffic. |
+| 5 | F2 | Dangling `lead_id` handed to API callers. |
+| 6 | F8 | Rejected/duplicate traffic still writes no rows. No longer blocked on `measurement_events` — that question is closed; needs a small ingress record instead. |
+| 7 | F4 | Confirm n8n zero-item semantics live; fix only if the halt is real. |
+| 8 | F7 | Cosmetic staleness signal. |
+| — | **F18** | **Deferred.** A fix requires touching `Update Lead Follow-up State` — the success path — which F16 was explicitly scoped to leave alone. Semantics are total, not a consecutive streak; see the F18 section for why the resulting retirement is still defensible. |
 
-**Provisional ordering for F16 and F17.** Neither has a severity assigned, so the positions above
-reflect blast radius, not a triage decision, and should be revisited once severity is set. What the
-ordering does not depend on: F16 and F17 sit above the deferred group because they are active
-defects in committed production rather than deliberately deferred scope, and F17 should not be
-deferred behind F16 — it is on the same surface, is smaller, and closing it first makes any future
-F16 fix observable through the audit trail.
+**On F17 now ranking first.** F16 was above it on the strength of an active unbounded-retry loop in
+production. That loop is closed as of `0e30562`, and the defect that remains on the same surface is
+smaller and audit-trail-only. F18 is deliberately parked rather than promoted: it is reachable only
+at a failure ratio worse than 8:1, and its terminal status is `failed` rather than `no_response`, so
+it does not distort the non-response metric. **The F16 and F17 ordering question is therefore
+closed**, and the provisional caveat that applied while both were open no longer holds.
 
 ## Before the measurement layer is built
 
@@ -939,11 +1061,12 @@ Four things must be accounted for before trusting any metric, as scoped by
   should not be copied wholesale into a measurement table until the quoted form is redacted. F13
   closed the WF06 write path and F14 closed the bearer pattern; F15 is what is left of the F11
   residual.
-- **WF02–WF05 email failures are recorded nowhere** — WF01 is the only workflow with an error-record
-  builder, so four email nodes fail into silence. The matrix routes their existing error outputs to
-  the **`errors` tab already in use**; WF01's builder+append pair is the pattern to copy. This is
-  closer to a bug fix than to new instrumentation, and it is the highest-priority item in the
-  matrix.
+- **WF02–WF04 email failures are recorded nowhere** — as of `0e30562`, WF01 and WF05 both have an
+  error-record builder, so three email nodes still fail into silence. The matrix routes their
+  existing error outputs to the **`errors` tab already in use**; WF01's builder+append pair is the
+  pattern to copy, and F16's `Build Failed Follow-up Record` / `Append Follow-up Error` pair is a
+  second worked instance of it. This is closer to a bug fix than to new instrumentation, and it is
+  the highest-priority remaining item in the matrix.
 - **F17** — WF05 writes no `status_updates` row for the terminal transition, so the transition that
   closes the follow-up lifecycle is the one the audit trail does not record. The matrix's fix
   appends to the **`status_updates` tab already in use**, copying WF04's `Build Status Update Record`.
@@ -968,6 +1091,9 @@ log for the pilot, which closes the question this document previously left attac
 did not authorise one. What remains open is scoped and small: the **sweep-run record** and the
 **ingress record** above.
 
-Recommended next step: fix F15, then build the matrix's item 1 — route the WF02–WF05 email error
+Recommended next step: fix F17, then the matrix's item 1 — route the remaining WF02–WF04 email error
 outputs to the existing `errors` tab — since it closes the most gaps at once against a baseline that
-is finally trustworthy. F16 and F17 remain the only active production defects.
+is finally trustworthy. F17 is the only remaining active defect on the follow-up lifecycle; F15 and
+F18 remain open, F15 as a deliberate deferral and F18 because a fix would touch the success path.
+**Deploy F16 only after adding `followup_fail_count` to the live `leads` header** — see the deployment
+prerequisite in the F16 section.
