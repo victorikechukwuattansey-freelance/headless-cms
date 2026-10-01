@@ -63,7 +63,7 @@ const { APPROVED_COLUMNS, APPROVED_COLUMN_INDEX, rowToObject, objectToRow, norma
 const { ENRICHMENT_LOG_COLUMNS, DEFAULT_TTL_DAYS, HUNTER_MIN_SCORE } = require('../src/enrichment-schema');
 const { enrichContactLeads } = require('../src/enrichment-contact');
 const { enrichContactOss, OSS_NO_RESULTS } = require('../src/enrichment-contact-oss');
-const { createContactClient } = require('../src/enrichment-contact-client');
+const { createContactClient, defaultSleep } = require('../src/enrichment-contact-client');
 const { GoogleSheetsClient, mintJwt, quotedRange, normalizeSpreadsheetId } = require('../src/google-sheets-client');
 
 const APPROVED_TAB = 'Approved Outreach';
@@ -290,8 +290,15 @@ async function _tokenForAuth(config, env) {
  * dataRow is the 0-based listRows index (0 = header row); the spreadsheet row
  * is therefore dataRow + 1. Fetches the access token per call (live) and PATCH
  * es a single value per cell with valueInputOption=USER_ENTERED.
+ *
+ * Paced: one PUT per cell (V and W per enriched lead) is a tight burst, so
+ * `--limit=100` fires 200 writes at once and trips the Google Sheets per-user
+ * write throttle (~60/min) with a 429 mid-run. A 150ms sleep between PUTs
+ * holds the loop at ~6.6 writes/sec, far under the limit, and costs ~30s over
+ * 200 cells. `deps.sleep` overrides the delay (tests pass a no-op). Retry
+ * semantics are deliberately NOT handled here.
  */
-async function updateValues(client, tabName, cells, config, env, transport) {
+async function updateValues(client, tabName, cells, config, env, transport, deps) {
   if (!cells || cells.length === 0) return { updated: 0, cells: [] };
   if (config.auth.mode === 'none') {
     throw new Error('updateValues requires GOOGLE_ACCESS_TOKEN or GOOGLE_SERVICE_ACCOUNT_JSON');
@@ -303,23 +310,29 @@ async function updateValues(client, tabName, cells, config, env, transport) {
     const col = String.fromCharCode(65 + colIndex);
     return `${col}${dataRow + 1}`;
   };
+  const paceMs = 150;
+  const sleep = deps && typeof deps.sleep === 'function' ? deps.sleep : defaultSleep;
   let updated = 0;
   const applied = [];
-  for (const cell of cells) {
-    const url = `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(quotedRange(tabName, A1(cell.dataRow, cell.colIndex)))}?valueInputOption=USER_ENTERED`;
-    const res = await tokens(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ values: [[String(cell.value)]] }),
-    });
-    if (!res.ok) {
-      throw new Error(`updateValues ${tabName} ${A1(cell.dataRow, cell.colIndex)} failed: ${res.status}`);
+  for (const [index, cell] of cells.entries()) {
+    try {
+      const url = `${SHEETS_API}/${spreadsheetId}/values/${encodeURIComponent(quotedRange(tabName, A1(cell.dataRow, cell.colIndex)))}?valueInputOption=USER_ENTERED`;
+      const res = await tokens(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ values: [[String(cell.value)]] }),
+      });
+      if (!res.ok) {
+        throw new Error(`updateValues ${tabName} ${A1(cell.dataRow, cell.colIndex)} failed: ${res.status}`);
+      }
+      updated += 1;
+      applied.push(cell);
+    } finally {
+      if (index < cells.length - 1) await sleep(paceMs);
     }
-    updated += 1;
-    applied.push(cell);
   }
   return { updated, cells: applied };
 }

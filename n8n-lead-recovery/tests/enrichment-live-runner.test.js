@@ -940,7 +940,7 @@ describe('updateValues', () => {
       { dataRow: 2, colIndex: 21, value: 'agentdata' },
       { dataRow: 3, colIndex: 22, value: 'TRUE' },
     ];
-    const out = await R.updateValues({ spreadsheetId: SPREADSHEET_ID }, 'Approved Outreach', cells, { auth: { mode: 'token' } }, { GOOGLE_ACCESS_TOKEN: 'tok-1' }, transport);
+    const out = await R.updateValues({ spreadsheetId: SPREADSHEET_ID }, 'Approved Outreach', cells, { auth: { mode: 'token' } }, { GOOGLE_ACCESS_TOKEN: 'tok-1' }, transport, { sleep: async () => {} });
     assert.equal(out.updated, 2);
     assert.equal(calls.length, 2);
     assert.ok(calls[0].url.includes("!V3"));
@@ -952,6 +952,49 @@ describe('updateValues', () => {
     for (const c of calls) {
       assert.equal(c.headers.Authorization, 'Bearer tok-1');
     }
+  });
+
+  it('paces the write loop: sleeps 150ms between PUTs, never after the last one', async () => {
+    const { transport, calls } = captureTransport();
+    const slept = [];
+    const cells = [
+      { dataRow: 2, colIndex: 21, value: 'agentdata' },
+      { dataRow: 3, colIndex: 22, value: 'TRUE' },
+      { dataRow: 4, colIndex: 21, value: 'agentdata' },
+    ];
+    const out = await R.updateValues(
+      { spreadsheetId: SPREADSHEET_ID },
+      'Approved Outreach',
+      cells,
+      { auth: { mode: 'token' } },
+      { GOOGLE_ACCESS_TOKEN: 'tok-1' },
+      transport,
+      { sleep: async (ms) => slept.push(ms) },
+    );
+    assert.equal(out.updated, 3);
+    assert.equal(calls.length, 3);
+    assert.deepEqual(slept, [150, 150], 'exactly one 150ms sleep between each adjacent pair, none trailing');
+  });
+
+  it('still sleeps on a failed PUT so a 429 does not resume at full speed', async () => {
+    const slept = [];
+    const transport = async () => ({ ok: false, status: 429 });
+    await assert.rejects(
+      () => R.updateValues(
+        { spreadsheetId: SPREADSHEET_ID },
+        'Approved Outreach',
+        [
+          { dataRow: 2, colIndex: 21, value: 'agentdata' },
+          { dataRow: 3, colIndex: 22, value: 'TRUE' },
+        ],
+        { auth: { mode: 'token' } },
+        { GOOGLE_ACCESS_TOKEN: 'tok-1' },
+        transport,
+        { sleep: async (ms) => slept.push(ms) },
+      ),
+      /failed: 429/,
+    );
+    assert.deepEqual(slept, [150], 'the finally block must pace even on the error path');
   });
 });
 
