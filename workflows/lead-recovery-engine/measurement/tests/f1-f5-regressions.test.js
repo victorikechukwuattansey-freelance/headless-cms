@@ -37,6 +37,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 
 import { Engine } from '../src/engine.js';
 import { newStore, engineOptions, WF, webhookInput, scheduleInput, SECRET } from '../src/fixtures.js';
@@ -1763,16 +1764,23 @@ test('F16: the fix is confined to the new nodes', () => {
   // Both writes hang off the Code node, not off each other. A Sheets append
   // returns the appended ROW, so chaining the leads update after the errors
   // append would resolve every retry field to '' and wipe the lead's status.
+  // F17 adds a third sibling on the same Code output - the shared status_updates
+  // builder - which reads the pre-update item for the same F5 reason.
   const fanout = wf.connections['Build Failed Follow-up Record'].main[0];
   assert.deepEqual(
     fanout.map((t) => t.node).sort(),
-    ['Append Follow-up Error', 'Update Lead Follow-up Retry'],
-    'both writes must read the Code node output'
+    ['Append Follow-up Error', 'Build Follow-up Status Record', 'Update Lead Follow-up Retry'],
+    'every write must read the Code node output'
   );
   assert.equal(
     wf.connections['Append Follow-up Error'],
     undefined,
     'the errors append must not feed the leads update'
+  );
+  assert.equal(
+    wf.connections['Update Lead Follow-up Retry'],
+    undefined,
+    'the leads update must not feed the status builder'
   );
 
   // The two writes are declared, and the retry write is a partial update that
@@ -1835,4 +1843,374 @@ test('F16: the fix is confined to the new nodes', () => {
     /next_followup_at: reachedCeiling \? '' : lead\.next_followup_at/,
     'only the ceiling unschedules the lead'
   );
+});
+
+/* ------------------------------------------------------------------ *
+ * F17 - 05 - Follow-up Sweeper: both terminal transitions were unaudited
+ *
+ * The sweeper moves a lead out of the funnel in exactly two ways:
+ *
+ *   - 'no_response' when followup_count reaches max_followups. The customer
+ *     was reached three times and chose not to reply.
+ *   - 'failed' when followup_fail_count reaches the delivery ceiling (F16).
+ *     We never managed to reach them at all.
+ *
+ * Both transitions were persisted to the leads tab and both were silent in
+ * status_updates. An operator auditing a lead that had vanished from the
+ * pipeline found no history explaining why: no_response and failed were
+ * indistinguishable from a lead someone had simply deleted. WF04 already
+ * writes status_updates rows for the transitions a human drives, so the
+ * automated ones were the conspicuous gap.
+ *
+ * The fix is one shared builder + one append, fed as a sibling branch off
+ * each of the two Code nodes so it reads the PRE-update item. That is the F5
+ * invariant: a Google Sheets write returns the stored row, which carries only
+ * 'status', so old_status would be lost and there would be nothing to compare
+ * it against. The builder therefore emits a row only when the status actually
+ * CHANGED, which keeps an ordinary successful follow-up and a below-ceiling
+ * delivery failure - both of which leave status untouched - from appending a
+ * no-op row on every hourly sweep.
+ * ------------------------------------------------------------------ */
+
+/** The status_updates rows belonging to this lead, oldest first. */
+const statusRowsFor = (store, leadId) =>
+  store.rows('status_updates').filter((r) => r.lead_id === leadId);
+
+/** The i-th hourly sweep after intake, as an ISO clock string. */
+const sweepHour = (i) => new Date(Date.parse(T0) + i * 3600000).toISOString();
+
+test('F17: reaching the follow-up cap writes a status_updates row', () => {
+  const { store, leadId, email } = leadUnderTest('f17-no-response');
+
+  // Two clean sweeps: the lead is contacted twice and simply stays 'new'.
+  for (let i = 0; i < 2; i += 1) {
+    const eng = runSweep(store, sweepHour(24 + i * 24), {});
+    assert.equal(sendsFor(eng, email)[0].sent, true, `sweep ${i + 1} must succeed`);
+    assert.equal(
+      leadNow(store, leadId).status,
+      'new',
+      `sweep ${i + 1} must not retire the lead`
+    );
+    assert.equal(
+      statusRowsFor(store, leadId).length,
+      0,
+      'a non-terminal follow-up is not a transition and writes no row'
+    );
+  }
+
+  // The third send spends the allowance and retires the lead.
+  const before = leadNow(store, leadId).status;
+  const eng = runSweep(store, sweepHour(72), {});
+  assert.equal(sendsFor(eng, email)[0].sent, true, 'the third send succeeds');
+  assert.equal(leadNow(store, leadId).status, 'no_response', 'the lead is retired');
+
+  const rows = statusRowsFor(store, leadId);
+  assert.equal(rows.length, 1, 'the transition is recorded exactly once');
+  const row = rows[0];
+
+  assert.equal(row.business_id, 'biz_lonestar_hvac', 'the tenant is recorded');
+  assert.equal(row.old_status, before, 'old_status is the status held BEFORE the transition');
+  assert.equal(row.new_status, 'no_response', 'new_status is where the lead ended up');
+  assert.equal(row.updated_by, 'followup_sweeper', 'the row is attributed to the sweeper, not a human');
+  assert.match(row.notes, /follow-up cap reached/, 'the note explains WHY the lead was retired');
+  assert.ok(row.update_id.startsWith('upd_'), 'update_id is generated');
+  assert.equal(row.created_at, sweepHour(72), 'created_at uses the run clock');
+});
+
+test('F17: reaching the delivery ceiling writes a status_updates row', () => {
+  const { store, leadId } = leadUnderTest('f17-failed');
+
+  // max_followups is 3, so the ceiling is max(24, 3*4) = 24. Only the 24th
+  // failure retires the lead, so only that sweep may write a row.
+  for (let i = 0; i < 23; i += 1) {
+    runSweep(store, sweepHour(24 + i), ALWAYS_FAILS);
+  }
+  assert.equal(leadNow(store, leadId).status, 'new', '23 failures have not retired the lead');
+  assert.equal(
+    statusRowsFor(store, leadId).length,
+    0,
+    'a below-ceiling failure is not a transition and writes no row'
+  );
+
+  const before = leadNow(store, leadId).status;
+  runSweep(store, sweepHour(24 + 23), ALWAYS_FAILS);
+  assert.equal(leadNow(store, leadId).status, 'failed', 'the ceiling retires the lead');
+
+  const rows = statusRowsFor(store, leadId);
+  assert.equal(rows.length, 1, 'the transition is recorded exactly once');
+  const row = rows[0];
+  assert.equal(row.old_status, before, 'old_status is the status held BEFORE the transition');
+  assert.equal(row.new_status, 'failed', 'new_status is where the lead ended up');
+  assert.equal(row.updated_by, 'followup_sweeper', 'the row is attributed to the sweeper');
+  assert.match(row.notes, /retired after 24 delivery failures/, 'the note gives the failure count');
+  assert.match(row.notes, /ceiling 24/, 'and the ceiling it hit');
+  // F18 is still open: the counter is cumulative, so the note must not imply
+  // that 24 CONSECUTIVE failures were required.
+  assert.doesNotMatch(row.notes, /consecutive/i, 'the note must not claim the failures were consecutive');
+});
+
+test('F17: no status_updates row is written before the transition', () => {
+  // Both branches active in ONE sweep: one send lands, one bounces. Neither is
+  // terminal, so the shared builder must emit nothing from EITHER branch. This
+  // is the strongest form of the gate - it is keyed on the transition, not on
+  // which branch produced the item.
+  const store = newStore();
+  runIntake(store, intakeBody({ source_id: 'f17-gate-ok', email: 'ok.lead@example.com', phone: '5125550888' }), T0);
+  runIntake(
+    store,
+    intakeBody({ source_id: 'f17-gate-bad', email: 'bounce@bounce.test', phone: '5125550999' }),
+    T0
+  );
+  const ok = store.rows('leads').find((r) => r.source_id === 'f17-gate-ok');
+  const bad = store.rows('leads').find((r) => r.source_id === 'f17-gate-bad');
+  assert.ok(ok && bad, 'both leads must exist, on distinct dedup keys');
+
+  const eng = runSweep(store, sweepHour(24), {
+    emailFault: (spec) => (spec.to === 'bounce@bounce.test' ? new Error('SMTP 550 mailbox unavailable') : null)
+  });
+
+  assert.equal(sendsFor(eng, 'ok.lead@example.com')[0].sent, true, 'the good address is reached');
+  assert.equal(sendsFor(eng, 'bounce@bounce.test')[0].sent, false, 'the bad address bounces');
+
+  const okAfter = leadNow(store, ok.lead_id);
+  const badAfter = leadNow(store, bad.lead_id);
+  assert.equal(okAfter.followup_count, '1', 'the clean lead was contacted');
+  assert.equal(okAfter.status, 'new', 'and is still open');
+  assert.equal(badAfter.followup_fail_count, '1', 'the bad lead recorded a failure');
+  assert.equal(badAfter.status, 'new', 'and is still open');
+  assert.equal(
+    store.rows('status_updates').length,
+    0,
+    'neither branch may write a row for a non-terminal sweep'
+  );
+
+  // The gate must be SELECTIVE, not merely silent. Drive the clean lead the
+  // remaining two sends and assert its row appears - so this test cannot be
+  // satisfied by a builder that never writes anything, and cannot pass against
+  // a pre-fix workflow where no row is ever produced.
+  for (let i = 1; i <= 2; i += 1) {
+    runSweep(store, sweepHour(24 + i * 24), {
+      emailFault: (spec) => (spec.to === 'bounce@bounce.test' ? new Error('SMTP 550 mailbox unavailable') : null)
+    });
+  }
+  assert.equal(leadNow(store, ok.lead_id).status, 'no_response', 'the clean lead is retired');
+  assert.equal(
+    statusRowsFor(store, ok.lead_id).length,
+    1,
+    'the row appears exactly when the transition happens'
+  );
+  assert.equal(
+    statusRowsFor(store, bad.lead_id).length,
+    0,
+    'the still-open failing lead has no row, so the gate tracks the transition'
+  );
+});
+
+test('F17: the recorded old_status is the pre-transition value', () => {
+  // Claim 2 of the review, settled by construction: the fixture's status
+  // immediately before the terminal sweep is asserted against the recorded
+  // old_status. This is NOT a pre-fix failure claim - pre-fix there is no row
+  // at all to read.
+  const { store, leadId } = leadUnderTest('f17-old-status');
+  for (let i = 0; i < 2; i += 1) runSweep(store, sweepHour(24 + i * 24), {});
+
+  const statusBefore = leadNow(store, leadId).status;
+  assert.equal(statusBefore, 'new', 'the fixture is a fresh lead, still in `new`');
+
+  runSweep(store, sweepHour(72), {});
+  const row = statusRowsFor(store, leadId)[0];
+  assert.ok(row, 'the transition is recorded');
+  assert.equal(row.old_status, 'new', 'old_status is exactly the pre-transition status');
+  assert.equal(row.old_status, statusBefore, 'and it is the value observed before the sweep');
+  assert.notEqual(row.old_status, row.new_status, 'a transition is by definition a change');
+  assert.equal(row.new_status, leadNow(store, leadId).status, 'new_status matches the persisted lead');
+});
+
+test('F17: a retired lead is never transitioned twice', () => {
+  // A terminal lead stops being selected, so the risk is the inverse one: a
+  // duplicate append if the gate ever let a no-op through.
+  const { store, leadId } = leadUnderTest('f17-no-duplicate');
+  for (let i = 0; i < 3; i += 1) runSweep(store, sweepHour(24 + i * 24), {});
+  assert.equal(statusRowsFor(store, leadId).length, 1, 'one row for the transition');
+
+  for (const hour of [200, 400, 900]) {
+    runSweep(store, sweepHour(hour), {});
+    assert.equal(
+      statusRowsFor(store, leadId).length,
+      1,
+      `a later sweep (t+${hour}h) must not append a second row`
+    );
+  }
+  assert.equal(leadNow(store, leadId).status, 'no_response', 'and the lead stays retired');
+});
+
+test('F17: one shared builder serves both terminal transitions', () => {
+  const wf5 = JSON.parse(WF.sweeper().__raw);
+
+  const builders = wf5.nodes.filter((n) => n.name === 'Build Follow-up Status Record');
+  assert.equal(builders.length, 1, 'the two transitions share ONE builder, not one each');
+  const appends = wf5.nodes.filter((n) => n.name === 'Append Follow-up Status Update');
+  assert.equal(appends.length, 1, 'and one append');
+
+  // Both terminal branches must reach it, and the append must hang off nothing
+  // else - otherwise a second transition path could be added that never lands
+  // in status_updates.
+  const sources = Object.entries(wf5.connections)
+    .filter(([, v]) => v.main.some((branch) => branch.some((t) => t.node === 'Build Follow-up Status Record')))
+    .map(([k]) => k)
+    .sort();
+  assert.deepEqual(
+    sources,
+    ['Advance Follow-up State', 'Build Failed Follow-up Record'],
+    'both terminal Code nodes feed the shared builder'
+  );
+
+  assert.deepEqual(
+    wf5.connections['Build Follow-up Status Record'].main[0].map((t) => t.node),
+    ['Append Follow-up Status Update'],
+    'the builder feeds only the append'
+  );
+
+  // The F5 invariant, in wiring form: neither Google Sheets write may sit
+  // between a Code node and the builder.
+  for (const leaf of ['Update Lead Follow-up State', 'Update Lead Follow-up Retry', 'Append Follow-up Error']) {
+    assert.equal(wf5.connections[leaf], undefined, `${leaf} must stay a leaf`);
+  }
+
+  // The builder reads $input, never a Sheets result.
+  const builder = builders[0].parameters.jsCode;
+  assert.doesNotMatch(
+    builder,
+    /\$\('Update Lead Follow-up State'\)|\$\('Update Lead Follow-up Retry'\)|\$\('Append Follow-up Error'\)/,
+    'the builder must read the pre-update Code output, not a Sheets write result'
+  );
+  assert.match(builder, /\$input\.all\(\)/, 'it reads the incoming items directly');
+});
+
+test('F17: the status_updates append reuses the shared eight-column contract', () => {
+  const wf5 = JSON.parse(WF.sweeper().__raw);
+  const append = wf5.nodes.find((n) => n.name === 'Append Follow-up Status Update').parameters;
+  const ref = JSON.parse(WF.status().__raw).nodes.find((n) => n.name === 'Append Status Update').parameters;
+
+  assert.equal(append.operation, 'append', 'status_updates is appended to, never overwritten');
+  assert.equal(append.sheetName.value, 'status_updates', 'the tab is status_updates');
+  assert.equal(
+    append.documentId.value,
+    ref.documentId.value,
+    'the same spreadsheet as every other consumer'
+  );
+  assert.deepEqual(
+    append.fieldsUi.fieldValues.map((v) => v.fieldId),
+    ['update_id', 'created_at', 'lead_id', 'business_id', 'old_status', 'new_status', 'updated_by', 'notes'],
+    'exactly the status_updates headers, in order'
+  );
+  assert.deepEqual(
+    append.fieldsUi.fieldValues,
+    ref.fieldsUi.fieldValues,
+    'the mapping is copied from WF04 rather than re-derived'
+  );
+
+  // The row the builder produces must have those same eight keys - a missing
+  // key would append a blank cell, which is how F10 shipped.
+  const builder = wf5.nodes.find((n) => n.name === 'Build Follow-up Status Record').parameters.jsCode;
+  for (const key of ['update_id', 'created_at', 'lead_id', 'business_id', 'old_status', 'new_status', 'updated_by', 'notes']) {
+    assert.match(builder, new RegExp('^\\s+' + key + ':', 'm'), `the builder must emit ${key}`);
+  }
+});
+
+test('F17: the sanitize block is byte-identical to the fd75d62 original', () => {
+  const wf5 = JSON.parse(WF.sweeper().__raw);
+  const builder = wf5.nodes.find((n) => n.name === 'Build Follow-up Status Record').parameters.jsCode;
+
+  const start = builder.indexOf('const SECRET_RE');
+  const fn = builder.indexOf('function sanitize');
+  assert.ok(start >= 0 && fn > start, 'the builder must carry the shared sanitize block');
+  const block = builder.slice(start, builder.indexOf('\n}', fn) + 2);
+
+  assert.equal(
+    createHash('sha256').update(block).digest('hex'),
+    'd7ffc93db65e5c0c6e7ccb4ecd4bb89e9768522d90b4a8e9c26af611c36435aa',
+    'the block must hash to the fd75d62 original, so a fourth variant can never creep in'
+  );
+
+  // Byte-for-byte against the two existing copies, not just the hash.
+  for (const [wfName, nodeName] of [
+    ['intake', 'Build Customer Email Error Record'],
+    ['sweeper', 'Build Failed Follow-up Record']
+  ]) {
+    const other = JSON.parse(WF[wfName]().__raw).nodes.find((n) => n.name === nodeName).parameters.jsCode;
+    const os = other.indexOf('const SECRET_RE');
+    const of_ = other.indexOf('function sanitize');
+    assert.equal(
+      block,
+      other.slice(os, other.indexOf('\n}', of_) + 2),
+      `the block must be identical to the copy in ${nodeName}`
+    );
+  }
+
+  // And the free-text fields must actually route through it.
+  assert.match(builder, /updated_by: sanitize\(/, 'updated_by is sanitised');
+  assert.match(builder, /notes: sanitize\(/, 'notes is sanitised');
+});
+
+test('F17: the F16 byte-identity invariant holds under the new named deltas', () => {
+  const wf5 = JSON.parse(WF.sweeper().__raw);
+  const advance = wf5.nodes.find((n) => n.name === 'Advance Follow-up State').parameters.jsCode;
+  const failed = wf5.nodes.find((n) => n.name === 'Build Failed Follow-up Record').parameters.jsCode;
+
+  // The exact pre-F16 text of 'Advance Follow-up State', pinned as data. F16
+  // proved the fix did not touch the success path; this pins that proof to
+  // bytes rather than to a handful of regexes, so F17's additions have to be
+  // declared one by one.
+  const ADVANCE_BASELINE = "const candidates = $('Select Follow-up Candidates').all();\n\nreturn $input.all().map((it, index) => {\n  const j = it.json;\n\n  // Prefer lead_id already present on the current item.\n  // If the Email node stripped it, recover it from the\n  // corresponding eligible-follow-up item.\n  const source = candidates[index]?.json || {};\n  const leadId = String(j.lead_id || source.lead_id || '').trim();\n\n  if (!leadId) {\n    throw new Error(\n      `Missing lead_id in Advance Follow-up State. Item ${index + 1} has no lead_id.`\n    );\n  }\n\n  const count = (Number(j.followup_count ?? source.followup_count ?? 0) || 0) + 1;\n  const max = Number(j.max_followups ?? source.max_followups ?? 3) || 3;\n  const delay = Number(j.followup_delay_hours ?? source.followup_delay_hours ?? 24) || 24;\n\n  const nowIso = new Date().toISOString();\n  const reachedMax = count >= max;\n\n  return {\n    json: {\n      ...source,\n      ...j,\n\n      lead_id: leadId,\n      followup_count: count,\n      last_contact_at: nowIso,\n      next_followup_at: reachedMax\n        ? ''\n        : new Date(Date.now() + delay * 3600 * 1000).toISOString(),\n      status: reachedMax\n        ? 'no_response'\n        : String(j.status ?? source.status ?? 'new'),\n      updated_at: nowIso\n    }\n  };\n});";
+  const FAILED_BASELINE = "// F16 - WF05 failed follow-up sends used to dead-end at a noOp, so a\n// persistently failing address was re-selected every hour forever and\n// followup_count (which only ever counts SUCCESSFUL sends) never moved, making\n// max_followups structurally unreachable. This node records the failure, counts\n// total delivery failures in its own field, and retires the lead once the ceiling is\n// reached. followup_count is deliberately NOT touched here: it stays a record of\n// real contacts, so a transient SMTP failure cannot burn the customer's allowance.\nconst candidates = $('Select Follow-up Candidates').all();\nconst configs = $('Get Active Businesses').all();\nconst SECRET_RE = /(bearer)(\\s+)([^,}\"'`\\s]+)|(secret|token|password|api[_ -]?key|authorization|bearer)((?:\\\\?[\"'])?\\s*[:=]\\s*)(\"(?:[^\"\\\\]|\\\\.)*\"|\\\\\"(?:[^\"\\\\]|\\\\.)*?\\\\\"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`|bearer\\s+[^,}\"'`\\s]+|[^,}\"'`\\s]+)/gi;\n// Redacts a secret whatever delimiter or quoting surrounds it, so the shape a\n// provider happens to emit cannot decide whether the value is reached. The value\n// may be a double-quoted, single-quoted or backtick literal, a JSON-escaped\n// double-quoted literal (which is what JSON.stringify hands the object branch),\n// a `Bearer <credential>` pair, or a bare token. `redactSecret` re-emits the\n// leading delimiter it found, quote and backslash included, so a redacted JSON\n// payload stays well-formed and parseable instead of being cut in half. The\n// leading branch still catches a bare \"Bearer <credential>\" with no keyword\n// separator, and the value group may itself be \"Bearer <credential>\", so a\n// header-style \"Authorization: Bearer <jwt>\" is consumed whole rather than\n// leaving the JWT behind.\nconst redactSecret = (m, bearer, ws, token, keyword, sep, value) => {\n  if (bearer) return bearer + ws + '[REDACTED]';\n  const open = /^(\\\\?[\"'`])/.exec(value);\n  const q = open ? open[1] : '';\n  return keyword + sep + q + '[REDACTED]' + q;\n};\nfunction sanitize(v){\n  if (v === null || v === undefined) return '';\n  if (typeof v === 'object') return JSON.stringify(v).replace(SECRET_RE, redactSecret);\n  return String(v).replace(SECRET_RE, redactSecret);\n}\n\nreturn $input.all().map((it, index) => {\n  const j = it.json;\n\n  // The error item carries the candidate, but recover it the same defensive way\n  // 'Advance Follow-up State' does so a stripped field cannot throw here.\n  const source = candidates[index]?.json || {};\n\n  const bid = String(j.business_id ?? source.business_id ?? '').trim();\n  const lead = {\n    lead_id: String(j.lead_id ?? source.lead_id ?? '').trim(),\n    business_id: bid,\n    status: String(j.status ?? source.status ?? ''),\n    next_followup_at: String(j.next_followup_at ?? source.next_followup_at ?? ''),\n    followup_fail_count: j.followup_fail_count ?? source.followup_fail_count ?? ''\n  };\n  if (!lead.lead_id) {\n    throw new Error(\n      `Missing lead_id in Build Failed Follow-up Record. Item ${index + 1} has no lead_id.`\n    );\n  }\n\n  const cfg = configs.find((c) => String(c.json.business_id || '').trim() === bid);\n  const config = cfg ? cfg.json : {};\n  const max = Number(j.max_followups ?? source.max_followups ?? config.max_followups ?? 3) || 3;\n\n  // Ceiling is a hard default, deliberately far above max_followups: a\n  // temporary provider outage must not consume the customer's real follow-ups.\n  const ceiling = Math.max(24, Number(config.max_followups || 3) * 4);\n\n  // The field is absent on every pre-existing row, so it defaults on read.\n  // WF01/WF03 are NOT changed: absent means 0.\n  const nextFailCount = Number(lead.followup_fail_count || 0) + 1;\n  const reachedCeiling = nextFailCount >= ceiling;\n  const nowIso = new Date().toISOString();\n\n  const rawErr = j.error !== undefined ? j.error : j._emailError;\n  const msg =\n    typeof rawErr === 'object' && rawErr !== null\n      ? String(rawErr.message || JSON.stringify(rawErr))\n      : String(rawErr || 'unknown follow-up email error');\n\n  return {\n    json: {\n      lead_id: lead.lead_id,\n      business_id: bid,\n      followup_fail_count: nextFailCount,\n      followup_fail_ceiling: ceiling,\n      failed_attempts_remaining: Math.max(0, ceiling - nextFailCount),\n      // Unchanged until the ceiling is reached, so the partial update is a\n      // no-op for these two columns on an ordinary failure.\n      status: reachedCeiling ? 'failed' : lead.status,\n      next_followup_at: reachedCeiling ? '' : lead.next_followup_at,\n      updated_at: nowIso,\n      error_id: 'err_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n      created_at: nowIso,\n      workflow: '05 - Follow-up Sweeper',\n      node: 'Send Follow-up Email',\n      error_message: sanitize(\n        'followup_email_failed (attempt ' + nextFailCount + '/' + ceiling + ', followup_count ' +\n        String(j.followup_count ?? source.followup_count ?? 0) + '/' + max + '): ' + msg\n      ).slice(0, 2000),\n      execution_id: $execution.id,\n      payload: sanitize({\n        lead_id: lead.lead_id,\n        business_id: bid,\n        followup_count: Number(j.followup_count ?? source.followup_count ?? 0) || 0,\n        max_followups: max,\n        followup_fail_count: nextFailCount,\n        followup_fail_ceiling: ceiling\n      }).slice(0, 4000),\n      resolved: false\n    }\n  };\n});\n";
+
+  assert.equal(
+    createHash('sha256').update(ADVANCE_BASELINE).digest('hex'),
+    '6651e9a63d9497d4b2d55f3f77fd34e9a5e8dc5116a78679aaeb4acc74eda5bb',
+    'the pinned baseline is the reviewed pre-F16 source'
+  );
+
+  // The declared deltas. Each must apply exactly once, and applying all of them
+  // must reproduce the on-disk source exactly.
+  const advanceDeltas = [["capture the pre-transition status into oldStatus","  const nowIso = new Date().toISOString();\n  const reachedMax = count >= max;","  // F17: capture the status the lead is in RIGHT NOW, before the terminal\n  // assignment below overwrites it. 'status' is the only field a Sheets update\n  // persists, so once this node overwrote it the pre-transition value was gone -\n  // and a status_updates row written downstream could only ever record the new\n  // value. Same invariant as WF04's 'Prepare Updated Lead'.\n  const oldStatus = String(j.status ?? source.status ?? '').trim();\n\n  const nowIso = new Date().toISOString();\n  const reachedMax = count >= max;"],["emit old_status on the row it builds","      next_followup_at: reachedMax\n        ? ''\n        : new Date(Date.now() + delay * 3600 * 1000).toISOString(),\n      status: reachedMax","      next_followup_at: reachedMax\n        ? ''\n        : new Date(Date.now() + delay * 3600 * 1000).toISOString(),\n      old_status: oldStatus,\n      status: reachedMax"]];
+  let rebuilt = ADVANCE_BASELINE;
+  for (const [label, from, to] of advanceDeltas) {
+    const hits = rebuilt.split(from).length - 1;
+    assert.equal(hits, 1, `the delta "${label}" must anchor on exactly one site, found ${hits}`);
+    rebuilt = rebuilt.replace(from, to);
+  }
+  assert.equal(
+    rebuilt,
+    advance,
+    'the ONLY change to the F16 success path is the declared F17 old_status delta'
+  );
+  assert.equal(
+    advanceDeltas.length,
+    2,
+    'a new undeclared change to the success path must be added here explicitly'
+  );
+
+  // F16's own confinement claim still has to hold.
+  assert.doesNotMatch(advance, /followup_fail_count/, 'the success path must not learn about failures');
+  assert.match(
+    advance,
+    /const count = \(Number\(j\.followup_count \?\? source\.followup_count \?\? 0\) \|\| 0\) \+ 1;/,
+    'and must still increment followup_count by exactly one'
+  );
+
+  // F17 also touches the failure branch, so pin that one the same way.
+  const failedDeltas = [["emit old_status on the retirement row","      status: reachedCeiling ? 'failed' : lead.status,","      old_status: lead.status,\n      status: reachedCeiling ? 'failed' : lead.status,"]];
+  let rebuiltFailed = FAILED_BASELINE;
+  for (const [label, from, to] of failedDeltas) {
+    const hits = rebuiltFailed.split(from).length - 1;
+    assert.equal(hits, 1, `the delta "${label}" must anchor on exactly one site, found ${hits}`);
+    rebuiltFailed = rebuiltFailed.replace(from, to);
+  }
+  assert.equal(
+    rebuiltFailed,
+    failed,
+    'the ONLY change to the F16 failure path is the declared F17 old_status delta'
+  );
+  assert.equal(failedDeltas.length, 1, 'a new undeclared change must be added here explicitly');
 });

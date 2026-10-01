@@ -183,7 +183,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const candidates = $('Select Follow-up Candidates').all();\n\nreturn $input.all().map((it, index) => {\n  const j = it.json;\n\n  // Prefer lead_id already present on the current item.\n  // If the Email node stripped it, recover it from the\n  // corresponding eligible-follow-up item.\n  const source = candidates[index]?.json || {};\n  const leadId = String(j.lead_id || source.lead_id || '').trim();\n\n  if (!leadId) {\n    throw new Error(\n      `Missing lead_id in Advance Follow-up State. Item ${index + 1} has no lead_id.`\n    );\n  }\n\n  const count = (Number(j.followup_count ?? source.followup_count ?? 0) || 0) + 1;\n  const max = Number(j.max_followups ?? source.max_followups ?? 3) || 3;\n  const delay = Number(j.followup_delay_hours ?? source.followup_delay_hours ?? 24) || 24;\n\n  const nowIso = new Date().toISOString();\n  const reachedMax = count >= max;\n\n  return {\n    json: {\n      ...source,\n      ...j,\n\n      lead_id: leadId,\n      followup_count: count,\n      last_contact_at: nowIso,\n      next_followup_at: reachedMax\n        ? ''\n        : new Date(Date.now() + delay * 3600 * 1000).toISOString(),\n      status: reachedMax\n        ? 'no_response'\n        : String(j.status ?? source.status ?? 'new'),\n      updated_at: nowIso\n    }\n  };\n});"
+        "jsCode": "const candidates = $('Select Follow-up Candidates').all();\n\nreturn $input.all().map((it, index) => {\n  const j = it.json;\n\n  // Prefer lead_id already present on the current item.\n  // If the Email node stripped it, recover it from the\n  // corresponding eligible-follow-up item.\n  const source = candidates[index]?.json || {};\n  const leadId = String(j.lead_id || source.lead_id || '').trim();\n\n  if (!leadId) {\n    throw new Error(\n      `Missing lead_id in Advance Follow-up State. Item ${index + 1} has no lead_id.`\n    );\n  }\n\n  const count = (Number(j.followup_count ?? source.followup_count ?? 0) || 0) + 1;\n  const max = Number(j.max_followups ?? source.max_followups ?? 3) || 3;\n  const delay = Number(j.followup_delay_hours ?? source.followup_delay_hours ?? 24) || 24;\n\n  // F17: capture the status the lead is in RIGHT NOW, before the terminal\n  // assignment below overwrites it. 'status' is the only field a Sheets update\n  // persists, so once this node overwrote it the pre-transition value was gone -\n  // and a status_updates row written downstream could only ever record the new\n  // value. Same invariant as WF04's 'Prepare Updated Lead'.\n  const oldStatus = String(j.status ?? source.status ?? '').trim();\n\n  const nowIso = new Date().toISOString();\n  const reachedMax = count >= max;\n\n  return {\n    json: {\n      ...source,\n      ...j,\n\n      lead_id: leadId,\n      followup_count: count,\n      last_contact_at: nowIso,\n      next_followup_at: reachedMax\n        ? ''\n        : new Date(Date.now() + delay * 3600 * 1000).toISOString(),\n      old_status: oldStatus,\n      status: reachedMax\n        ? 'no_response'\n        : String(j.status ?? source.status ?? 'new'),\n      updated_at: nowIso\n    }\n  };\n});"
       },
       "id": "13d53e0b-e579-4fe8-975a-c9af5d0d2d69",
       "name": "Advance Follow-up State",
@@ -258,7 +258,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// F16 - WF05 failed follow-up sends used to dead-end at a noOp, so a\n// persistently failing address was re-selected every hour forever and\n// followup_count (which only ever counts SUCCESSFUL sends) never moved, making\n// max_followups structurally unreachable. This node records the failure, counts\n// total delivery failures in its own field, and retires the lead once the ceiling is\n// reached. followup_count is deliberately NOT touched here: it stays a record of\n// real contacts, so a transient SMTP failure cannot burn the customer's allowance.\nconst candidates = $('Select Follow-up Candidates').all();\nconst configs = $('Get Active Businesses').all();\nconst SECRET_RE = /(bearer)(\\s+)([^,}\"'`\\s]+)|(secret|token|password|api[_ -]?key|authorization|bearer)((?:\\\\?[\"'])?\\s*[:=]\\s*)(\"(?:[^\"\\\\]|\\\\.)*\"|\\\\\"(?:[^\"\\\\]|\\\\.)*?\\\\\"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`|bearer\\s+[^,}\"'`\\s]+|[^,}\"'`\\s]+)/gi;\n// Redacts a secret whatever delimiter or quoting surrounds it, so the shape a\n// provider happens to emit cannot decide whether the value is reached. The value\n// may be a double-quoted, single-quoted or backtick literal, a JSON-escaped\n// double-quoted literal (which is what JSON.stringify hands the object branch),\n// a `Bearer <credential>` pair, or a bare token. `redactSecret` re-emits the\n// leading delimiter it found, quote and backslash included, so a redacted JSON\n// payload stays well-formed and parseable instead of being cut in half. The\n// leading branch still catches a bare \"Bearer <credential>\" with no keyword\n// separator, and the value group may itself be \"Bearer <credential>\", so a\n// header-style \"Authorization: Bearer <jwt>\" is consumed whole rather than\n// leaving the JWT behind.\nconst redactSecret = (m, bearer, ws, token, keyword, sep, value) => {\n  if (bearer) return bearer + ws + '[REDACTED]';\n  const open = /^(\\\\?[\"'`])/.exec(value);\n  const q = open ? open[1] : '';\n  return keyword + sep + q + '[REDACTED]' + q;\n};\nfunction sanitize(v){\n  if (v === null || v === undefined) return '';\n  if (typeof v === 'object') return JSON.stringify(v).replace(SECRET_RE, redactSecret);\n  return String(v).replace(SECRET_RE, redactSecret);\n}\n\nreturn $input.all().map((it, index) => {\n  const j = it.json;\n\n  // The error item carries the candidate, but recover it the same defensive way\n  // 'Advance Follow-up State' does so a stripped field cannot throw here.\n  const source = candidates[index]?.json || {};\n\n  const bid = String(j.business_id ?? source.business_id ?? '').trim();\n  const lead = {\n    lead_id: String(j.lead_id ?? source.lead_id ?? '').trim(),\n    business_id: bid,\n    status: String(j.status ?? source.status ?? ''),\n    next_followup_at: String(j.next_followup_at ?? source.next_followup_at ?? ''),\n    followup_fail_count: j.followup_fail_count ?? source.followup_fail_count ?? ''\n  };\n  if (!lead.lead_id) {\n    throw new Error(\n      `Missing lead_id in Build Failed Follow-up Record. Item ${index + 1} has no lead_id.`\n    );\n  }\n\n  const cfg = configs.find((c) => String(c.json.business_id || '').trim() === bid);\n  const config = cfg ? cfg.json : {};\n  const max = Number(j.max_followups ?? source.max_followups ?? config.max_followups ?? 3) || 3;\n\n  // Ceiling is a hard default, deliberately far above max_followups: a\n  // temporary provider outage must not consume the customer's real follow-ups.\n  const ceiling = Math.max(24, Number(config.max_followups || 3) * 4);\n\n  // The field is absent on every pre-existing row, so it defaults on read.\n  // WF01/WF03 are NOT changed: absent means 0.\n  const nextFailCount = Number(lead.followup_fail_count || 0) + 1;\n  const reachedCeiling = nextFailCount >= ceiling;\n  const nowIso = new Date().toISOString();\n\n  const rawErr = j.error !== undefined ? j.error : j._emailError;\n  const msg =\n    typeof rawErr === 'object' && rawErr !== null\n      ? String(rawErr.message || JSON.stringify(rawErr))\n      : String(rawErr || 'unknown follow-up email error');\n\n  return {\n    json: {\n      lead_id: lead.lead_id,\n      business_id: bid,\n      followup_fail_count: nextFailCount,\n      followup_fail_ceiling: ceiling,\n      failed_attempts_remaining: Math.max(0, ceiling - nextFailCount),\n      // Unchanged until the ceiling is reached, so the partial update is a\n      // no-op for these two columns on an ordinary failure.\n      status: reachedCeiling ? 'failed' : lead.status,\n      next_followup_at: reachedCeiling ? '' : lead.next_followup_at,\n      updated_at: nowIso,\n      error_id: 'err_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n      created_at: nowIso,\n      workflow: '05 - Follow-up Sweeper',\n      node: 'Send Follow-up Email',\n      error_message: sanitize(\n        'followup_email_failed (attempt ' + nextFailCount + '/' + ceiling + ', followup_count ' +\n        String(j.followup_count ?? source.followup_count ?? 0) + '/' + max + '): ' + msg\n      ).slice(0, 2000),\n      execution_id: $execution.id,\n      payload: sanitize({\n        lead_id: lead.lead_id,\n        business_id: bid,\n        followup_count: Number(j.followup_count ?? source.followup_count ?? 0) || 0,\n        max_followups: max,\n        followup_fail_count: nextFailCount,\n        followup_fail_ceiling: ceiling\n      }).slice(0, 4000),\n      resolved: false\n    }\n  };\n});\n"
+        "jsCode": "// F16 - WF05 failed follow-up sends used to dead-end at a noOp, so a\n// persistently failing address was re-selected every hour forever and\n// followup_count (which only ever counts SUCCESSFUL sends) never moved, making\n// max_followups structurally unreachable. This node records the failure, counts\n// total delivery failures in its own field, and retires the lead once the ceiling is\n// reached. followup_count is deliberately NOT touched here: it stays a record of\n// real contacts, so a transient SMTP failure cannot burn the customer's allowance.\nconst candidates = $('Select Follow-up Candidates').all();\nconst configs = $('Get Active Businesses').all();\nconst SECRET_RE = /(bearer)(\\s+)([^,}\"'`\\s]+)|(secret|token|password|api[_ -]?key|authorization|bearer)((?:\\\\?[\"'])?\\s*[:=]\\s*)(\"(?:[^\"\\\\]|\\\\.)*\"|\\\\\"(?:[^\"\\\\]|\\\\.)*?\\\\\"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`|bearer\\s+[^,}\"'`\\s]+|[^,}\"'`\\s]+)/gi;\n// Redacts a secret whatever delimiter or quoting surrounds it, so the shape a\n// provider happens to emit cannot decide whether the value is reached. The value\n// may be a double-quoted, single-quoted or backtick literal, a JSON-escaped\n// double-quoted literal (which is what JSON.stringify hands the object branch),\n// a `Bearer <credential>` pair, or a bare token. `redactSecret` re-emits the\n// leading delimiter it found, quote and backslash included, so a redacted JSON\n// payload stays well-formed and parseable instead of being cut in half. The\n// leading branch still catches a bare \"Bearer <credential>\" with no keyword\n// separator, and the value group may itself be \"Bearer <credential>\", so a\n// header-style \"Authorization: Bearer <jwt>\" is consumed whole rather than\n// leaving the JWT behind.\nconst redactSecret = (m, bearer, ws, token, keyword, sep, value) => {\n  if (bearer) return bearer + ws + '[REDACTED]';\n  const open = /^(\\\\?[\"'`])/.exec(value);\n  const q = open ? open[1] : '';\n  return keyword + sep + q + '[REDACTED]' + q;\n};\nfunction sanitize(v){\n  if (v === null || v === undefined) return '';\n  if (typeof v === 'object') return JSON.stringify(v).replace(SECRET_RE, redactSecret);\n  return String(v).replace(SECRET_RE, redactSecret);\n}\n\nreturn $input.all().map((it, index) => {\n  const j = it.json;\n\n  // The error item carries the candidate, but recover it the same defensive way\n  // 'Advance Follow-up State' does so a stripped field cannot throw here.\n  const source = candidates[index]?.json || {};\n\n  const bid = String(j.business_id ?? source.business_id ?? '').trim();\n  const lead = {\n    lead_id: String(j.lead_id ?? source.lead_id ?? '').trim(),\n    business_id: bid,\n    status: String(j.status ?? source.status ?? ''),\n    next_followup_at: String(j.next_followup_at ?? source.next_followup_at ?? ''),\n    followup_fail_count: j.followup_fail_count ?? source.followup_fail_count ?? ''\n  };\n  if (!lead.lead_id) {\n    throw new Error(\n      `Missing lead_id in Build Failed Follow-up Record. Item ${index + 1} has no lead_id.`\n    );\n  }\n\n  const cfg = configs.find((c) => String(c.json.business_id || '').trim() === bid);\n  const config = cfg ? cfg.json : {};\n  const max = Number(j.max_followups ?? source.max_followups ?? config.max_followups ?? 3) || 3;\n\n  // Ceiling is a hard default, deliberately far above max_followups: a\n  // temporary provider outage must not consume the customer's real follow-ups.\n  const ceiling = Math.max(24, Number(config.max_followups || 3) * 4);\n\n  // The field is absent on every pre-existing row, so it defaults on read.\n  // WF01/WF03 are NOT changed: absent means 0.\n  const nextFailCount = Number(lead.followup_fail_count || 0) + 1;\n  const reachedCeiling = nextFailCount >= ceiling;\n  const nowIso = new Date().toISOString();\n\n  const rawErr = j.error !== undefined ? j.error : j._emailError;\n  const msg =\n    typeof rawErr === 'object' && rawErr !== null\n      ? String(rawErr.message || JSON.stringify(rawErr))\n      : String(rawErr || 'unknown follow-up email error');\n\n  return {\n    json: {\n      lead_id: lead.lead_id,\n      business_id: bid,\n      followup_fail_count: nextFailCount,\n      followup_fail_ceiling: ceiling,\n      failed_attempts_remaining: Math.max(0, ceiling - nextFailCount),\n      // Unchanged until the ceiling is reached, so the partial update is a\n      // no-op for these two columns on an ordinary failure.\n      old_status: lead.status,\n      status: reachedCeiling ? 'failed' : lead.status,\n      next_followup_at: reachedCeiling ? '' : lead.next_followup_at,\n      updated_at: nowIso,\n      error_id: 'err_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n      created_at: nowIso,\n      workflow: '05 - Follow-up Sweeper',\n      node: 'Send Follow-up Email',\n      error_message: sanitize(\n        'followup_email_failed (attempt ' + nextFailCount + '/' + ceiling + ', followup_count ' +\n        String(j.followup_count ?? source.followup_count ?? 0) + '/' + max + '): ' + msg\n      ).slice(0, 2000),\n      execution_id: $execution.id,\n      payload: sanitize({\n        lead_id: lead.lead_id,\n        business_id: bid,\n        followup_count: Number(j.followup_count ?? source.followup_count ?? 0) || 0,\n        max_followups: max,\n        followup_fail_count: nextFailCount,\n        followup_fail_ceiling: ceiling\n      }).slice(0, 4000),\n      resolved: false\n    }\n  };\n});\n"
       },
       "id": "f16b1c40-0001-4a10-9c01-0000000000f1",
       "name": "Build Failed Follow-up Record",
@@ -405,6 +405,89 @@
           "name": "Lead Engine Sheets"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "// F17 - WF05 moved a lead into a terminal status (no_response once the follow-up\n// cap is reached, failed once the delivery ceiling is reached) and persisted that\n// change, but never recorded the transition in status_updates. A lead could\n// leave the funnel with nothing in its history explaining why.\n//\n// This is the single shared builder for BOTH terminal paths. It reads $input -\n// the pre-update item emitted by 'Advance Follow-up State' or 'Build Failed\n// Follow-up Record' - and never a Google Sheets write result. A Sheets update\n// returns the stored row, which carries only 'status', so it would lose\n// old_status and leave nothing to compare it against; that is the same F5\n// invariant WF04's 'Prepare Updated Lead' exists to hold. Because both sources\n// are Code nodes and this hangs off each of them as a sibling branch, $input is\n// the pre-update item by construction on either path.\n//\n// updated_by and notes go through the shared sanitize() block, so no free-text\n// field can ever carry a credential into the audit trail.\nconst candidates = $('Select Follow-up Candidates').all();\n\nconst SECRET_RE = /(bearer)(\\s+)([^,}\"'`\\s]+)|(secret|token|password|api[_ -]?key|authorization|bearer)((?:\\\\?[\"'])?\\s*[:=]\\s*)(\"(?:[^\"\\\\]|\\\\.)*\"|\\\\\"(?:[^\"\\\\]|\\\\.)*?\\\\\"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`|bearer\\s+[^,}\"'`\\s]+|[^,}\"'`\\s]+)/gi;\n// Redacts a secret whatever delimiter or quoting surrounds it, so the shape a\n// provider happens to emit cannot decide whether the value is reached. The value\n// may be a double-quoted, single-quoted or backtick literal, a JSON-escaped\n// double-quoted literal (which is what JSON.stringify hands the object branch),\n// a `Bearer <credential>` pair, or a bare token. `redactSecret` re-emits the\n// leading delimiter it found, quote and backslash included, so a redacted JSON\n// payload stays well-formed and parseable instead of being cut in half. The\n// leading branch still catches a bare \"Bearer <credential>\" with no keyword\n// separator, and the value group may itself be \"Bearer <credential>\", so a\n// header-style \"Authorization: Bearer <jwt>\" is consumed whole rather than\n// leaving the JWT behind.\nconst redactSecret = (m, bearer, ws, token, keyword, sep, value) => {\n  if (bearer) return bearer + ws + '[REDACTED]';\n  const open = /^(\\\\?[\"'`])/.exec(value);\n  const q = open ? open[1] : '';\n  return keyword + sep + q + '[REDACTED]' + q;\n};\nfunction sanitize(v){\n  if (v === null || v === undefined) return '';\n  if (typeof v === 'object') return JSON.stringify(v).replace(SECRET_RE, redactSecret);\n  return String(v).replace(SECRET_RE, redactSecret);\n}\n\nreturn $input.all().map((it, index) => {\n  const j = it.json;\n\n  // Same defensive recovery as the two Code nodes that feed this one: a field\n  // the email node stripped is still available on the candidate.\n  const source = candidates[index]?.json || {};\n\n  const bid = String(j.business_id ?? source.business_id ?? '').trim();\n  const leadId = String(j.lead_id ?? source.lead_id ?? '').trim();\n  if (!leadId) {\n    throw new Error(\n      `Missing lead_id in Build Follow-up Status Record. Item ${index + 1} has no lead_id.`\n    );\n  }\n\n  const oldStatus = String(j.old_status ?? source.status ?? '').trim();\n  const newStatus = String(j.status ?? '').trim();\n\n  // Only a real transition is an audit event. An ordinary successful follow-up\n  // leaves status untouched, and a delivery failure below the ceiling leaves it\n  // untouched too, so both compare equal and emit nothing. Without this gate\n  // every hourly sweep would append a no-op row.\n  if (!newStatus || newStatus === oldStatus) return null;\n\n  const maxFollowups = Number(j.max_followups ?? source.max_followups ?? 3) || 3;\n  const followupCount = Number(j.followup_count ?? source.followup_count ?? 0) || 0;\n  const failCount = Number(j.followup_fail_count ?? source.followup_fail_count ?? 0) || 0;\n  const failCeiling = Number(j.followup_fail_ceiling ?? source.followup_fail_ceiling ?? 0) || 0;\n\n  const note =\n    newStatus === 'no_response'\n      ? 'no_response: follow-up cap reached (' + followupCount + '/' + maxFollowups +\n        ' sends sent, no reply received)'\n      : 'failed: retired after ' + failCount + ' delivery failures (ceiling ' +\n        failCeiling + ')';\n\n  const nowIso = new Date().toISOString();\n\n  return {\n    json: {\n      update_id: 'upd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),\n      created_at: nowIso,\n      lead_id: leadId,\n      business_id: bid,\n      old_status: oldStatus,\n      new_status: newStatus,\n      updated_by: sanitize('followup_sweeper'),\n      notes: sanitize(note).slice(0, 2000)\n    }\n  };\n}).filter(Boolean);"
+      },
+      "id": "f17b1c40-0001-4a11-9c02-0000000000e1",
+      "name": "Build Follow-up Status Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        160
+      ],
+      "notes": "F17 shared builder for BOTH terminal transitions. Reads the pre-update Code node output, never a Sheets write result, so old_status survives (F5). Emits nothing unless the status actually changed."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs",
+          "mode": "list",
+          "cachedResultName": "Lead Recovery Engine",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lU_200-4-4LHZFHAWzgB-k85zKSNCflSSdv2IH8dZGs/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "status_updates",
+          "mode": "name"
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "update_id",
+              "fieldValue": "={{ $json.update_id }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ $json.created_at }}"
+            },
+            {
+              "fieldId": "lead_id",
+              "fieldValue": "={{ $json.lead_id }}"
+            },
+            {
+              "fieldId": "business_id",
+              "fieldValue": "={{ $json.business_id }}"
+            },
+            {
+              "fieldId": "old_status",
+              "fieldValue": "={{ $json.old_status }}"
+            },
+            {
+              "fieldId": "new_status",
+              "fieldValue": "={{ $json.new_status }}"
+            },
+            {
+              "fieldId": "updated_by",
+              "fieldValue": "={{ $json.updated_by }}"
+            },
+            {
+              "fieldId": "notes",
+              "fieldValue": "={{ $json.notes }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f17b1c40-0002-4a11-9c02-0000000000e2",
+      "name": "Append Follow-up Status Update",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        1664,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WKOG2OGDN34LtGmz",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "F17. Explicit mapping to the exact status_updates headers, copied from WF04. If your n8n version has no name mode on this field, reselect the status_updates tab once."
     }
   ],
   "pinData": {},
@@ -496,6 +579,11 @@
             "node": "Update Lead Follow-up State",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Build Follow-up Status Record",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -510,6 +598,22 @@
           },
           {
             "node": "Update Lead Follow-up Retry",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Follow-up Status Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Follow-up Status Record": {
+      "main": [
+        [
+          {
+            "node": "Append Follow-up Status Update",
             "type": "main",
             "index": 0
           }
