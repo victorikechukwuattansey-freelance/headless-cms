@@ -106,6 +106,7 @@ export function journeyB_NoResponse() {
     leadAfter: store.rows('leads').find((r) => r.lead_id === lead.lead_id),
     sweepEmails: sweeps.flatMap((s) => s.outbox),
     sweeps: sweeps.map((s) => ({ candidates: s.outputsOf('Select Follow-up Candidates').length, emails: s.outbox.length })),
+    statusUpdates: store.rows('status_updates'),
     errors: store.rows('errors')
   };
 }
@@ -377,6 +378,10 @@ export function journeyH_Failures() {
     afterTransientFailure,
     afterRecovery,
     recoverySendSucceeded: recoverySweep.outbox.every((e) => e.sent),
+    // F17: same key as A/C/D/G. Read from failEmailStore, not the unused
+    // `store` local, because failEmailStore is the store this journey drives
+    // to the ceiling (and the one its `store:` field exposes).
+    statusUpdates: failEmailStore.rows('status_updates'),
     sheetsDown: { store: downStore }
   };
 }
