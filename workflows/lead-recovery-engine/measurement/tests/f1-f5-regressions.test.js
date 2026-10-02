@@ -2214,3 +2214,116 @@ test('F17: the F16 byte-identity invariant holds under the new named deltas', ()
   );
   assert.equal(failedDeltas.length, 1, 'a new undeclared change must be added here explicitly');
 });
+
+/* ------------------------------------------------------------------ *
+ * Sanitizer byte-identity across ALL FIVE consumers.
+ *
+ * F14's test covers WF01 x2 + WF06. F17's test covers WF05 x2 and pins
+ * one hash. Neither spans all five, so a sixth consumer carrying a
+ * divergent block would pass both. Tracked follow-up recorded in
+ * measurement/FINDINGS.md under the F15 resolution, "Known coverage gap".
+ * ------------------------------------------------------------------ */
+
+/** The block as it stands at fd75d62. Do NOT change this without authorisation. */
+const SANITIZE_BLOCK_SHA256 = 'd7ffc93db65e5c0c6e7ccb4ecd4bb89e9768522d90b4a8e9c26af611c36435aa';
+const SANITIZE_BLOCK_CHARS = 1509;
+const SANITIZE_BLOCK_LINES = 23;
+
+const SANITIZE_CONSUMERS = [
+  { label: 'WF01 Build Customer Email Error Record', loader: WF.intake, node: 'Build Customer Email Error Record' },
+  { label: 'WF01 Build Owner Email Error Record', loader: WF.intake, node: 'Build Owner Email Error Record' },
+  { label: 'WF05 Build Failed Follow-up Record', loader: WF.sweeper, node: 'Build Failed Follow-up Record' },
+  { label: 'WF05 Build Follow-up Status Record', loader: WF.sweeper, node: 'Build Follow-up Status Record' },
+  { label: 'WF06 Build & Sanitize Error Record', loader: WF.errorHandler, node: 'Build & Sanitize Error Record' }
+];
+
+/**
+ * Extract the sanitize() block from a Code node.
+ *
+ * Boundaries: the block starts at the hoisted `const SECRET_RE` and ends at
+ * the column-0 `}` that closes `function sanitize`. The end is found with
+ * `indexOf('\n}', fn)` rather than brace counting because this Code node body
+ * is indented — every nested brace sits at column >= 2 — so the first `\n}`
+ * after `function sanitize` is that function's own terminator, not a nested
+ * one. Hashing the whole jsCode is deliberately NOT done: the surrounding
+ * code differs per node and only this region is supposed to be shared.
+ */
+function sanitizeBlockOf(consumer) {
+  const wf = consumer.loader();
+  const node = wf.nodes.find((n) => n.name === consumer.node);
+  assert.ok(node, `${consumer.label}: node not found in ${wf.__file}`);
+
+  const code = node.parameters.jsCode;
+  const start = code.indexOf('const SECRET_RE');
+  const fn = code.indexOf('function sanitize');
+  assert.ok(start >= 0, `${consumer.label}: no SECRET_RE in ${wf.__file}`);
+  assert.ok(fn > start, `${consumer.label}: no sanitize() after SECRET_RE in ${wf.__file}`);
+
+  const close = code.indexOf('\n}', fn);
+  assert.ok(close > fn, `${consumer.label}: sanitize() is not closed in ${wf.__file}`);
+
+  const block = code.slice(start, close + 2);
+  return {
+    label: consumer.label,
+    file: wf.__file,
+    block,
+    chars: block.length,
+    lines: block.split('\n').length,
+    hash: createHash('sha256').update(block).digest('hex')
+  };
+}
+
+test('SANITIZER: all five consumers carry one byte-identical sanitize() block', () => {
+  const found = SANITIZE_CONSUMERS.map(sanitizeBlockOf);
+
+  // Per-consumer shape guards, so a shifted boundary is reported as such
+  // rather than as a mysterious hash mismatch.
+  for (const f of found) {
+    assert.equal(
+      f.chars,
+      SANITIZE_BLOCK_CHARS,
+      `${f.label} (${f.file}): sanitize block is ${f.chars} chars, expected ${SANITIZE_BLOCK_CHARS} — ` +
+        'the extraction boundaries or the block itself changed'
+    );
+    assert.equal(
+      f.lines,
+      SANITIZE_BLOCK_LINES,
+      `${f.label} (${f.file}): sanitize block is ${f.lines} lines, expected ${SANITIZE_BLOCK_LINES}`
+    );
+  }
+
+  // One distinct block across all five, naming whoever drifted.
+  const byHash = new Map();
+  for (const f of found) {
+    if (!byHash.has(f.hash)) byHash.set(f.hash, []);
+    byHash.get(f.hash).push(`${f.label} (${f.file})`);
+  }
+  assert.equal(
+    byHash.size,
+    1,
+    `sanitize block drift: expected 1 distinct block across ${found.length} consumers, found ${byHash.size}.\n` +
+      [...byHash]
+        .map(([h, labels]) => `  ${h} x${labels.length}: ${labels.join(', ')}`)
+        .join('\n')
+  );
+
+  const [hash, drifted] = [...byHash][0];
+  assert.equal(
+    hash,
+    SANITIZE_BLOCK_SHA256,
+    `sanitize block no longer matches the hash pinned at fd75d62.\n` +
+      `  expected: ${SANITIZE_BLOCK_SHA256}\n` +
+      `  actual:   ${hash}\n` +
+      `  consumers sharing the current block: ${drifted.join(', ')}`
+  );
+
+  // Byte-for-byte, not merely equal hashes.
+  const [first, ...rest] = found;
+  for (const f of rest) {
+    assert.equal(
+      f.block,
+      first.block,
+      `${f.label} (${f.file}) is not byte-identical to ${first.label} (${first.file})`
+    );
+  }
+});
