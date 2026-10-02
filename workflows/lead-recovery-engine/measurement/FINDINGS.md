@@ -174,13 +174,12 @@ deliberately deferred item is not read as an active regression.
 | F8 | Rejected and duplicate traffic still writes no rows anywhere | **partly** — the `measurement_events` question beneath it is **closed**; the behaviour itself is still unfixed |
 | F18 | `followup_fail_count` accumulates total failures, not a consecutive streak | **no — semantic edge case, and a fix would touch the success path** |
 
-**Tracked follow-up — the sanitize block now has five consumers and no single test spans all five.**
-The block is byte-identical everywhere (one hash, `d7ffc93db65e5c0c…`, 1509 chars, 23 lines), but
-coverage is split: the F14 test asserts WF01 ×2 + WF06, and the F17 test asserts WF05 ×2 against a
-pinned hash. Nothing asserts all five at once, so a sixth consumer could be added with a divergent
-block and both tests would still pass. A single all-five byte-identity test is **not yet written**; see
-the F15 resolution for the full statement. This is a coverage gap, not a known defect — the block is
-identical today.
+**Closed — the sanitize block now has five consumers and one test spans all five.**
+The block is byte-identical everywhere (one hash, `d7ffc93db65e5c0c…`, 1509 chars, 23 lines). The
+**`SANITIZER` test in `measurement/tests/f1-f5-regressions.test.js`** asserts all five consumers at once
+against that pinned hash, so a sixth consumer carrying a divergent block now fails. Before `e032adf`
+this was recorded as an open gap with no all-five assertion; see the F15 resolution for the full
+statement. It was a coverage gap, not a known defect — the block was identical throughout.
 
 **`measurement_events` — CLOSED as a requirement, and never implemented.** The general
 event store contemplated by F8 is **not required for the pilot**: `measurement/EVIDENCE_MATRIX.md`
@@ -843,10 +842,12 @@ correct to pass: *the three consumers agree byte-for-byte on the same input* (al
 identical before the fix) and *ordinary text, including quoted prose, is still NOT redacted* (a guard
 against over-redaction, which must hold in both states). So the 5 failures are the defect-specific ones.
 
-**Known coverage gap.** No single test spans all five consumers. The F14 test asserts WF01 ×2 + WF06;
-the F17 test asserts WF05 ×2 against the pinned hash. A sixth consumer carrying a divergent block
-would pass both. A single all-five byte-identity test is a **tracked follow-up, not yet written** —
-recorded in the status summary so it is not buried here.
+**Coverage gap — now closed.** This gap was originally recorded as: no single test spans all five
+consumers. The F14 test asserts WF01 ×2 + WF06; the F17 test asserts WF05 ×2 against the pinned hash,
+so a sixth consumer carrying a divergent block would have passed both. The **all-five byte-identity
+test is now written — `SANITIZER: all five consumers carry one byte-identical sanitize() block` in
+`measurement/tests/f1-f5-regressions.test.js`** — and closes it by asserting all five at once against
+the pinned hash. Added in `e032adf`; the status summary carries the same statement.
 
 **Why this commit's record lagged.** `af302e8`'s subject reads *"docs(measurement): mark F15 resolved;
 add F16 resolution, F18, deploy prerequisite"*, but its body never changed any of F15's twelve
