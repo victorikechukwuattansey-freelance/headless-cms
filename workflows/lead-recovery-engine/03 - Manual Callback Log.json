@@ -551,7 +551,7 @@
         "fromEmail": "={{ $('Resolve Config & Normalize Callback').first().json.from_email }}",
         "toEmail": "={{ $('Resolve Config & Normalize Callback').first().json.email }}",
         "subject": "={{ 'We received your callback request — ' + $('Resolve Config & Normalize Callback').first().json.business_name }}",
-        "html": "={{ `<p>Hi ${$json._esc_name || 'there'},</p><p>Thanks for your callback request with <strong>${$json._esc_business_name}</strong>. Our team will reach out soon.</p>${$json.booking_link ? '<p>You can book online now: <a href=\"' + $json._esc_booking_link + '\">Schedule here</a></p>' : ''}<p>Replying to this email reaches us directly.</p><p>— ${$json._esc_business_name}</p>` }}",
+        "html": "={{ `<p>Hi ${$('Resolve Config & Normalize Callback').first().json._esc_name || 'there'},</p><p>Thanks for your callback request with <strong>${$('Resolve Config & Normalize Callback').first().json._esc_business_name}</strong>. Our team will reach out soon.</p>${$json.booking_link ? '<p>You can book online now: <a href=\"' + $('Resolve Config & Normalize Callback').first().json._esc_booking_link + '\">Schedule here</a></p>' : ''}<p>Replying to this email reaches us directly.</p><p>— ${$('Resolve Config & Normalize Callback').first().json._esc_business_name}</p>` }}",
         "options": {
           "appendAttribution": false,
           "replyTo": "={{ $('Resolve Config & Normalize Callback').first().json.reply_to_email }}"
@@ -625,7 +625,7 @@
         "fromEmail": "={{ $('Check Duplicate').first().json.from_email }}",
         "toEmail": "={{ $('Check Duplicate').first().json.owner_email }}",
         "subject": "={{ 'Manual callback logged — ' + $('Check Duplicate').first().json.business_name + ' — Lead ' + $('Check Duplicate').first().json.lead_id }}",
-        "html": "={{ `<h3>Manual callback</h3><p><b>${$json._esc_business_name}</b></p><table cellpadding=\"4\"><tr><td><b>Lead ID</b></td><td>${$json._esc_lead_id}</td></tr><tr><td><b>Name</b></td><td>${$json._esc_name}</td></tr><tr><td><b>Phone</b></td><td>${$json._esc_phone}</td></tr><tr><td><b>Email</b></td><td>${$json._esc_email}</td></tr><tr><td><b>Service</b></td><td>${$json._esc_service}</td></tr><tr><td><b>Time</b></td><td>${$json._esc_created_at}</td></tr></table><p><b>Notes:</b> ${$json._esc_notes || '—'}</p>${$json.booking_link ? '<p>Booking link: <a href=\"' + $json._esc_booking_link + '\">' + $json._esc_booking_link + '</a></p>' : ''}` }}",
+        "html": "={{ `<h3>Manual callback</h3><p><b>${$('Check Duplicate').first().json._esc_business_name}</b></p><table cellpadding=\"4\"><tr><td><b>Lead ID</b></td><td>${$('Check Duplicate').first().json._esc_lead_id}</td></tr><tr><td><b>Name</b></td><td>${$('Check Duplicate').first().json._esc_name}</td></tr><tr><td><b>Phone</b></td><td>${$('Check Duplicate').first().json._esc_phone}</td></tr><tr><td><b>Email</b></td><td>${$('Check Duplicate').first().json._esc_email}</td></tr><tr><td><b>Service</b></td><td>${$('Check Duplicate').first().json._esc_service}</td></tr><tr><td><b>Time</b></td><td>${$('Check Duplicate').first().json._esc_created_at}</td></tr></table><p><b>Notes:</b> ${$('Check Duplicate').first().json._esc_notes || '—'}</p>${$json.booking_link ? '<p>Booking link: <a href=\"' + $('Check Duplicate').first().json._esc_booking_link + '\">' + $('Check Duplicate').first().json._esc_booking_link + '</a></p>' : ''}` }}",
         "options": {
           "appendAttribution": false
         }

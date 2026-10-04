@@ -605,7 +605,7 @@
         "fromEmail": "={{ $('Prepare Updated Lead').first().json.from_email }}",
         "toEmail": "={{ $('Prepare Updated Lead').first().json.owner_email }}",
         "subject": "={{ 'Lead status updated: ' + $('Prepare Updated Lead').first().json._esc_new_status + ' — ' + $('Prepare Updated Lead').first().json.business_name + ' — Lead ' + $('Prepare Updated Lead').first().json.lead_id }}",
-        "html": "={{ `<h3>Lead status updated</h3><p><b>${$json._esc_business_name}</b></p><table cellpadding=\"4\"><tr><td><b>Lead ID</b></td><td>${$json._esc_lead_id}</td></tr><tr><td><b>Name</b></td><td>${$json._esc_name}</td></tr><tr><td><b>Old status</b></td><td>${$json._esc_old_status}</td></tr><tr><td><b>New status</b></td><td>${$json._esc_new_status}</td></tr><tr><td><b>Updated by</b></td><td>${$json._esc_updated_by}</td></tr></table>${$json.notes ? '<p>Notes: ' + $json._esc_notes + '</p>' : ''}` }}",
+        "html": "={{ `<h3>Lead status updated</h3><p><b>${$('Prepare Updated Lead').first().json._esc_business_name}</b></p><table cellpadding=\"4\"><tr><td><b>Lead ID</b></td><td>${$('Prepare Updated Lead').first().json._esc_lead_id}</td></tr><tr><td><b>Name</b></td><td>${$('Prepare Updated Lead').first().json._esc_name}</td></tr><tr><td><b>Old status</b></td><td>${$('Prepare Updated Lead').first().json._esc_old_status}</td></tr><tr><td><b>New status</b></td><td>${$('Prepare Updated Lead').first().json._esc_new_status}</td></tr><tr><td><b>Updated by</b></td><td>${$('Prepare Updated Lead').first().json._esc_updated_by}</td></tr></table>${$json.notes ? '<p>Notes: ' + $('Prepare Updated Lead').first().json._esc_notes + '</p>' : ''}` }}",
         "options": {
           "appendAttribution": false
         }

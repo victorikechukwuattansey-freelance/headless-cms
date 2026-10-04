@@ -83,6 +83,17 @@ function runStatus(store, body, at = T0) {
   });
 }
 
+function runCallback(store, body, at = T0) {
+  return withClock(at, () => {
+    const eng = new Engine(
+      WF.callback(),
+      engineOptions(store, { now: () => new Date(at).getTime() })
+    );
+    eng.runAll(webhookInput(body));
+    return eng;
+  });
+}
+
 /* ------------------------------------------------------------------ *
  * F1
  * ------------------------------------------------------------------ */
@@ -2325,5 +2336,254 @@ test('SANITIZER: all five consumers carry one byte-identical sanitize() block', 
       first.block,
       `${f.label} (${f.file}) is not byte-identical to ${first.label} (${first.file})`
     );
+  }
+});
+
+/* ------------------------------------------------------------------ *
+ * F6 - Literal undefined removed from WF03 / WF04 email bodies
+ *
+ * Both workflows feed `emailSend` nodes from a Code node and then a Google
+ * Sheets write. The Sheets write replaces `$json` with the sheet row, and none
+ * of the `_esc_*` fields are sheet columns, so every `${$json._esc_*}` read in
+ * an email body rendered the literal string `undefined`. The bodies now read
+ * `_esc_*` through an explicit `$('<node>').first().json` reference - the same
+ * source node each body already used for its envelope.
+ *
+ * The bodies carry a `|| 'there'` style fallback on some fields, so asserting
+ * only "no `undefined`" is not enough: a renamed or missing producer would fall
+ * back and still render cleanly. These tests therefore assert the EXPECTED
+ * escaped values are PRESENT, which is what actually proves the read resolves.
+ * ------------------------------------------------------------------ */
+
+const CALLBACK_BODY = {
+  business_id: 'biz_lonestar_hvac',
+  source_id: 'f6-fixture',
+  name: 'Jordan Ellis',
+  phone: '5125550188',
+  email: 'jordan.ellis@example.com',
+  message: 'No heat since last night.',
+  service: 'HVAC',
+  city: 'Austin',
+  state: 'TX',
+  zip: '78704',
+  notes: 'Customer called back about the ad.'
+};
+
+test('F6: the WF03 customer email body is fully rendered, with no undefined', () => {
+  const store = newStore();
+  const eng = runCallback(store, CALLBACK_BODY);
+
+  const sent = eng.outbox.filter((e) => e.node === 'Callback Customer Email');
+  assert.equal(sent.length, 1, 'expected exactly one Callback Customer Email');
+  const mail = sent[0];
+  assert.equal(mail.to, 'jordan.ellis@example.com');
+  assert.equal(mail.sent, true);
+  assert.equal(mail.body.includes('undefined'), false, 'callback customer body must not contain literal undefined');
+  // The producer's escaped name must be present, NOT the `|| 'there'` fallback:
+  // a renamed or missing `_esc_name` renders "Hi there," and would otherwise pass.
+  assert.match(
+    mail.body,
+    /<p>Hi Jordan Ellis,<\/p>/,
+    'callback customer body must carry the name read from the source node, not the fallback'
+  );
+  assert.match(
+    mail.body,
+    /<strong>Lone Star HVAC &amp; Cooling<\/strong>/,
+    'callback customer body must carry the escaped business name from the source node'
+  );
+  assert.match(
+    mail.body,
+    /href="https:\/\/book\.lonestarhvac\.example\.com\/\?lead_id=lead_[0-9]+_[a-z0-9]+"/,
+    'callback customer body must carry the resolved booking link'
+  );
+});
+
+test('F6: the WF03 owner email body is fully rendered, with no undefined', () => {
+  const store = newStore();
+  const eng = runCallback(store, CALLBACK_BODY);
+
+  const sent = eng.outbox.filter((e) => e.node === 'Owner Callback Notification');
+  assert.equal(sent.length, 1, 'expected exactly one Owner Callback Notification');
+  const mail = sent[0];
+  assert.equal(mail.to, 'owner@lonestarhvac.example.com');
+  assert.equal(mail.sent, true);
+  assert.equal(mail.body.includes('undefined'), false, 'callback owner body must not contain literal undefined');
+  // `|| '—'` guards the Notes cell, so Notes alone would not prove the read.
+  // These are unguarded fields: each must carry the producer's escaped value.
+  assert.match(
+    mail.body,
+    /<td>Jordan Ellis<\/td>/,
+    'callback owner body must carry the name read from the source node'
+  );
+  assert.match(
+    mail.body,
+    /<p><b>Lone Star HVAC &amp; Cooling<\/b><\/p>/,
+    'callback owner body must carry the escaped business name from the source node'
+  );
+  assert.match(
+    mail.body,
+    /<td>lead_[0-9]+_[a-z0-9]+<\/td>/,
+    'callback owner body must carry the lead id read from the source node'
+  );
+  assert.match(
+    mail.body,
+    /<td>5125550188<\/td>/,
+    'callback owner body must carry the phone read from the source node'
+  );
+  assert.match(
+    mail.body,
+    /<p><b>Notes:<\/b> Customer called back about the ad\.<\/p>/,
+    'callback owner body must carry the escaped notes read from the source node'
+  );
+});
+
+test('F6: the WF04 owner status email body is fully rendered, with no undefined', () => {
+  const store = newStore();
+  const lead = store.rows('leads')[0];
+
+  const eng = runStatus(store, {
+    business_id: lead.business_id,
+    lead_id: lead.lead_id,
+    new_status: 'lost',
+    updated_by: 'front_desk',
+    notes: 'Went with a competitor.'
+  });
+
+  const sent = eng.outbox.filter((e) => e.node === 'Owner Status Notification');
+  assert.equal(sent.length, 1, 'expected exactly one Owner Status Notification');
+  const mail = sent[0];
+  assert.equal(mail.to, 'owner@lonestarhvac.example.com');
+  assert.equal(mail.sent, true);
+  assert.equal(mail.body.includes('undefined'), false, 'status notification body must not contain literal undefined');
+  // `notes` is behind a `$json.notes ?` guard, so the unguarded table cells
+  // carry the proof: both statuses, the name, the actor and the lead id.
+  assert.match(mail.body, /<td>new<\/td>/, 'status body must carry old_status from the source node');
+  assert.match(mail.body, /<td>lost<\/td>/, 'status body must carry new_status from the source node');
+  assert.match(mail.body, /<td>Maria Gonzalez<\/td>/, 'status body must carry the lead name from the source node');
+  assert.match(mail.body, /<td>front_desk<\/td>/, 'status body must carry updated_by from the source node');
+  assert.match(
+    mail.body,
+    /<td>lead_1755693000001_a1b2c3d4<\/td>/,
+    'status body must carry the lead id from the source node'
+  );
+  assert.match(
+    mail.body,
+    /<p><b>Lone Star HVAC &amp; Cooling<\/b><\/p>/,
+    'status body must carry the escaped business name from the source node'
+  );
+});
+
+test('F6: the WF03/04 email bodies still escape HTML after the explicit-read fix', () => {
+  const store = newStore();
+  const lead = store.rows('leads')[0];
+  const XSS = '<script>alert("x")</script>';
+
+  const engCb = runCallback(store, { ...CALLBACK_BODY, name: XSS, notes: XSS });
+
+  const cbMails = engCb.outbox.filter(
+    (e) => e.node === 'Callback Customer Email' || e.node === 'Owner Callback Notification'
+  );
+  assert.equal(cbMails.length, 2, 'expected both WF03 callback emails');
+  for (const mail of cbMails) {
+    assert.equal(
+      mail.body.includes('<script>'),
+      false,
+      `${mail.node}: raw <script> reached the body - the source is not escaping`
+    );
+    assert.match(
+      mail.body,
+      /&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/,
+      `${mail.node}: the injected value must appear escaped in the body`
+    );
+  }
+
+  const engSt = runStatus(store, {
+    business_id: lead.business_id,
+    lead_id: lead.lead_id,
+    new_status: 'lost',
+    updated_by: 'front_desk',
+    notes: XSS
+  });
+
+  const stMails = engSt.outbox.filter((e) => e.node === 'Owner Status Notification');
+  assert.equal(stMails.length, 1, 'expected the WF04 status notification');
+  assert.equal(
+    stMails[0].body.includes('<script>'),
+    false,
+    'WF04 status notification: raw <script> reached the body - the source is not escaping'
+  );
+  assert.match(
+    stMails[0].body,
+    /&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/,
+    'WF04 status notification: the injected notes must appear escaped in the body'
+  );
+});
+
+test('F6: WF03 and WF04 no longer read _esc_* off $json in any emailSend body', async () => {
+  const fs = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const offenders = [];
+
+  for (const file of ['03 - Manual Callback Log.json', '04 - Status Update.json']) {
+    const wf = JSON.parse(fs.readFileSync(root + file, 'utf8'));
+    for (const node of wf.nodes) {
+      if (node.type !== 'n8n-nodes-base.emailSend') continue;
+      const p = node.parameters || {};
+      for (const field of ['html', 'subject', 'toEmail', 'fromEmail']) {
+        const expr = p[field];
+        if (typeof expr === 'string' && expr.includes('$json._esc_')) {
+          offenders.push(`${file} :: ${node.name} :: ${field}`);
+        }
+      }
+      const replyTo = p.options && p.options.replyTo;
+      if (typeof replyTo === 'string' && replyTo.includes('$json._esc_')) {
+        offenders.push(`${file} :: ${node.name} :: options.replyTo`);
+      }
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `emailSend fields still reading $json._esc_* (the Sheets write replaces $json, so these render undefined):\n  ${offenders.join('\n  ')}`
+  );
+
+  // Each of the three bodies must read _esc_* from exactly ONE explicit source,
+  // and that source must be the node the body's own envelope already reads.
+  const SOURCES = {
+    '03 - Manual Callback Log.json': {
+      'Callback Customer Email': 'Resolve Config & Normalize Callback',
+      'Owner Callback Notification': 'Check Duplicate'
+    },
+    '04 - Status Update.json': {
+      'Owner Status Notification': 'Prepare Updated Lead'
+    }
+  };
+
+  for (const [file, expected] of Object.entries(SOURCES)) {
+    const wf = JSON.parse(fs.readFileSync(root + file, 'utf8'));
+    for (const [nodeName, source] of Object.entries(expected)) {
+      const node = wf.nodes.find((n) => n.name === nodeName);
+      const p = node.parameters;
+      const reads = new Set(
+        [...p.html.matchAll(/\$\('([^']+)'\)\.first\(\)\.json\._esc_/g)].map((m) => m[1])
+      );
+      assert.deepEqual(
+        [...reads],
+        [source],
+        `${file} :: ${nodeName}: every _esc_* read must come from $('${source}') and nothing else`
+      );
+
+      const envelope = [p.fromEmail, p.toEmail, p.subject].join(' ');
+      const envelopeSources = new Set(
+        [...envelope.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1])
+      );
+      assert.deepEqual(
+        [...envelopeSources],
+        [source],
+        `${file} :: ${nodeName}: the envelope and the body must read the same source node`
+      );
+    }
   }
 });
