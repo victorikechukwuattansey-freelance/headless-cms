@@ -1,14 +1,17 @@
 # Lead Recovery Engine — Execution Findings (Pilots 1–3)
 
 **Date:** 2026-09-27
-**Updated:** 2026-10-01 — F17 is **RESOLVED** by `a06e1ae` and F15 is **RESOLVED** by `fd75d62`;
-only the new F18 remains open. `af302e8`'s subject claimed to mark F15 resolved, but its body never
-landed that change, so the record is corrected here.
+**Updated:** 2026-10-04 — F6 is **RESOLVED** by `f5cb164` and F19 is **RESOLVED** by `3a1abbd`;
+F20 is newly open. Both were the same defect as F1, found one workflow at a time rather than as a
+class. The scan that class implies is now recorded under "Test methodology", and F20 is its current
+output.
 Retained history: reconciled against committed production at `5c1a854`, where F11, F12, F13 and F14
 were resolved and F15, F16 and F17 were open. F16 and F17 were added from
 `measurement/EVIDENCE_MATRIX.md` (`c0f8e5b`, a docs-only commit); production JSON is unchanged at
 `5c1a854`. Later the same day, F8 was reconciled against that matrix: the general
-`measurement_events` question is **closed**, and F8's residual production behaviour stays open.
+`measurement_events` question is **closed**, and F8's residual production behaviour stays open. On
+2026-10-01 `af302e8`'s subject claimed to mark F15 resolved but its body never landed that change, so
+the record was corrected in that pass; the code fix itself landed at `fd75d62`.
 **Scope:** `workflows/lead-recovery-engine/01–07` (committed JSON at `5c1a854`)
 **Method:** observational harness (`measurement/`) executes the real workflow JSON —
 real Code-node `jsCode` via `new Function`, an n8n expression evaluator
@@ -27,7 +30,6 @@ copied verbatim from the live tab contracts.
 | F2 | open | out of scope |
 | F3 | open | out of scope |
 | F4 | open | out of scope; still needs one live confirmation |
-| F6 | open | **partly self-resolved** — see F1 note below |
 | F7 | open | out of scope |
 | F8 | **partly closed 2026-09-28** | Split into two questions. **(1) The general `measurement_events` event store is CLOSED — not required for the pilot**, per `measurement/EVIDENCE_MATRIX.md` (`c0f8e5b`): three of the four evidence gaps are better served by writing to tables that already exist, and the fourth is small and single-purpose. **(2) The underlying production behaviour — rejected and duplicate requests writing no rows — remains OPEN** in its own right and is no longer blocked on that decision. F10 improved the *email-failure* slice only. |
 | **F11** | **RESOLVED 2026-09-28** | `error_message` is now sanitised in both email-error builders. Covered by 6 tests. Its two residuals were closed as F13 and F14 in `5c1a854`; the quoted-JSON case became F15. |
@@ -37,7 +39,10 @@ copied verbatim from the live tab contracts.
 | **F15** | **RESOLVED 2026-09-30** | Quoted and escaped secret forms are now redacted across all sanitizer consumers. Commit `fd75d62`. The text previously recorded here ("still not redacted, deliberately excluded from `5c1a854`") described the state *before* `fd75d62` and was never updated. |
 | **F16** | **RESOLVED 2026-09-30** | WF05's follow-up failure path now records the failure, counts it in a new `followup_fail_count` field, and retires the lead as `failed` at a ceiling of `Math.max(24, Number(config.max_followups || 3) * 4)`. Commit `0e30562`. One consequence was surfaced rather than fixed, as F18. |
 | **F17** | **RESOLVED 2026-10-01** | WF05 now records its terminal transition in `status_updates`. A shared builder plus append was added, fed by both terminal branches, with the pre-transition status hoisted in the Code nodes that overwrite it. Commit `a06e1ae`. |
+| **F6** | **RESOLVED 2026-10-04** | WF03's `Callback Customer Email` and `Owner Callback Notification` and WF04's `Owner Status Notification` now read their `_esc_*` fields through explicit node references matching each node's own envelope source. Commit `f5cb164`. |
+| **F19** | **RESOLVED 2026-10-04** | WF02's `Owner Booking Notification` body rendered 7 literal `undefined` values plus a silently dropped booking-link paragraph. Same class as F6, same fix: explicit reference to `Prep Lead Booked Update`. Commit `3a1abbd`. |
 | **F18** | **open** | `followup_fail_count` uses total-accumulation, not consecutive-failure semantics; a lead with intermittent failures can be retired despite successful contacts. Classification: semantic edge case introduced by the F16 fix. Severity: not yet assigned. |
+| **F20** | **open** | WF01 (2 email bodies) and WF05 (1 body) still read `$json._esc_*` across their node chains. Safe empirically today, but the same structural shape as F1/F6/F19: a Sheets write inserted between producer and email would silently reintroduce the defect. No test guards them. |
 
 ### F1 side effect on F6
 
@@ -45,6 +50,12 @@ F1's fix restores the transient `_esc_*` fields to the item that `Customer Ackno
 renders from, so **WF01's** body no longer renders `undefined` — as a direct consequence of
 F1, not as an F6 change. F6 remains open for **WF03 and WF04**, whose email bodies are still
 observed full of `undefined` (Journeys C and D).
+
+> The paragraph above is retained as written from the F1/F6 pass. F6 was **RESOLVED 2026-10-04**
+> in `f5cb164`, which rewired WF03 and WF04; WF01's half had already closed as a consequence of F1.
+> WF01's two bodies are now tracked as **F20**, because the F1 consequence depends on
+> `Prepare Email Content`'s position in the chain rather than on anything F6 or F19 changed.
+> See the F6 resolution below.
 
 ### Harness fidelity corrections made during the F1/F5 pass
 
@@ -156,10 +167,12 @@ so the three behavioural tests for F14 run the same logic in WF01 (twice) and WF
 
 ## Status summary
 
-Restates the resolution log above for `a06e1ae`; the log remains the source of truth.
+Restates the resolution log above for `3a1abbd`; the log remains the source of truth.
 
-**Resolved — 11 findings, no further work claimed:** F1, F5, F9, F10, F11, F12, F13, F14, F15, F16,
-F17.
+**Total — 20 findings, F1–F20. Resolved 13, open 7.**
+
+**Resolved — 13 findings, no further work claimed:** F1, F5, F6, F9, F10, F11, F12, F13, F14, F15,
+F16, F17, F19.
 
 **Open — 7 findings, carried forward.** The second column is the reason each one is still open, so a
 deliberately deferred item is not read as an active regression.
@@ -169,10 +182,10 @@ deliberately deferred item is not read as an active regression.
 | F2 | Duplicate branch returns an id that was never persisted | yes — out of scope |
 | F3 | Unknown-lead booking traffic gets no response | yes — out of scope |
 | F4 | Empty `bookings` tab halts the first booking | yes — needs one live confirmation of n8n zero-item semantics |
-| F6 | WF03/WF04 bodies still render `undefined` | partly — WF01 closed as a consequence of F1 |
 | F7 | `Update Lead Response` does not bump `updated_at` | yes — out of scope |
 | F8 | Rejected and duplicate traffic still writes no rows anywhere | **partly** — the `measurement_events` question beneath it is **closed**; the behaviour itself is still unfixed |
 | F18 | `followup_fail_count` accumulates total failures, not a consecutive streak | **no — semantic edge case, and a fix would touch the success path** |
+| F20 | WF01 ×2 and WF05 ×1 email bodies still read `$json._esc_*` across a Sheets write | **no — same shape as F1/F6/F19; safe today, unguarded against a future chain edit** |
 
 **Closed — the sanitize block now has five consumers and one test spans all five.**
 The block is byte-identical everywhere (one hash, `d7ffc93db65e5c0c…`, 1509 chars, 23 lines). The
@@ -197,6 +210,45 @@ open on their own: a **sweep-run record**, and an **ingress record for reject an
 — the latter being the substance of F8's still-open production half. So the closure is "the general
 event store is not needed", not "the pilot needs no new schema". Revisit only if an item 1–4 gap
 appears that genuinely fits no existing tab.
+
+## Test methodology
+
+Not a numbered finding. Two rules that the F6 and F19 passes established empirically, recorded here
+because both cost a wrong turn the first time.
+
+### Guards mask broken reads
+
+Any test that asserts "no `undefined` in output" is defeated by any template guard that suppresses a
+field on failure. Two independent instances have been confirmed empirically:
+
+- **F6 mutation (c):** customer template `Hi ${$json._esc_name || 'there'}` renders `Hi there` when
+  the read is broken — no `undefined` appears, the test passes.
+- **F19 mutation (b):** booking template `${$json._esc_booking_link ? '...' : ''}` silently drops the
+  paragraph when the read is broken — no `undefined` appears, the test passes.
+
+The correct test shape is a **present-value assertion**: assert that the fixture's expected value
+*appears* in the body, not merely that `undefined` does not. Where the field is conditionally
+rendered, also assert the condition's positive case — the paragraph **is** present when the fixture
+supplies the value — and its negative case, so a template that always emitted it cannot pass either.
+
+Every F19 test that touches a guarded field uses this shape. Future fixes for the same class (F20 and
+any successor) must as well.
+
+### Recurring-shape scan
+
+F1, F6 and F19 were the same defect shape (`$json._esc_*` read across a Sheets write) discovered
+sequentially rather than as a class. Each was found only because the previous one was being fixed, and
+each fix was a one-line rewiring in a single workflow — which is exactly the shape of change that is
+easy to apply and easy to leave incomplete.
+
+When a fix addresses a defect shape that is **structural** — not one-off — the fix's scope should
+include a scan for the same shape across all workflows. The shape that produced F1/F6/F19 is:
+
+- a Code node producing transient `_esc_*` (or equivalent) fields
+- one or more `googleSheets` writes between that producer and an `emailSend` (or any consumer)
+- the consumer reading `$json._esc_*` rather than an explicit node reference
+
+F20 is the current output of this scan; the shape may exist elsewhere in future workflow edits.
 
 ## Confidence labels
 
@@ -375,7 +427,11 @@ const item = $('Prepare Updated Lead').first().json;
 
 ## F6 — Customer-facing email bodies render `undefined`
 
-**Severity: high · CONFIRMED (WF04) / HARNESS-DEPENDENT (WF01, WF03)**
+**Status: RESOLVED 2026-10-04 (`f5cb164`) · severity: high · CONFIRMED (WF04) / HARNESS-DEPENDENT (WF01, WF03)**
+
+> The table and body below describe the defect **as observed before `f5cb164`**, including the
+> `HARNESS-DEPENDENT` labels for WF01 and WF03. They are retained unchanged as the finding's record.
+> The fix and its verification are in the resolution at the end of this section.
 
 A consistent pattern across the three inbound-capture workflows: the email node's
 `fromEmail` / `toEmail` / `subject` were correctly rewired to explicit node references, but
@@ -409,6 +465,51 @@ fixed.
 
 **Measurement impact:** outbound contact either does not happen (WF01) or reaches the customer
 with literal `undefined` in the body (WF03, WF04).
+
+### Resolution — F6 (2026-10-04, commit `f5cb164`)
+
+**Root cause.** Identical in shape to F1, in the same three email nodes. Each body read transient
+`_esc_*` fields off `$json`, but one or more Google Sheets writes sit between the Code node that
+produced them and the `emailSend`, and a Sheets write emits the **stored row** — on which no `_esc_*`
+column exists. The fields were never persisted, so `$json` at render time carried none of them. The
+envelope fields (`fromEmail`, `toEmail`, `subject`) had already been rewired to explicit node
+references, which is what made the bodies the only remaining `$json` reader and gave the defect its
+partial-fix signature.
+
+**Scope.** Three email bodies:
+
+| Workflow | Node | Body now reads from |
+| --- | --- | --- |
+| `03 - Manual Callback Log.json` | `Callback Customer Email` | `$('Resolve Config & Normalize Callback')` |
+| `03 - Manual Callback Log.json` | `Owner Callback Notification` | `$('Check Duplicate')` |
+| `04 - Status Update.json` | `Owner Status Notification` | `$('Prepare Updated Lead')` |
+
+Each body now reads from **the same node its own envelope already used**, so no email node mixes two
+source nodes for one send. WF01 was not part of this commit: its half had already closed as a
+consequence of F1, and what remains there is tracked as F20.
+
+**Fix.** Explicit node references in place of `$json._esc_*`, matching each node's existing envelope
+source. No Code node, IF gate, column mapping or append mapping was touched.
+
+**Test integrity.** The five added tests were verified additively at byte level against `HEAD`: a
+reconstruction that strips only the appended block was **byte-identical** to the committed blob —
+**2330 committed lines preserved byte-identical, 260 additions, 0 deletions, trailing newline
+preserved**. The check ran against `git cat-file blob`, not `git show > file`, which produced a
+corrupt UTF-16/CRLF file on an earlier attempt.
+
+**Non-vacuity.** Mutation **(c)**, renaming the producer field at its production site, and mutation
+**(e)**, removing escaping at its production site, both fire on the strengthened assertions.
+
+Mutation (c) is what exposed a **masked-fallback defect in the original test design**: the customer
+template read `Hi ${$json._esc_name || 'there'}`, so a broken read rendered `Hi there` and the
+absence-of-undefined assertion passed. The test was rewritten to a present-value assertion. This is
+recorded as the first of two independent instances of the guard pattern now written up under "Test
+methodology"; F19 mutation (b) is the second.
+
+**Candidate found during this task, fixed separately.** Probing WF02 for the same shape surfaced the
+`Owner Booking Notification` body as a further instance — it also read eight `$json._esc_*` fields
+across two Sheets writes. That was reported as a candidate **F19** during the F6 pass rather than
+folded into this commit, and was fixed on its own in `3a1abbd`. See the F19 section.
 
 ---
 
@@ -1102,6 +1203,93 @@ prerequisite. The F16 `followup_fail_count` header prerequisite remains the one 
 
 ---
 
+## F19 — WF02 owner booking email body rendered `undefined` and dropped the booking link
+
+**Status: RESOLVED 2026-10-04 (`3a1abbd`) · CONFIRMED · severity: high (not separately triaged)**
+
+Surfaced while probing for F6's residual instances and reported as a candidate during the F6 pass.
+It is F6's defect in WF02, and it was fixed separately so neither commit's scope covered the other's
+workflow.
+
+**Root cause.** Same shape as F1 and F6. `Owner Booking Notification` reads **eight** `$json._esc_*`
+fields off `$json`. The chain in `02 - Booking Status.json`:
+
+```
+Resolve Lead & Booking [code]        <- esc() lives here; produces all eight _esc_*
+  → Lead Found? [if]
+  → Booking Already Recorded? [if]
+  → Prep Booking Row [code]
+  → Append Booking        [googleSheets]   <- row written; no _esc_* column exists
+  → Prep Lead Booked Update [code]         <- re-exports all eight _esc_* from the Code node above
+  → Update Lead Booked    [googleSheets]   <- row written; no _esc_* column exists
+  → Append Status Update  [googleSheets]   <- last write before the email; persists no _esc_*
+  → Owner Email Present? [if]
+  → Owner Booking Notification [emailSend]
+```
+
+Three Sheets writes carry the item between the producer and the email. The two that matter are
+`Update Lead Booked` and `Append Status Update` — `Append Status Update` is the **last** write before
+the send, and neither persists an `_esc_*` column. `Prep Lead Booked Update` is therefore the last
+node that still holds all eight fields, and it is the only correct read source.
+
+The defect is subtle in production code because `Prep Lead Booked Update` *looks* adjacent to the
+email. It is separated from it by two writes, and reading `$json` reaches the wrong one.
+
+**Severity note:** eight fields, one of them a customer-facing booking link, on an owner address.
+Not separately triaged — closed as a known active customer-facing rendering defect without a
+re-rating pass.
+
+**Measurement impact:** the owner was sent a confirmation email whose body was seven literal
+`undefined` values, with the booking link silently missing. Any "booking confirmation delivered" or
+"owner notified of booking" metric computed from the send succeeding would have read as delivered.
+
+### Resolution — F19 (2026-10-04, commit `3a1abbd`)
+
+**Fix.** All eight reads moved to `$('Prep Lead Booked Update').first().json.<same>`, matching the
+source the node's own envelope (`fromEmail`, `toEmail`, `subject`) already used. One node, one
+source, no mixing. Zero `$json._esc_*` remain in any WF02 `emailSend` field.
+
+**Verified.** The body now renders the business name, lead id, booking id, name, phone, service,
+`booking_at`, and the booking-link paragraph. Byte-level: the `html` expression grew 614 → 974 chars
+across a single changed line; WF02's node count (22) and connection count (17) did not move, and no
+field other than that one `html` was touched.
+
+**Zero prior test coverage on WF02.** Neither the suite nor any journey executed this body. The
+fixture store has no `bookings` rows, and an empty read halts the branch before the email — so a run
+that never reached the send would have looked like a passing test. That gap is recorded here as the
+context for why WF02 tests were added, and why the new tests seed a `bookings` row first. The
+practical consequence is the finding's severity: seven `undefined` values reached a customer-facing
+owner address and no test in the repository noticed, across the F1, F6, F17 and F18 passes.
+
+**Non-vacuity.** All five mutations fired, each on its intended assertion:
+
+| | Break | Assertion that fired |
+| --- | --- | --- |
+| a | business-name read reverted to `$json._esc_*` | present-value |
+| b | booking-link reads reverted to `$json._esc_*` | **booking-link presence** |
+| c | `_esc_business_name` renamed at its production site | present-value |
+| d | `esc()` disabled at its production site | **XSS escaping** |
+| e | reads pointed at `Append Booking` instead of `Prep Lead Booked Update` | present-value |
+
+Two results are worth recording beyond the pass/fail:
+
+- **Mutation (b) is the second independent confirmation of the guard pattern.** Reverting
+  `_esc_booking_link` to `$json._esc_*` leaves the **no-undefined test passing** while the workflow is
+  broken: the truthiness guard `${... ? '<p>Booking link: …</p>' : ''}` silently suppresses the
+  paragraph instead of emitting `undefined`. This is why the booking-link test asserts the paragraph is
+  **present** — and why it also asserts the negative case, that clearing the link removes it. An
+  absence-of-undefined assertion alone cannot see this defect at all. Written up under "Test
+  methodology".
+- **Mutation (c) fires on the present-value assertion directly, with no fallback masking it.** Unlike
+  WF03's customer template, WF02's has no `|| 'default'` anywhere, so a renamed producer renders a
+  literal `undefined` and both the no-undefined and present-value assertions fail. This is the
+  structural difference that made F6's masked fallback invisible and WF02's equivalent failure loud.
+
+**Suite state.** 87/87 tests pass (82 before, +5 new), 9/9 journeys pass with no literal `undefined`
+in any output, and the smoke run exits 0.
+
+---
+
 ## F18 — `followup_fail_count` is a total, not a consecutive-failure streak
 
 **Status: OPEN · CONFIRMED · classification: semantic edge case introduced by the F16 fix · severity not yet assigned**
@@ -1152,24 +1340,36 @@ That fix is small but belongs on the success path and needs its own regression p
 
 ## Fix order
 
-F1, F5, F9, F10, F11, F12, F13, F14, F15, F16 and F17 are done. Revised order for what remains:
+F1, F5, F6, F9, F10, F11, F12, F13, F14, F15, F16, F17 and F19 are done. Revised order for what
+remains:
 
 | # | Finding | Why |
 | --- | --- | --- |
-| 1 | **F6** | WF03 and WF04 bodies still render `undefined` at customers and owners. WF01's half closed as a consequence of F1, so this is the only live customer-facing rendering defect. |
-| 2 | F3 | Silent webhook hangs on unknown-lead booking traffic. |
-| 3 | F2 | Dangling `lead_id` handed to API callers. |
+| 1 | **F20** | WF01 ×2 and WF05 ×1 email bodies still read `$json._esc_*` across a Sheets write. Safe empirically today, but it is F1/F6/F19's shape with no test guarding it, so any future chain edit silently reintroduces a customer-facing `undefined` body. Cheap now that the fix pattern and its test shape are both established. |
+| 2 | F2 | Dangling `lead_id` handed to API callers. |
+| 3 | F7 | Cosmetic staleness signal. |
 | 4 | F8 | Rejected/duplicate traffic still writes no rows. No longer blocked on `measurement_events` — that question is closed; needs a small ingress record instead. |
-| 5 | F4 | Confirm n8n zero-item semantics live; fix only if the halt is real. |
-| 6 | F7 | Cosmetic staleness signal. |
+| 5 | **F3** | Silent webhook hangs on unknown-lead booking traffic. |
+| 6 | **F4** | Confirm n8n zero-item semantics live; fix only if the halt is real. |
 | — | **F18** | **Deferred.** A fix requires touching `Update Lead Follow-up State` — the success path — which F16 was explicitly scoped to leave alone. Semantics are total, not a consecutive streak; see the F18 section for why the resulting retirement is still defensible. |
 
-**On F6 now ranking first.** F17 held this slot on the strength of being an active audit-trail defect
-sharing F16's surface, and F15 outranked it as the only open finding with a security consequence. Both
-are now closed — F17 as of `a06e1ae`, F15 as of `fd75d62`. Of what remains, F6 is the only one a
-customer can observe, and nothing left carries a security consequence. F18 is deliberately parked
-rather than promoted: it is reachable only at a failure ratio worse than 8:1, and its terminal status
-is `failed` rather than `no_response`, so it does not distort the non-response metric.
+**F3 and F4 are grouped and sequenced together.** Both are the same mechanism — a zero-item read
+halting a branch — in opposite directions: F3 hangs forever, F4 halts the first booking. **Both are
+blocked on live-environment confirmation and cannot be closed from harness evidence alone.** Their
+shared premise is that n8n does not run downstream nodes when a node emits zero items
+(`emptyOutputHaltsBranch: true`), which the harness models as an explicit switch precisely so both
+worlds can be observable offline. Until one live call settles that premise, fixing either one risks
+"fixing" behaviour n8n does not have. F4 is listed second of the two because a confirmed halt there
+is the more expensive of the two: it makes the booking step a silent no-op, which F3's hang does not.
+
+**On F20 now ranking first.** F6 held this slot as the only live customer-visible defect, and it is
+now closed — `f5cb164` for WF03 and WF04, `3a1abbd` for WF02's F19. No open finding carries a security
+consequence. F20 outranks the rest because it is the same class as the three findings just closed,
+observed and left unfixed: unlike F2, F3, F7 and F8 it needs no new schema and no live-environment
+confirmation, and the fix pattern plus the test shape that makes the fix provably non-vacuous are both
+established. Leaving it open means the engine still contains a defect class that has now silently
+reached customers three times, unguarded. F18 stays parked rather than promoted, for the reasons in
+its own section.
 
 ## Before the measurement layer is built
 
@@ -1217,9 +1417,10 @@ log for the pilot, which closes the question this document previously left attac
 did not authorise one. What remains open is scoped and small: the **sweep-run record** and the
 **ingress record** above.
 
-Recommended next step: fix F6 — the last customer-visible defect — then the matrix's item 1, route the
-remaining WF02–WF04 email error outputs to the existing `errors` tab, since it closes the most gaps at
-once against a baseline that is finally trustworthy. **F15 and F17 are both closed** (`fd75d62` and
-`a06e1ae`), leaving F18 as the only open item on the follow-up lifecycle, deferred because a fix would
-touch the success path. **Deploy F16 only after adding `followup_fail_count` to the live `leads` header** — see the deployment
-prerequisite in the F16 section.
+Recommended next step: fix **F20** — close the last three unguarded instances of the F1/F6/F19 defect
+shape, now that the fix and its non-vacuous test shape are both established — then the matrix's item
+1, route the remaining WF02–WF04 email error outputs to the existing `errors` tab, since it closes the
+most gaps at once against a baseline that is finally trustworthy. **F15 and F17 are both closed**
+(`fd75d62` and `a06e1ae`), leaving F18 as the only open item on the follow-up lifecycle, deferred
+because a fix would touch the success path. **Deploy F16 only after adding `followup_fail_count` to
+the live `leads` header** — see the deployment prerequisite in the F16 section.
