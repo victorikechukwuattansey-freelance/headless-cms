@@ -2587,3 +2587,229 @@ test('F6: WF03 and WF04 no longer read _esc_* off $json in any emailSend body', 
     }
   }
 });
+
+/* ------------------------------------------------------------------ *
+ * F19 - WF02 owner booking email body rendered seven literal `undefined`
+ *
+ * Same defect class as F6. `Owner Booking Notification` read all eight
+ * `_esc_*` fields off `$json`, but two Google Sheets writes sit between
+ * the producer and the email:
+ *
+ *   Resolve Lead & Booking [code]      <- esc() lives here
+ *     -> Prep Booking Row [code]
+ *     -> Append Booking      [googleSheets]
+ *     -> Prep Lead Booked Update [code] <- re-exports the eight _esc_* fields
+ *     -> Update Lead Booked  [googleSheets]
+ *     -> Append Status Update[googleSheets]
+ *     -> Owner Email Present?[if]
+ *     -> Owner Booking Notification [emailSend]
+ *
+ * A Sheets write returns the stored row, and neither write persists an
+ * `_esc_*` column, so every `${$json._esc_*}` resolved to `undefined`.
+ * The body now reads them through `$('Prep Lead Booked Update')`, which is
+ * the same node the envelope already used for fromEmail/toEmail/subject.
+ *
+ * Two traps this block is written against:
+ *
+ *   1. `_esc_booking_link` sits behind a truthiness guard. A broken read
+ *      does not emit `undefined` - it silently DROPS the booking-link
+ *      paragraph. A "no undefined" assertion passes straight through that
+ *      bug, so test 3 asserts the paragraph is PRESENT when a link exists,
+ *      and proves the guard still works by removing the link and asserting
+ *      the paragraph goes away.
+ *   2. This template has NO `|| 'default'` fallbacks anywhere, so unlike
+ *      F6 a renamed producer fires the assertion directly rather than
+ *      being masked.
+ *
+ * WF02 was previously rendered by neither the suite nor any journey, which
+ * is how seven `undefined` values reached a customer-facing owner address
+ * unnoticed.
+ * ------------------------------------------------------------------ */
+
+function runBooking(store, body, at = T0) {
+  return withClock(at, () => {
+    const eng = new Engine(
+      WF.booking(),
+      engineOptions(store, { now: () => new Date(at).getTime() })
+    );
+    eng.runAll(webhookInput(body));
+    return eng;
+  });
+}
+
+/**
+ * WF02 reads the bookings tab before it can resolve anything. The fixture
+ * store has no bookings rows, and an empty read halts the branch, so a run
+ * that never reaches the email would look like a passing test. Seed one.
+ */
+function seedPreviousBooking(store, lead) {
+  store.append('bookings', {
+    booking_id: 'bk_seed_previous',
+    lead_id: lead.lead_id,
+    business_id: lead.business_id,
+    created_at: '2026-08-25T12:00:00.000Z',
+    booking_at: '2026-08-26T14:00:00.000Z',
+    source: 'seed',
+    status: 'booked'
+  });
+}
+
+/** The notification WF02 sends for `lead`, with a deterministic booking id/time. */
+function bookingNotification(store, overrides = {}) {
+  const lead = store.rows('leads')[0];
+  seedPreviousBooking(store, lead);
+  const eng = runBooking(store, {
+    business_id: lead.business_id,
+    lead_id: lead.lead_id,
+    booking_id: 'bk_f19_new',
+    booking_at: '2026-09-01T11:30:00.000Z',
+    updated_by: 'front_desk',
+    ...overrides
+  });
+  const mail = eng.outbox.filter((e) => e.node === 'Owner Booking Notification');
+  assert.equal(mail.length, 1, 'expected exactly one Owner Booking Notification');
+  return mail[0];
+}
+
+test('F19: the WF02 owner booking email body is fully rendered, with no undefined', () => {
+  const store = newStore();
+  const mail = bookingNotification(store);
+
+  assert.equal(mail.to, 'owner@lonestarhvac.example.com');
+  assert.equal(mail.from, 'no-reply@lonestarhvac.example.com');
+  assert.equal(mail.sent, true);
+  assert.equal(
+    mail.body.includes('undefined'),
+    false,
+    `WF02 owner booking body must not contain literal undefined:\n${mail.body}`
+  );
+  assert.match(mail.subject, /^Booking confirmed .* Lone Star HVAC & Cooling .* Lead lead_/, 'the envelope renders');
+});
+
+test('F19: the WF02 owner booking email body carries the real values, not just the absence of undefined', () => {
+  // The F6 (c) lesson: an absence-of-undefined assertion can be satisfied by a
+  // fallback. These eight are the fixture's own values, read straight from the
+  // source node. WF02's template has no `|| 'default'`, so a renamed or missing
+  // producer renders `undefined` and fails here.
+  const store = newStore();
+  const mail = bookingNotification(store);
+
+  assert.match(mail.body, /<p><b>Lone Star HVAC &amp; Cooling<\/b><\/p>/, 'business name from the source node');
+  assert.match(mail.body, /<td>lead_1755693000001_a1b2c3d4<\/td>/, 'lead id from the source node');
+  assert.match(mail.body, /<td>bk_f19_new<\/td>/, 'booking id from the source node');
+  assert.match(mail.body, /<td>Maria Gonzalez<\/td>/, 'lead name from the source node');
+  assert.match(mail.body, /<td>\(512\) 555-0187<\/td>/, 'phone from the source node');
+  assert.match(mail.body, /<td>ac_repair<\/td>/, 'service from the source node');
+  assert.match(mail.body, /<td>2026-09-01T11:30:00\.000Z<\/td>/, 'booked at from the source node');
+});
+
+test('F19: the WF02 booking-link paragraph is present when the fixture provides a booking link', () => {
+  // `_esc_booking_link` is behind a truthiness guard, so a broken read drops
+  // this paragraph silently. Assert it is PRESENT - the href AND the label -
+  // which an absence-of-undefined check could never catch.
+  const store = newStore();
+  const link = store.rows('leads')[0].booking_link;
+  assert.ok(link, 'the fixture lead must carry a booking link for this test to mean anything');
+
+  const mail = bookingNotification(store);
+  assert.match(
+    mail.body,
+    new RegExp(
+      `<p>Booking link: <a href="${link.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}">${link.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</a></p>`
+    ),
+    `the booking-link paragraph must be rendered when a link exists:\n${mail.body}`
+  );
+
+  // And the guard must still be a guard: with no link the paragraph goes away.
+  // Without this half, a template that always emitted the paragraph would pass.
+  const noLink = newStore();
+  const lead = noLink.rows('leads')[0];
+  noLink.update('leads', 'lead_id', lead.lead_id, { booking_link: '' });
+  const without = bookingNotification(noLink);
+  assert.equal(
+    /Booking link:/.test(without.body),
+    false,
+    'with no booking link the paragraph must be omitted, so the assertion above is discriminating'
+  );
+  assert.equal(without.body.includes('undefined'), false, 'and the rest of the body still renders');
+});
+
+test('F19: the WF02 owner booking email body still escapes HTML after the explicit-read fix', () => {
+  const XSS = '<script>alert("x")</script>';
+  const store = newStore();
+  const lead = store.rows('leads')[0];
+  seedPreviousBooking(store, lead);
+  store.update('leads', 'lead_id', lead.lead_id, { name: XSS, service: XSS, booking_link: XSS });
+
+  const eng = runBooking(store, {
+    business_id: lead.business_id,
+    lead_id: lead.lead_id,
+    booking_id: 'bk_f19_xss',
+    booking_at: '2026-09-01T11:30:00.000Z'
+  });
+  const mail = eng.outbox.filter((e) => e.node === 'Owner Booking Notification');
+  assert.equal(mail.length, 1, 'expected the WF02 owner booking notification');
+
+  assert.equal(
+    mail[0].body.includes('<script>'),
+    false,
+    `WF02 owner booking body: raw <script> reached the body - the source is not escaping:\n${mail[0].body}`
+  );
+  // name, service and booking_link all carry the payload, so all three cells
+  // must show it escaped.
+  const escaped = /&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/;
+  assert.equal(
+    (mail[0].body.match(new RegExp(escaped.source, 'g')) || []).length,
+    4,
+    `name, service and both booking-link positions must show the escaped payload:\n${mail[0].body}`
+  );
+});
+
+test('F19: WF02 does not read _esc_* off $json in any emailSend body', async () => {
+  const fs = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const raw = fs.readFileSync(root + '02 - Booking Status.json', 'utf8');
+  const wf = JSON.parse(raw);
+
+  const offenders = [];
+  for (const node of wf.nodes) {
+    if (node.type !== 'n8n-nodes-base.emailSend') continue;
+    const p = node.parameters || {};
+    for (const field of ['html', 'subject', 'toEmail', 'fromEmail']) {
+      const expr = p[field];
+      if (typeof expr === 'string' && expr.includes('$json._esc_')) {
+        offenders.push(`WF02 :: ${node.name} :: ${field}`);
+      }
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `WF02 emailSend fields still reading $json._esc_* (the two Sheets writes replace $json, so these render undefined):\n  ${offenders.join('\n  ')}`
+  );
+
+  // One node, one source, and it must be the node the envelope already reads.
+  const node = wf.nodes.find((n) => n.name === 'Owner Booking Notification');
+  const p = node.parameters;
+  const SOURCE = 'Prep Lead Booked Update';
+
+  const bodySources = new Set([...p.html.matchAll(/\$\('([^']+)'\)\.first\(\)\.json\._esc_/g)].map((m) => m[1]));
+  assert.deepEqual([...bodySources], [SOURCE], 'every _esc_* read must name the same single source node');
+
+  assert.equal(
+    (p.html.match(new RegExp(`\\$\\('${SOURCE}'\\)\\.first\\(\\)\\.json\\._esc_`, 'g')) || []).length,
+    10,
+    'all eight fields, with _esc_booking_link read three times, must use the explicit source'
+  );
+  assert.equal(
+    /\$json\._esc_/.test(p.html),
+    false,
+    'no $json._esc_* may survive anywhere in the body'
+  );
+
+  const envelopeSources = new Set(
+    [...[p.fromEmail, p.toEmail, p.subject].join(' ').matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1])
+  );
+  assert.deepEqual([...envelopeSources], [SOURCE], 'the envelope and the body must read the same source node');
+});
