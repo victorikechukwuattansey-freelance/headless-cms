@@ -2813,3 +2813,648 @@ test('F19: WF02 does not read _esc_* off $json in any emailSend body', async () 
   );
   assert.deepEqual([...envelopeSources], [SOURCE], 'the envelope and the body must read the same source node');
 });
+
+/* ------------------------------------------------------------------ *
+ * F20 - WF01 and WF05 email bodies read _esc_* off $json
+ *
+ * Same defect class as F6 and F19. `_esc_*` is a TRANSIENT field: it is
+ * computed in a code node and is never a `leads` column, so a Google Sheets
+ * write - which returns the stored row - silently drops it. In WF01 two
+ * writes sit between the producer and the emails (`Append Lead`,
+ * `Update Lead Next Follow-up`) and in WF05 none do today, but both bodies
+ * read `$json._esc_*`, so the same latent break applies to both.
+ *
+ * WF01 shipped the values only because `Prepare Email Content` re-exports
+ * the `_esc_*` block after the last write. That is an accident of ordering,
+ * not a guarantee: a write inserted after the relay, or a future reordering
+ * of the graph, reintroduces the break with no test failing.
+ *
+ * WHY THE TWO WORKFLOWS GET DIFFERENT TREATMENT
+ *
+ *   WF01 - ONE item reaches each emailSend, so the body can read `_esc_*`
+ *   from an explicit upstream source. Both bodies now read
+ *   $('Resolve Config & Normalize Lead').first().json.<field>.
+ *
+ *   WF05 - the email node iterates over EVERY candidate in one execution.
+ *   `$('Select Follow-up Candidates').first()` would bind all follow-ups to
+ *   candidate #1, so every recipient would receive candidate #1's data. That
+ *   is strictly worse than the latent defect, so WF05 KEEPS `$json._esc_*`
+ *   and is protected by a topology guard plus a per-recipient regression lock
+ *   instead. See the F20 block at the end of this file.
+ *
+ * Only TRANSIENT reads are converted. `_esc_*` fields are transient;
+ * `service`, `booking_link`, `score` and `source_id` are `leads` columns and
+ * survive a Sheets write by definition, so moving them would change semantics
+ * for no benefit. The envelope (fromEmail/toEmail/subject/replyTo) is left on
+ * `$json` exactly as F1 left it, because F1's fix is the relay that feeds it.
+ *
+ * `_esc_*` in WF01 was previously covered by ONE present-value assertion
+ * (`_esc_business_name`, incidentally, via the F9 tenant tests). The other
+ * eleven fields were untested, and three of them sit behind fallbacks that
+ * make a broken read INVISIBLE to an absence-of-undefined check:
+ *
+ *   _esc_name          -> `|| 'there'`  renders "Hi there,"
+ *   _esc_message       -> `|| '-'`      renders a bare em dash
+ *   _esc_booking_link  -> ternary on $json.booking_link, DROPS the paragraph
+ *
+ * Every F20 body assertion below is therefore a PRESENT-VALUE assertion.
+ * ------------------------------------------------------------------ */
+
+/** The `_esc_*` producer in WF01, and the source both WF01 bodies now read. */
+const F20_WF01_SOURCE = 'Resolve Config & Normalize Lead';
+
+/** The `_esc_*` producer in WF05, whose output the sweeper iterates over. */
+const F20_WF05_SOURCE = 'Select Follow-up Candidates';
+
+/** The `leads` columns the WF01/WF05 bodies read; a Sheets write preserves these. */
+const F20_PERSISTED_COLUMNS = ['service', 'booking_link', 'score', 'source_id'];
+
+/** Async read of a workflow JSON at the repository root of this project. */
+async function f20Workflow(file) {
+  const fs = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  return JSON.parse(fs.readFileSync(fileURLToPath(new URL(file, new URL('../../', import.meta.url))), 'utf8'));
+}
+
+/** Every emailSend node in a workflow. */
+const f20EmailNodes = (wf) => wf.nodes.filter((n) => n.type === 'n8n-nodes-base.emailSend');
+
+/** Node names in the order the engine actually executed them. */
+const f20Trace = (eng) => eng.trace.map((t) => t.node);
+
+/**
+ * Every path of main edges from `from` to `to`, exclusive of the endpoints.
+ *
+ * All main output indices are followed, not just main[0]: n8n does not put the
+ * success branch on main[0] for every node type (an IF node puts true/false on
+ * 0/1), so a main[0]-only walk dead-ends at the first gate. Error branches that
+ * leave the email node are downstream of the email, so they never appear in the
+ * relay -> email window. Returns an array of node-name arrays.
+ */
+function f20PathsBetween(wf, from, to, maxDepth = 12) {
+  const known = new Set(wf.nodes.map((n) => n.name));
+  const out = (n) =>
+    (wf.connections[n] && wf.connections[n].main ? wf.connections[n].main.flat() : [])
+      .filter((c) => known.has(c.node));
+  const found = [];
+  const walk = (node, path, seen) => {
+    if (node === to) { found.push(path.slice()); return; }
+    if (path.length >= maxDepth) return;
+    for (const c of out(node)) {
+      if (seen.has(c.node)) continue;
+      seen.add(c.node);
+      path.push(c.node);
+      walk(c.node, path, seen);
+      path.pop();
+      seen.delete(c.node);
+    }
+  };
+  walk(from, [], new Set([from]));
+  return found;
+}
+
+/** Intake run for the F20 fixture: one lead, identifiable by `source_id`. */
+function f20Intake(store, over = {}) {
+  return runIntake(store, intakeBody({ source_id: 'f20-fixture', ...over }));
+}
+
+/** The single mail a WF01 node sent, with the count asserted. */
+function f20Mail(eng, node) {
+  const sent = eng.outbox.filter((e) => e.node === node);
+  assert.equal(sent.length, 1, `expected exactly one ${node}`);
+  assert.equal(sent[0].sent, true, `${node} must have been sent`);
+  return sent[0];
+}
+
+test('F20: the WF01 owner email body carries the real values, not just the absence of undefined', () => {
+  const store = newStore();
+  const eng = f20Intake(store);
+  const mail = f20Mail(eng, 'Owner Notification');
+
+  assert.equal(mail.to, 'owner@lonestarhvac.example.com');
+
+  // PRESENT-VALUE assertions come FIRST, deliberately. Each is the fixture's
+  // own value read through $('Resolve Config & Normalize Lead').first().
+  // If the absence-of-undefined check ran first it would be the assertion that
+  // reports a renamed producer, which is the weaker claim.
+  const expected = [
+    [/<h3>New lead — Lone Star HVAC &amp; Cooling<\/h3>/, 'business name'],
+    [/<td>lead_[0-9]+_[a-z0-9]+<\/td>/, 'lead id'],
+    [/<td>Jordan Ellis<\/td>/, 'name'],
+    [/<td>5125550188<\/td>/, 'phone'],
+    [/<td>jordan\.ellis@example\.com<\/td>/, 'email'],
+    [/<td>HVAC<\/td>/, 'service'],
+    [/<td>normal<\/td>/, 'urgency'],
+    [/<td>2026-09-01T09:00:00\.000Z<\/td>/, 'created_at'],
+    [/<td>web_form \(f20-fixture\)<\/td>/, 'source_type and source_id'],
+    [/<p><b>Message:<\/b> No heat since last night, need a quote\.<\/p>/, 'message']
+  ];
+  for (const [re, what] of expected) {
+    assert.match(mail.body, re, `WF01 owner body must carry the real ${what} from the source node:\n${mail.body}`);
+  }
+
+  // The customer body from the same run: `_esc_name` is behind `|| 'there'`,
+  // so the name must be asserted by value or the fallback satisfies the check.
+  const customer = f20Mail(eng, 'Customer Acknowledgment');
+  assert.match(
+    customer.body,
+    /<p>Hi Jordan Ellis,<\/p>/,
+    'WF01 customer body must carry the real name from the source node, not the || "there" fallback'
+  );
+  assert.match(
+    customer.body,
+    /<strong>Lone Star HVAC &amp; Cooling<\/strong>/,
+    'WF01 customer body must carry the escaped business name from the source node'
+  );
+
+  // Weaker claim, asserted last on purpose.
+  assert.equal(
+    mail.body.includes('undefined'),
+    false,
+    `WF01 owner body must not contain literal undefined:\n${mail.body}`
+  );
+});
+
+test('F20: the WF01 owner email body renders every table cell from the lead, not one blanked field', () => {
+  const store = newStore();
+  const mail = f20Mail(f20Intake(store), 'Owner Notification');
+
+  // Enumerate the table row by row and require EVERY value cell to hold its
+  // real value. A single blanked cell must fail, which is precisely what a
+  // field-by-field smoke test cannot see. Each row is `<td><b>Label</b></td>
+  // <td>value</td>`, so the label cell is matched separately and skipped.
+  const rows = [...mail.body.matchAll(/<tr><td><b>([^<]*)<\/b><\/td><td>([\s\S]*?)<\/td><\/tr>/g)];
+  assert.equal(rows.length, 9, `expected nine table rows, found ${rows.length}`);
+
+  const labels = rows.map((m) => m[1]);
+  assert.deepEqual(
+    labels,
+    ['Lead ID', 'Name', 'Phone', 'Email', 'Service', 'Urgency', 'Score', 'Source', 'Time'],
+    'the owner table must keep its nine labelled rows'
+  );
+
+  const cells = rows.map((m) => m[2]);
+  for (const [label, cell] of rows.map((m) => [m[1], m[2]])) {
+    assert.notEqual(cell.trim(), '', `the ${label} cell rendered blank`);
+    assert.doesNotMatch(
+      cell.trim(),
+      /^[—–-]$/,
+      `the ${label} cell rendered a dash placeholder instead of the lead's value`
+    );
+  }
+
+  assert.deepEqual(
+    cells.map((c) => c.trim().replace(/lead_[0-9]+_[a-z0-9]+/, 'lead_<ID>')),
+    [
+      'lead_<ID>',
+      'Jordan Ellis',
+      '5125550188',
+      'jordan.ellis@example.com',
+      'HVAC',
+      'normal',
+      '80/100',
+      'web_form (f20-fixture)',
+      '2026-09-01T09:00:00.000Z'
+    ],
+    'every value cell must carry the real value read from the source node, not a fallback'
+  );
+
+  // `_esc_message` sits behind `|| '—'`, so a broken read renders an em dash
+  // and emits NO `undefined`. Assert the message BY VALUE; this is the
+  // assertion that gives the owner body its teeth.
+  const message = mail.body.match(/<p><b>Message:<\/b>([\s\S]*?)<\/p>/);
+  assert.ok(message, `the Message paragraph must be present:\n${mail.body}`);
+  assert.equal(
+    message[1].trim(),
+    'No heat since last night, need a quote.',
+    'the Message cell must carry the real message, not the || "—" fallback'
+  );
+});
+
+test('F20: the WF01 owner booking-link paragraph is present when the fixture provides a booking link', () => {
+  const store = newStore();
+  const eng = f20Intake(store);
+  const mail = f20Mail(eng, 'Owner Notification');
+
+  const link = store.rows('leads').find((r) => r.source_id === 'f20-fixture').booking_link;
+  assert.ok(link, 'the fixture lead must carry a booking link for this test to mean anything');
+
+  const quoted = link.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  assert.match(
+    mail.body,
+    new RegExp(`<p>Booking link: <a href="${quoted}">${quoted}</a></p>`),
+    `the booking-link paragraph (href AND label) must be rendered when a link exists:\n${mail.body}`
+  );
+
+  // Prove the assertion discriminates: `_esc_booking_link` is behind a
+  // truthiness guard, so with no link the paragraph must disappear rather than
+  // render `undefined`.
+  const noLink = newStore();
+  const noLinkMail = f20Mail(
+    f20Intake(noLink, { business_id: 'biz_hillcountry_plumbing' }),
+    'Owner Notification'
+  );
+  assert.equal(
+    /Booking link:/.test(noLinkMail.body),
+    false,
+    'with no booking link the paragraph must be omitted, so the assertion above is discriminating'
+  );
+  assert.equal(
+    noLinkMail.body.includes('undefined'),
+    false,
+    'and the rest of the body still renders'
+  );
+  assert.match(noLinkMail.body, /<td>Derek Shaw<\/td>|<td>Jordan Ellis<\/td>/, 'the guarded run still renders its cells');
+});
+
+test('F20: WF01 does not read _esc_* off $json in any emailSend body', async () => {
+  const wf = await f20Workflow('01 - Lead Intake.json');
+  const offenders = [];
+
+  for (const node of f20EmailNodes(wf)) {
+    const p = node.parameters || {};
+    for (const field of ['html', 'subject', 'toEmail', 'fromEmail']) {
+      const expr = p[field];
+      if (typeof expr === 'string' && expr.includes('$json._esc_')) {
+        offenders.push(`WF01 :: ${node.name} :: ${field}`);
+      }
+    }
+    const replyTo = p.options && p.options.replyTo;
+    if (typeof replyTo === 'string' && replyTo.includes('$json._esc_')) {
+      offenders.push(`WF01 :: ${node.name} :: options.replyTo`);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `WF01 emailSend fields still reading $json._esc_* (the two Sheets writes replace $json, so these render undefined):\n  ${offenders.join('\n  ')}`
+  );
+
+  const EXPECTED_REFS = { 'Customer Acknowledgment': 5, 'Owner Notification': 13 };
+
+  for (const node of f20EmailNodes(wf)) {
+    const html = node.parameters.html;
+
+    // Every _esc_* read must name exactly ONE source: the producer.
+    const sources = new Set(
+      [...html.matchAll(/\$\('([^']+)'\)\.first\(\)\.json\._esc_\w+/g)].map((m) => m[1])
+    );
+    assert.deepEqual(
+      [...sources],
+      [F20_WF01_SOURCE],
+      `WF01 :: ${node.name}: every _esc_* read must come from $('${F20_WF01_SOURCE}') and nothing else`
+    );
+    assert.equal(
+      (html.match(new RegExp(`\\$\\('${F20_WF01_SOURCE}'\\)\\.first\\(\\)\\.json\\._esc_`, 'g')) || []).length,
+      EXPECTED_REFS[node.name],
+      `WF01 :: ${node.name}: every _esc_* read must use the explicit source (expected ${EXPECTED_REFS[node.name]})`
+    );
+    assert.equal(
+      /\$json\._esc_/.test(html),
+      false,
+      `WF01 :: ${node.name}: no $json._esc_* may survive anywhere in the body`
+    );
+
+    // ONLY transient fields were converted. A persisted `leads` column read
+    // through the explicit source would be a semantic change, not a fix.
+    assert.equal(
+      new RegExp(`\\$\\('${F20_WF01_SOURCE}'\\)\\.first\\(\\)\\.json\\.(?!_esc_)`).test(html),
+      false,
+      `WF01 :: ${node.name}: only transient _esc_* fields may use the explicit source; persisted columns must stay on $json`
+    );
+
+    // The envelope is deliberately untouched: F1 fixed the relay that feeds it.
+    const p = node.parameters;
+    const envelope = [p.fromEmail, p.toEmail, p.subject, p.options && p.options.replyTo]
+      .filter((v) => typeof v === 'string')
+      .join(' ');
+    assert.equal(
+      /\$\('[^']+'\)/.test(envelope),
+      false,
+      `WF01 :: ${node.name}: the envelope must keep reading $json (F1 owns the relay, F20 owns the body)`
+    );
+    assert.match(envelope, /\$json\.from_email/, `WF01 :: ${node.name}: fromEmail must still read $json.from_email`);
+    assert.match(
+      envelope,
+      /\$json\.(urgency|name|business_name)/,
+      `WF01 :: ${node.name}: subject must still read $json`
+    );
+    // Only `Customer Acknowledgment` sets a replyTo; `Owner Notification` has
+    // none by design. Where one exists it must still read $json.
+    if (p.options && typeof p.options.replyTo === 'string') {
+      assert.match(
+        p.options.replyTo,
+        /\$json\.reply_to_email/,
+        `WF01 :: ${node.name}: replyTo must still read $json.reply_to_email`
+      );
+    }
+  }
+
+  // The replyTo asymmetry is part of the shipped contract, not an F20 change.
+  assert.equal(
+    typeof wf.nodes.find((n) => n.name === 'Customer Acknowledgment').parameters.options.replyTo,
+    'string',
+    'Customer Acknowledgment keeps its replyTo on $json'
+  );
+  assert.equal(
+    wf.nodes.find((n) => n.name === 'Owner Notification').parameters.options.replyTo,
+    undefined,
+    'Owner Notification still has no replyTo'
+  );
+});
+
+test('F20: WF01 email bodies still escape HTML after the explicit-read fix', () => {
+  const XSS = '<script>alert("x")</script>';
+  const store = newStore();
+  const eng = f20Intake(store, { name: XSS, service: XSS, message: XSS });
+
+  const escaped = /&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/g;
+  const expected = { 'Customer Acknowledgment': 2, 'Owner Notification': 3 };
+
+  for (const node of ['Customer Acknowledgment', 'Owner Notification']) {
+    const mail = f20Mail(eng, node);
+    assert.equal(
+      mail.body.includes('<script>'),
+      false,
+      `WF01 :: ${node}: raw <script> reached the body - the source is not escaping:\n${mail.body}`
+    );
+    assert.equal(
+      (mail.body.match(escaped) || []).length,
+      expected[node],
+      `WF01 :: ${node}: every injected field must appear escaped, so the count pins the escaping:\n${mail.body}`
+    );
+  }
+});
+
+test('F20: no googleSheets node sits between the _esc_* producer and any WF01 emailSend', async () => {
+  const wf = await f20Workflow('01 - Lead Intake.json');
+  const typeOf = new Map(wf.nodes.map((n) => [n.name, n.type]));
+  const isSheet = (n) => /googleSheets/i.test(typeOf.get(n) || '');
+
+  for (const email of ['Customer Acknowledgment', 'Owner Notification']) {
+    // PART 1 - the window the email still depends on, asserted STATICALLY.
+    //
+    // The happy path DOES cross two Sheets writes after the producer
+    // (`Append Lead`, `Update Lead Next Follow-up`), so the literal
+    // "no Sheets node between the producer and the email" is not a property
+    // WF01 has and must not be asserted as one. What IS a property is that the
+    // body's _esc_* values are immune to those writes (the explicit read, test
+    // 4) and that nothing sits between the RELAY - which feeds the envelope and
+    // the persisted column reads - and the gates. `from_email`,
+    // `business_name` and `reply_to_email` are not `leads` columns, so a write
+    // in that window strips them. This is the window mutation (e) breaks.
+    const windows = f20PathsBetween(wf, 'Prepare Email Content', email);
+    assert.ok(windows.length > 0, `${email} must be reachable from 'Prepare Email Content'`);
+    for (const path of windows) {
+      assert.deepEqual(
+        path.filter(isSheet),
+        [],
+        `WF01 :: ${email}: a googleSheets node between 'Prepare Email Content' and the email replaces $json, ` +
+          `which strips from_email / business_name / reply_to_email because those are not leads columns. ` +
+          `Path: Prepare Email Content -> ${path.join(' -> ')}`
+      );
+    }
+  }
+
+  // PART 2 - cross-check the static model against what really executed, so the
+  // guard above is not asserting against a fiction, AND prove the producer
+  // sits upstream of every Sheets write the email actually crosses (the
+  // post-fix immunity property; it fails if the producer is ever moved
+  // downstream of a write).
+  const trace = f20Trace(f20Intake(newStore()));
+  const at = (name) => trace.indexOf(name);
+  assert.ok(at(F20_WF01_SOURCE) >= 0, `the run must have executed ${F20_WF01_SOURCE}`);
+
+  for (const email of ['Customer Acknowledgment', 'Owner Notification']) {
+    assert.ok(at(email) > at(F20_WF01_SOURCE), `the run must have executed ${email} after ${F20_WF01_SOURCE}`);
+
+    const crossed = trace.slice(at(F20_WF01_SOURCE) + 1, at(email));
+    assert.deepEqual(
+      crossed.filter(isSheet),
+      ['Read Existing Leads', 'Append Lead', 'Update Lead Next Follow-up'],
+      `WF01 :: ${email}: the exact set of Sheets nodes crossed on the way to the email is part of the ` +
+        `F20 argument, so a change to it must be reviewed (crossed: ${crossed.join(' -> ')})`
+    );
+
+    const executedWindow = trace.slice(trace.indexOf('Prepare Email Content') + 1, at(email));
+    assert.deepEqual(
+      executedWindow.filter(isSheet),
+      [],
+      `WF01 :: ${email}: the executed relay->email window must match the static guard (executed: ${executedWindow.join(' -> ')})`
+    );
+  }
+});
+
+/* ------------------------------------------------------------------ *
+ * F20 - WF05 `Send Follow-up Email` keeps $json._esc_* ON PURPOSE
+ *
+ * WF01 was fixed by pointing both bodies at
+ * $('Resolve Config & Normalize Lead').first().json.<field>. WF05 MUST NOT be
+ * fixed that way.
+ *
+ * `Send Follow-up Email` iterates over EVERY item `Select Follow-up Candidates`
+ * emits in a single execution. `.first()` on that node binds all follow-ups to
+ * candidate #1, so every recipient would receive candidate #1's name, service
+ * and booking link. Verified: with two candidates, converting the read to
+ * `$('Select Follow-up Candidates').first()` sends candidate #1's body to
+ * candidate #2's address. A cross-lead data leak is strictly worse than the
+ * latent `_esc_*` fragility it would "fix", and the engine exposes no indexed
+ * per-item node accessor (`measurement/src/engine.js` offers first/last/all and
+ * a static `item` pinned to items[0]).
+ *
+ * So WF05 keeps `$json._esc_*` and is protected three ways instead:
+ *
+ *   1. a topology guard - no googleSheets node may come to sit between the
+ *      producer and this email, because a write returns the `leads` row and
+ *      drops every transient field;
+ *   2. present-value assertions on the rendered body, which catch a renamed or
+ *      missing producer that the template's `|| 'there'` and ternary guards
+ *      would otherwise hide;
+ *   3. a per-recipient regression lock - a two-candidate sweep must give each
+ *      recipient its OWN data. This is what fails if anyone later "fixes" the
+ *      read with `.first()`.
+ *
+ * No `05 - Follow-up Sweeper.json` change is part of F20.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Two leads due for follow-up at the same sweep, with distinct identities.
+ *
+ * `phone` MUST differ: WF01's duplicate check matches on phone as well as
+ * email, so two candidates sharing one are rejected at intake and the sweep
+ * only ever sees a single item - which would silently make the cross-lead lock
+ * below vacuous.
+ */
+const F20_CANDIDATES = [
+  { source_id: 'f20-jordan', name: 'Jordan Ellis', email: 'jordan.ellis@example.com', phone: '5125550188', service: 'HVAC', urgency: 'normal', message: 'Jordan needs a quote.' },
+  { source_id: 'f20-priya', name: 'Priya Raman', email: 'priya.raman@example.com', phone: '5125550142', service: 'ac_repair', urgency: 'emergency', message: 'Priya needs AC repair.' }
+];
+
+/**
+ * Intake both candidates, then sweep 24h later when both are due.
+ *
+ * `followup_delay_hours` is 24 for this tenant, so a sweep at T0 would select
+ * neither. The seeded lead is deliberately left in place: `Get Leads Requiring
+ * Follow-up` is filtered by lead_id downstream, and every assertion below is
+ * scoped to a candidate address rather than assuming the tab holds one row.
+ */
+function f20TwoCandidateSweep(overrides = {}) {
+  const store = newStore();
+  for (const c of F20_CANDIDATES) {
+    runIntake(store, intakeBody({ ...c, ...overrides }));
+  }
+  const eng = runSweep(store, '2026-09-02T09:00:00.000Z');
+  const followUps = eng.outbox.filter((e) => e.node === 'Send Follow-up Email');
+  assert.ok(
+    followUps.length >= 2,
+    `the sweep must produce at least two follow-ups or the cross-lead lock is vacuous (got ${followUps.length})`
+  );
+  const mailFor = (email) => {
+    const sent = eng.outbox.filter((e) => e.to === email && e.node === 'Send Follow-up Email');
+    assert.equal(sent.length, 1, `expected exactly one follow-up to ${email}, got ${sent.length}`);
+    assert.equal(sent[0].sent, true, `the follow-up to ${email} must have been sent`);
+    return sent[0];
+  };
+  return { store, eng, jordan: mailFor('jordan.ellis@example.com'), priya: mailFor('priya.raman@example.com') };
+}
+
+test('F20: the WF05 follow-up body carries the real values, not just the absence of undefined', () => {
+  const { jordan, priya } = f20TwoCandidateSweep();
+
+  for (const [mail, who] of [[jordan, 'Jordan Ellis'], [priya, 'Priya Raman']]) {
+    assert.equal(
+      mail.body.includes('undefined'),
+      false,
+      `WF05 body to ${mail.to} must not contain literal undefined:\n${mail.body}`
+    );
+
+    // PRESENT-VALUE assertions. `_esc_name` sits behind `|| 'there'` and
+    // `_esc_service` behind a ternary, so a broken read renders a plausible
+    // body with NO `undefined` in it. Only a by-value assertion sees that.
+    assert.match(
+      mail.body,
+      new RegExp(`<p>Hi ${who},</p>`),
+      `WF05 body to ${mail.to} must greet the recipient by their own name, not the "there" fallback:\n${mail.body}`
+    );
+    assert.match(
+      mail.body,
+      /<strong>Lone Star HVAC &amp; Cooling<\/strong>/,
+      `WF05 body to ${mail.to} must carry the escaped business name`
+    );
+    assert.match(
+      mail.body,
+      /<p>Book online here: <a href="https:\/\/book\.lonestarhvac\.example\.com\/\?lead_id=lead_[0-9]+_[a-z0-9]+">Schedule now<\/a><\/p>/,
+      `WF05 body to ${mail.to} must carry its own booking link:\n${mail.body}`
+    );
+  }
+
+  // The two services differ per candidate, which is what proves the service
+  // read is per item rather than per node.
+  assert.match(jordan.body, /<strong>HVAC<\/strong>/, "Jordan's body must carry HVAC");
+  assert.match(priya.body, /<strong>ac_repair<\/strong>/, "Priya's body must carry ac_repair");
+});
+
+test('F20: the WF05 follow-up body still escapes HTML', () => {
+  const XSS = '<script>alert("x")</script>';
+  const { jordan, priya } = f20TwoCandidateSweep({ name: XSS, service: XSS });
+  const escaped = /&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;/g;
+
+  for (const mail of [jordan, priya]) {
+    assert.equal(
+      mail.body.includes('<script>'),
+      false,
+      `WF05 body to ${mail.to}: raw <script> reached the body - Select Follow-up Candidates is not escaping:\n${mail.body}`
+    );
+    // The body renders name and service only, so two escaped payloads.
+    assert.equal(
+      (mail.body.match(escaped) || []).length,
+      2,
+      `WF05 body to ${mail.to}: name and service must both appear escaped:\n${mail.body}`
+    );
+  }
+});
+
+test('F20: no googleSheets node sits between the _esc_* producer and Send Follow-up Email', async () => {
+  const wf = await f20Workflow('05 - Follow-up Sweeper.json');
+  const isSheet = (n) => /googleSheets/i.test((wf.nodes.find((x) => x.name === n) || {}).type || '');
+
+  // Today there is nothing in this window, which is the only reason the
+  // `$json._esc_*` read is safe. A Sheets write returns the `leads` row, and
+  // `_esc_name` / `_esc_business_name` / `_esc_service` / `_esc_booking_link`
+  // are not columns, so the body would render "Hi there," with no service and
+  // no booking link - and no `undefined` to alert on.
+  const windows = f20PathsBetween(wf, F20_WF05_SOURCE, 'Send Follow-up Email');
+  assert.ok(windows.length > 0, 'Send Follow-up Email must be reachable from Select Follow-up Candidates');
+  for (const path of windows) {
+    assert.deepEqual(
+      path.filter(isSheet),
+      [],
+      `WF05: a googleSheets node between '${F20_WF05_SOURCE}' and 'Send Follow-up Email' replaces $json and ` +
+        `drops every transient _esc_* field. Path: ${F20_WF05_SOURCE} -> ${path.join(' -> ')}`
+    );
+  }
+
+  // And the window must stay empty at runtime, not only on paper.
+  const { eng } = f20TwoCandidateSweep();
+  const trace = f20Trace(eng);
+  const from = trace.indexOf(F20_WF05_SOURCE);
+  const to = trace.indexOf('Send Follow-up Email');
+  assert.ok(from >= 0 && to > from, `the sweep must have executed the producer then the email (trace: ${trace.join(' -> ')})`);
+  assert.deepEqual(
+    trace.slice(from + 1, to).filter(isSheet),
+    [],
+    `WF05: the executed producer->email window must be Sheets-free (executed: ${trace.slice(from, to + 1).join(' -> ')})`
+  );
+});
+
+test('F20: every follow-up email names its own recipient, not candidate #1', async () => {
+  // The cross-lead leak lock. If anyone converts the body read to
+  // `$('Select Follow-up Candidates').first()`, EVERY body becomes candidate
+  // #1's, and these "must not contain the other candidate" assertions fail.
+  const { jordan, priya } = f20TwoCandidateSweep();
+
+  assert.match(jordan.body, /<p>Hi Jordan Ellis,<\/p>/, `Jordan's body must name Jordan:\n${jordan.body}`);
+  assert.doesNotMatch(
+    jordan.body,
+    /Priya Raman/,
+    `Jordan's body must NOT carry another candidate's data (cross-lead leak):\n${jordan.body}`
+  );
+  assert.match(priya.body, /<p>Hi Priya Raman,<\/p>/, `Priya's body must name Priya:\n${priya.body}`);
+  assert.doesNotMatch(
+    priya.body,
+    /Jordan Ellis/,
+    `Priya's body must NOT carry another candidate's data (cross-lead leak):\n${priya.body}`
+  );
+
+  // Each booking link embeds its own lead_id, so the links must differ.
+  const linkOf = (body) => (body.match(/lead_id=(lead_[0-9]+_[a-z0-9]+)/) || [])[1];
+  assert.ok(linkOf(jordan.body), "Jordan's body must carry a booking link with a lead_id");
+  assert.ok(linkOf(priya.body), "Priya's body must carry a booking link with a lead_id");
+  assert.notEqual(
+    linkOf(jordan.body),
+    linkOf(priya.body),
+    'each follow-up must link to its OWN lead, not a shared first candidate'
+  );
+
+  // Static lock, so the leak cannot be reintroduced silently: the body must not
+  // name an explicit node ref at all. `$json._esc_*` is the only correct read
+  // here while the engine offers no indexed per-item accessor.
+  const wf = await f20Workflow('05 - Follow-up Sweeper.json');
+  const html = wf.nodes.find((n) => n.name === 'Send Follow-up Email').parameters.html;
+  assert.equal(
+    /\$\('[^']+'\)/.test(html),
+    false,
+    "WF05 Send Follow-up Email must not read from an explicit node ref: the node emits one item per candidate, " +
+      "so .first() would send candidate #1's data to every recipient"
+  );
+  assert.equal(
+    /\$json\._esc_\w+/.test(html),
+    true,
+    'WF05 Send Follow-up Email must keep reading $json._esc_* per item'
+  );
+  assert.equal(
+    /\$json\.booking_link/.test(html),
+    true,
+    'WF05 Send Follow-up Email must keep the persisted booking_link column on $json'
+  );
+});
