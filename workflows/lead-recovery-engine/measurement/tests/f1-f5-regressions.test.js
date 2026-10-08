@@ -3458,3 +3458,226 @@ test('F20: every follow-up email names its own recipient, not candidate #1', asy
     'WF05 Send Follow-up Email must keep the persisted booking_link column on $json'
   );
 });
+
+/* ------------------------------------------------------------------ *
+ * F2
+ *
+ *   F2 - 01 - Lead Intake / `Respond 200 Duplicate Accepted`
+ *        The duplicate response read `lead_id: $json.lead_id`, and the
+ *        $json reaching that node is `Check Duplicate`'s output, which
+ *        passes the freshly normalised candidate through unchanged.
+ *        `Resolve Config & Normalize Lead` mints that id with rid() on
+ *        every request, so a duplicate submission answered with a
+ *        lead_id that was never written to the `leads` tab.
+ *
+ *        The correct id was in scope one node earlier: `Read Existing
+ *        Leads` emits the whole sheet and `Check Duplicate` matches on
+ *        it, but Array.some() keeps only the reason and throws the row
+ *        away. The fix ports WF03's shape -- Array.find(), capture
+ *        `matchedLeadId`, expose `_existingLeadId` -- and the Respond
+ *        node reads that instead of `$json.lead_id`.
+ *
+ *        WF03 already had this shape and is untouched. Nothing here
+ *        changes what counts as a duplicate: the four branches
+ *        (idempotency_key, source_id, phone, email) are byte-identical
+ *        to before, so the source_id/source_type divergence between
+ *        WF01 and WF03 stays its own finding.
+ * ------------------------------------------------------------------ */
+
+const f2T1 = '2026-09-01T09:00:00.000Z';
+const f2T2 = '2026-09-01T09:05:00.000Z';
+const f2T3 = '2026-09-01T09:10:00.000Z';
+
+const f2Body = (over = {}) => intakeBody({ source_id: 'f2-fixture', ...over });
+const f2Parse = (eng) => JSON.parse(eng.responses[0].body);
+
+/** Create a lead from `first`, then submit `second` against the same store. */
+function f2Duplicate(store, first, second) {
+  const created = f2Parse(runIntake(store, first, f2T1));
+  const dupEng = runIntake(store, second, f2T2);
+  return { created, dupEng, dup: f2Parse(dupEng) };
+}
+
+test('F2: the duplicate response echoes the existing lead\'s persisted lead_id', () => {
+  const store = newStore();
+  const { created, dup } = f2Duplicate(
+    store,
+    f2Body({ source_id: 'f2-echo' }),
+    f2Body({ source_id: 'f2-echo' })
+  );
+
+  assert.equal(dup.status, 'accepted');
+  assert.equal(
+    dup.lead_id,
+    created.lead_id,
+    'the duplicate must echo the id already in the leads tab, not a freshly minted one'
+  );
+});
+
+test('F2: the duplicate response lead_id resolves to a row in the leads tab', () => {
+  const store = newStore();
+  const { dup } = f2Duplicate(
+    store,
+    f2Body({ source_id: 'f2-resolve' }),
+    f2Body({ source_id: 'f2-resolve' })
+  );
+
+  const row = store.rows('leads').find((r) => r.lead_id === dup.lead_id);
+  assert.ok(row, `no leads row carries lead_id=${dup.lead_id}`);
+  assert.equal(row.business_id, 'biz_lonestar_hvac');
+  assert.equal(row.source_id, 'f2-resolve');
+});
+
+test('F2: every dedupe reason returns the same persisted lead_id', () => {
+  // One case per branch. `reason` is whichever branch matched first, so
+  // each payload is built so exactly that branch can fire:
+  //  - idempotency_key: same explicit key, everything else different
+  //  - source_id: same source_id + source_type, DIFFERENT explicit key
+  //              (a derived key would make the idempotency branch win)
+  //  - phone: different key/source, same digits in a different format
+  //  - email: different key/source/phone, same address in a different case
+  const cases = [
+    ['idempotency_key',
+      { source_id: 'f2-reason-a', idempotency_key: 'f2-reason-key-1', phone: '5125550111', email: 'f2.reason.a@example.com' },
+      { source_id: 'f2-reason-b', idempotency_key: 'f2-reason-key-1', phone: '5125550122', email: 'f2.reason.b@example.com' }],
+    ['source_id',
+      { source_id: 'f2-reason-shared', idempotency_key: 'f2-reason-key-A', phone: '5125550133', email: 'f2.reason.c@example.com' },
+      { source_id: 'f2-reason-shared', idempotency_key: 'f2-reason-key-B', phone: '5125550144', email: 'f2.reason.d@example.com' }],
+    ['phone',
+      { source_id: 'f2-reason-ph-a', phone: '5125550155', email: 'f2.reason.e@example.com' },
+      { source_id: 'f2-reason-ph-b', phone: '(512) 555-0155', email: 'f2.reason.f@example.com' }],
+    ['email',
+      { source_id: 'f2-reason-em-a', phone: '5125550166', email: 'f2.reason.shared@example.com' },
+      { source_id: 'f2-reason-em-b', phone: '5125550177', email: 'F2.Reason.Shared@example.com' }]
+  ];
+
+  for (const [reason, first, second] of cases) {
+    const store = newStore();
+    const { created, dup } = f2Duplicate(store, f2Body(first), f2Body(second));
+
+    assert.equal(dup.reason, reason, `${reason}: wrong dedupe reason reported`);
+    assert.equal(
+      dup.lead_id,
+      created.lead_id,
+      `${reason}: echoed ${dup.lead_id}, expected the persisted ${created.lead_id}`
+    );
+  }
+});
+
+test('F2: the duplicate response still marks duplicate true and names the reason', () => {
+  const store = newStore();
+  const { dup } = f2Duplicate(
+    store,
+    f2Body({ source_id: 'f2-marker' }),
+    f2Body({ source_id: 'f2-marker' })
+  );
+
+  assert.equal(typeof dup.duplicate, 'boolean', 'duplicate must stay a boolean, not the matched object');
+  assert.equal(dup.duplicate, true, 'the duplicate marker must survive the fix');
+  assert.equal(dup.reason, 'idempotency_key', 'the response must still name why it is a duplicate');
+  assert.equal(dup.status, 'accepted');
+  assert.equal(dup.code, 200);
+  // Exactly these five keys: the fix may not silently add or drop a field.
+  assert.deepEqual(Object.keys(dup).sort(), ['code', 'duplicate', 'lead_id', 'reason', 'status']);
+});
+
+test('F2: the duplicate response does not leak the newly minted lead_id', () => {
+  const store = newStore();
+  const body = f2Body({ source_id: 'f2-leak' });
+  const created = f2Parse(runIntake(store, body, f2T1));
+
+  const dupEng = runIntake(store, body, f2T2);
+  const dup = f2Parse(dupEng);
+
+  // What Resolve Config & Normalize Lead minted for THIS request...
+  const minted = dupEng.outputsOf('Resolve Config & Normalize Lead')[0].json.lead_id;
+  // ...and what Check Duplicate decided the existing row is.
+  const existing = dupEng.outputsOf('Check Duplicate')[0].json._existingLeadId;
+
+  assert.notEqual(minted, created.lead_id, 'the fixture must mint a fresh id, or this test proves nothing');
+  assert.equal(existing, created.lead_id, 'Check Duplicate must capture the matched row');
+  assert.notEqual(dup.lead_id, minted, 'the response echoed the never-persisted id');
+  assert.equal(dup.lead_id, created.lead_id);
+  assert.ok(
+    store.rows('leads').some((r) => r.lead_id === dup.lead_id),
+    'the returned id must be a real row'
+  );
+  assert.equal(
+    store.rows('leads').some((r) => r.lead_id === minted),
+    false,
+    'the minted id must never reach the leads tab'
+  );
+});
+
+test('F2: a duplicate on a second tenant returns that tenant\'s own lead_id', () => {
+  const store = newStore();
+  // Both tenants deliberately share phone and email, and tenant 1's row is
+  // written first, so a dedupe predicate that lost `rowBid === bid` would
+  // match tenant 1's row and answer with the wrong tenant's lead.
+  const tenantA = f2Body({
+    business_id: 'biz_lonestar_hvac',
+    source_id: 'f2-cross-a',
+    phone: '5125550199',
+    email: 'f2cross@example.com'
+  });
+  const tenantB = f2Body({
+    business_id: 'biz_hillcountry_plumbing',
+    source_id: 'f2-cross-b',
+    phone: '5125550199',
+    email: 'f2cross@example.com'
+  });
+
+  const a = f2Parse(runIntake(store, tenantA, f2T1));
+  const b = f2Parse(runIntake(store, tenantB, f2T2));
+  const dup = f2Parse(runIntake(store, tenantB, f2T3));
+
+  assert.equal(dup.duplicate, true, 'the second tenant submission must still be detected as a duplicate');
+  assert.equal(dup.lead_id, b.lead_id, 'the duplicate must return tenant 2\'s own lead');
+  assert.notEqual(dup.lead_id, a.lead_id, 'tenant 1\'s lead must not leak across the boundary');
+});
+
+test('F2: the create path still mints a distinct lead_id', () => {
+  const store = newStore();
+  const first = f2Parse(runIntake(store, f2Body({ source_id: 'f2-distinct-1' }), f2T1));
+  const second = f2Parse(
+    runIntake(
+      store,
+      f2Body({ source_id: 'f2-distinct-2', phone: '5125550101', email: 'f2.distinct@example.com' }),
+      f2T2
+    )
+  );
+
+  assert.equal(first.status, 'created');
+  assert.equal(second.status, 'created');
+  assert.ok(first.lead_id.startsWith('lead_'));
+  assert.notEqual(first.lead_id, second.lead_id, 'two creates must mint two distinct ids');
+
+  // The duplicate of the FIRST lead must collapse back onto it. Without
+  // this half the test would not notice a fix that answered every request
+  // with one constant id.
+  const dup = f2Parse(runIntake(store, f2Body({ source_id: 'f2-distinct-1' }), f2T3));
+  assert.equal(dup.lead_id, first.lead_id, 'the duplicate must collapse onto the lead it matched');
+  assert.notEqual(dup.lead_id, second.lead_id);
+});
+
+test('F2: the duplicate branch still writes no row and sends no email', () => {
+  const store = newStore();
+  const createEng = runIntake(store, f2Body({ source_id: 'f2-nowrite' }), f2T1);
+  const rowsAfterCreate = store.rows('leads').length;
+  const callsAfterCreate = store.calls.length;
+
+  const dupEng = runIntake(store, f2Body({ source_id: 'f2-nowrite' }), f2T2);
+
+  assert.equal(createEng.outbox.length, 2, 'the create still sends customer + owner mail');
+  assert.equal(store.rows('leads').length, rowsAfterCreate, 'a duplicate must not append a lead');
+  assert.equal(dupEng.outbox.length, 0, 'a duplicate must not re-send email');
+
+  // Reads only. Any append/update taken on the duplicate path shows here.
+  const dupCalls = store.calls.slice(callsAfterCreate);
+  assert.deepEqual(
+    dupCalls.map((c) => c.op),
+    ['read', 'read'],
+    'the duplicate run must only read business_config and leads'
+  );
+  assert.deepEqual(dupCalls.map((c) => c.tab), ['business_config', 'leads']);
+});

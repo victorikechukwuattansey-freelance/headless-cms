@@ -198,7 +198,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rows = $input.all();\nconst lead = $('Resolve Config & Normalize Lead').first().json;\nconst key = String(lead.idempotency_key || '');\nconst srcId = String(lead.source_id || '');\nconst srcType = String(lead.source_type || '');\nconst bid = String(lead.business_id || '');\nconst normPhone = String(lead.phone || '').replace(/\\D/g, '');\nconst normEmail = String(lead.email || '').trim().toLowerCase();\nlet reason = '';\nconst dup = rows.some(r => {\n  const j = r.json;\n  const rowBid = String(j.business_id || '');\n  if (key && j.idempotency_key && String(j.idempotency_key) === key && rowBid === bid) { reason = 'idempotency_key'; return true; }\n  // Tenant-scoped: source identifiers only match within the same business_id (V4 fix).\n  if (srcId && j.source_id && String(j.source_id) === srcId && String(j.source_type || '') === srcType && rowBid === bid) { reason = 'source_id'; return true; }\n  // Digits-only phone normalization for comparison; stored phone value is untouched.\n  if (normPhone && j.phone && rowBid === bid && String(j.phone).replace(/\\D/g, '') === normPhone) { reason = 'phone'; return true; }\n  if (normEmail && j.email && rowBid === bid && String(j.email).trim().toLowerCase() === normEmail) { reason = 'email'; return true; }\n  return false;\n});\nreturn [{ json: Object.assign({}, lead, { _isDuplicate: dup, _duplicateReason: reason }) }];"
+        "jsCode": "const rows = $input.all();\nconst lead = $('Resolve Config & Normalize Lead').first().json;\nconst key = String(lead.idempotency_key || '');\nconst srcId = String(lead.source_id || '');\nconst srcType = String(lead.source_type || '');\nconst bid = String(lead.business_id || '');\nconst normPhone = String(lead.phone || '').replace(/\\D/g, '');\nconst normEmail = String(lead.email || '').trim().toLowerCase();\nlet reason = '';\nlet matchedLeadId = '';\nconst match = rows.find(r => {\n  const j = r.json;\n  const rowBid = String(j.business_id || '');\n  if (key && j.idempotency_key && String(j.idempotency_key) === key && rowBid === bid) { reason = 'idempotency_key'; return true; }\n  // Tenant-scoped: source identifiers only match within the same business_id (V4 fix).\n  if (srcId && j.source_id && String(j.source_id) === srcId && String(j.source_type || '') === srcType && rowBid === bid) { reason = 'source_id'; return true; }\n  // Digits-only phone normalization for comparison; stored phone value is untouched.\n  if (normPhone && j.phone && rowBid === bid && String(j.phone).replace(/\\D/g, '') === normPhone) { reason = 'phone'; return true; }\n  if (normEmail && j.email && rowBid === bid && String(j.email).trim().toLowerCase() === normEmail) { reason = 'email'; return true; }\n  return false;\n});\nif (match) {\n  matchedLeadId = String(match.json.lead_id || '').trim();\n}\nreturn [{ json: Object.assign({}, lead, { _isDuplicate: Boolean(match), _duplicateReason: reason, _existingLeadId: matchedLeadId }) }];"
       },
       "id": "608e1f69-76b7-4fe9-8432-d6f13fd6cc02",
       "name": "Check Duplicate",
@@ -247,7 +247,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'accepted', duplicate: true, reason: $json._duplicateReason, lead_id: $json.lead_id, code: 200 }) }}",
+        "responseBody": "={{ JSON.stringify({ status: 'accepted', duplicate: true, reason: $json._duplicateReason, lead_id: $json._existingLeadId, code: 200 }) }}",
         "options": {
           "responseCode": 200
         }
