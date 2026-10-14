@@ -74,6 +74,12 @@ documents (2J 352/352; 2K 572+359; Freeze 601+388; 3B 618+405; 3C 654+441).
 The forward-looking standing guard is now **665/665** (root) and **452/452**
 (storefront). Historical acceptance reports are retained as snapshots and are
 not rewritten.
+The standing guard is now enforced by CI:
+`.github/workflows/reconcilekit-ci.yml` runs all four checks on
+`ubuntu-latest` from a fresh `npm ci` on push and PR (path-filtered to
+`reconcilekit/**`). Local runs remain a developer convenience, but the
+authoritative source of "green" is the CI run. First green run: commit
+`136ba00`, 2026-10-14. See `PHASE_4_DISTRIBUTION_READINESS.md` §4A.
 
 ## 6. Frozen architecture — preserved
 
