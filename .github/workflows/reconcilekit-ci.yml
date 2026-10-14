@@ -57,12 +57,9 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-  storefront:
+    storefront:
     name: Storefront (reconcilekit/storefront/)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: reconcilekit/storefront
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,13 +69,30 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: reconcilekit/storefront/package-lock.json
+          cache-dependency-path: |
+            reconcilekit/package-lock.json
+            reconcilekit/storefront/package-lock.json
 
-      - name: Install
+      # The storefront imports core source files by relative path (see the
+      # Phase 2 freeze: no workspace linking, no declared dependency). Those
+      # core files import `csv-parse`, which is a *core* runtime dependency.
+      # On a fresh CI checkout, only the storefront tree would be installed,
+      # so `csv-parse` would not be resolvable from the core source and every
+      # test file that imports a core module would fail on load. Installing
+      # both trees keeps the current architecture (relative imports, no
+      # workspace) working on a clean checkout.
+      - name: Install core dependencies
         run: npm ci
+        working-directory: reconcilekit
+
+      - name: Install storefront dependencies
+        run: npm ci
+        working-directory: reconcilekit/storefront
 
       - name: Test
         run: npm test
+        working-directory: reconcilekit/storefront
 
       - name: Typecheck
         run: npm run typecheck
+        working-directory: reconcilekit/storefront
