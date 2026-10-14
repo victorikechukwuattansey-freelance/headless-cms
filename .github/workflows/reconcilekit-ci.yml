@@ -1,0 +1,84 @@
+name: ReconcileKit CI
+
+# Only run when reconcilekit/** or this workflow itself changes. Other
+# monorepo projects (agency-os, n8n-lead-recovery, etc.) are not covered
+# by this workflow and are not affected by it.
+on:
+  push:
+    paths:
+      - "reconcilekit/**"
+      - ".github/workflows/reconcilekit-ci.yml"
+  pull_request:
+    paths:
+      - "reconcilekit/**"
+      - ".github/workflows/reconcilekit-ci.yml"
+
+# Cancel superseded runs on the same ref to avoid queuing behind stale runs.
+concurrency:
+  group: reconcilekit-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core (reconcilekit/)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reconcilekit
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Core requires Node >=24.12.0 for native TypeScript type-stripping.
+          # '24' resolves to the latest 24.x line.
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: reconcilekit/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # The core's test runner is recursive: from reconcilekit/, `node --test`
+      # discovers both src/** and storefront/test/**. The storefront job below
+      # also runs its own suite; the duplication is intentional so each job
+      # fails independently and reports scoped results.
+      - name: Test
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+  storefront:
+    name: Storefront (reconcilekit/storefront/)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reconcilekit/storefront
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: reconcilekit/storefront/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
