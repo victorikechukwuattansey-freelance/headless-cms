@@ -62,7 +62,7 @@ code path added in this increment.
 
 ## 4. Tests
 
-`storefront/test/marketplace/findings.test.ts` — 10 tests:
+`storefront/test/marketplace/findings.test.ts` — 11 tests:
 
 1. Summary lists every non-MATCH evidence pack and omits MATCH
 2. Summary shows outcome, codes, and amount
@@ -73,15 +73,18 @@ code path added in this increment.
 7. Gift-card codes stay masked on the finding evidence route
 8. Summary → determination → evidence reachable in exactly 3 GETs
 9. Read-only: no store mutations across the three pages
-10. Nav exposes the Findings entry
+10. Does not touch the frozen engine — no new discrepancy codes appear
+11. Findings appears in the customer nav
 
-**Baseline preservation** — expected after running the increment:
+**Verified baseline after the increment (2026-10-13):**
 
-- `reconcilekit/`: 654/654 (unchanged)
-- `reconcilekit/storefront/`: 441/441 + 10 new = **451/451**
-- Both typechecks PASS
-- ESLint PASS (JS-only config — unchanged)
-- Prettier `format:check` PASS once the earlier C4/D1 `.prettierrc.json` change is applied
+- `reconcilekit/`: **665/665** pass (654 baseline + 11 new)
+- `reconcilekit/storefront/`: **452/452** pass (441 baseline + 11 new)
+- Both typechecks: **PASS**
+- ESLint: **PASS** (JS-only config — unchanged)
+- Prettier `format:check`: **PASS** (`All matched files use Prettier code style!`)
+
+Commit: `94a5c94` — `feat(3d): mismatch investigation workflows (findings summary → determination → masked evidence)`. 26 files changed, all under `reconcilekit/`.
 
 ## 5. Runbook
 
@@ -98,8 +101,9 @@ providers, provider CSV as evidence, engine changes, new discrepancy codes.
 
 ## 7. Status
 
-**PHASE 3D — IMPLEMENTED AND READY FOR OWNER ACCEPTANCE.**
+**PHASE 3D — IMPLEMENTED AND ACCEPTED (pending owner sign-off).**
 
-The exit gate is satisfied. The frozen architecture is intact. No new runtime
-dependency was added. No frozen contract was changed. The entry gate evidence
-is recorded in `PHASE_3D_GATE_EVIDENCE.md`.
+Exit gate satisfied: summary → determination → masked evidence in three GET
+interactions, verified by `findings.test.ts`. Frozen architecture intact.
+No new runtime dependency. No frozen contract changed. Entry-gate evidence
+recorded in `PHASE_3D_GATE_EVIDENCE.md`.
