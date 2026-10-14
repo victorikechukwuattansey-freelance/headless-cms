@@ -3,7 +3,7 @@
 **Version:** 0.1  
 **Status:** Draft  
 **Project type:** Open-source TypeScript reconciliation toolkit  
-**Current phase:** Pre-coding / domain validation
+**Current phase:** Core implemented and frozen (Phase 2). Storefront implemented (Phase 2). Phase 3A pilot complete — PASS WITH CONDITIONS, owner disposition recorded. Phase 3B (merchant CSV intake) and 3C (transaction-truth surface) accepted. 3D entry gate cleared. 3E (webhooks) and 3F (durable persistence) remain gated.
 
 ## 1. Project Identity
 
@@ -199,22 +199,16 @@ That document is subordinate to this project blueprint and must remain consisten
 
 ## 14. Current Phase
 
-The project is **pre-coding**.
+The project is **past pre-coding**. The Phase 2 validation gates were satisfied and the architecture is frozen; the storefront is implemented; Phase 3A is complete (PASS WITH CONDITIONS, owner disposition recorded); Phase 3B and 3C are accepted; the 3D entry gate is cleared; 3E and 3F remain gated. The seven entry conditions below were the Phase 2 gates and are retained for historical reference only.
 
-No production implementation should begin until:
-
-- the project scope is approved;
-- the reconciliation domain has been validated;
-- synthetic scenarios have been tested;
-- the canonical domain model has been approved;
-- the architecture has been approved;
-- the package specification has been approved;
-- the implementation plan has been approved.
+- project scope approved;
+- reconciliation domain validated;
+- synthetic scenarios tested;
+- canonical domain model approved;
+- architecture approved;
+- package specification approved;
+- implementation plan approved.
 
 ## 15. Next Artifact
 
-The immediate next artifact is:
-
-`ARCHITECTURE.md`
-
-Architecture must be derived from the approved project scope and validated reconciliation domain rather than invented independently.
+`ARCHITECTURE.md` was delivered and frozen in Phase 2 and remains the authoritative architecture document. The current authoritative references are the Phase 2 freeze (`docs/PHASE_2_ACCEPTANCE_AND_ARCHITECTURE_FREEZE.md`), the canonical domain model (`CANONICAL-DOMAIN-MODEL-v0.3.md`), and the Phase 3 governance record (`docs/PHASE_3A_CONDITION_DISPOSITION_AND_PHASE_4_ENTRY_GATE.md`). Any new artifact must be derived from these, not invented independently.

@@ -1,0 +1,44 @@
+[
+  {
+    "status": true,
+    "message": "Verification successful",
+    "data": {
+      "id": 4123456789,
+      "reference": "T545417640929901",
+      "amount": 1200000,
+      "currency": "NGN",
+      "status": "success",
+      "created_at": "2026-08-18T05:09:15.000Z",
+      "paid_at": "2026-08-18T05:09:15.000Z",
+      "transaction_date": "2026-08-18T05:09:15.000Z"
+    }
+  },
+  {
+    "status": true,
+    "message": "Verification successful",
+    "data": {
+      "id": 4123456790,
+      "reference": "T545417640929902",
+      "amount": 3000000,
+      "currency": "NGN",
+      "status": "failed",
+      "created_at": "2026-08-18T05:13:20.000Z",
+      "paid_at": "2026-08-18T05:13:20.000Z",
+      "transaction_date": "2026-08-18T05:13:20.000Z"
+    }
+  },
+  {
+    "status": true,
+    "message": "Verification successful",
+    "data": {
+      "id": 4123456791,
+      "reference": "T545417640929990",
+      "amount": 1500000,
+      "currency": "NGN",
+      "status": "success",
+      "created_at": "2026-08-18T05:21:00.000Z",
+      "paid_at": "2026-08-18T05:21:00.000Z",
+      "transaction_date": "2026-08-18T05:21:00.000Z"
+    }
+  }
+]

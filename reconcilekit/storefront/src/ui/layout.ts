@@ -132,6 +132,7 @@ const CUSTOMER_NAV: readonly NavLink[] = [
   { href: "/wallet", label: "Wallet", iconName: "wallet" },
   { href: "/catalog", label: "Catalog", iconName: "catalog" },
   { href: "/transactions", label: "Transactions", iconName: "list" },
+  { href: "/findings", label: "Findings", iconName: "alert" },
   { href: "/notifications", label: "Alerts", iconName: "bell" },
   { href: "/admin", label: "Admin", iconName: "shield" },
 ];

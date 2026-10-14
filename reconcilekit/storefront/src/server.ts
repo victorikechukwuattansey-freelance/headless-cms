@@ -54,6 +54,9 @@ import {
   disputesViewModel,
   ensureReceipt,
   evidenceViewModel,
+  findingDeterminationViewModel,
+  findingEvidenceViewModel,
+  findingsSummaryViewModel,
   findTransactionByIdentifier,
   notificationsViewModel,
   runCheckout,
@@ -68,6 +71,9 @@ import {
   renderDashboardPage,
   renderDisputesPage,
   renderEvidencePage,
+  renderFindingDeterminationPage,
+  renderFindingEvidencePage,
+  renderFindingsSummaryPage,
   renderHomePage,
   renderLoginPage,
   renderNotificationsPage,
@@ -572,6 +578,7 @@ const MARKETPLACE_PATHS = new Set([
   "/checkout",
   "/checkout/",
   "/transactions",
+  "/findings",
   "/notifications",
   "/disputes",
   "/profile",
@@ -591,6 +598,7 @@ function isMarketplacePath(pathname: string): boolean {
   if (pathname.startsWith("/services/")) return true;
   if (pathname.startsWith("/checkout/")) return true;
   if (pathname.startsWith("/transactions/")) return true;
+  if (pathname.startsWith("/findings/")) return true;
   if (pathname.startsWith("/admin/queues/")) return true;
   if (pathname.startsWith("/admin/transactions/")) return true;
   return false;
@@ -771,6 +779,34 @@ async function routeMarketplace(
         );
       }
       sendHtml(res, renderEvidencePage(vm));
+      return;
+    }
+    // /findings (summary)
+    if (path === "/findings") {
+      const vm = await findingsSummaryViewModel(deps, DEMO_CUSTOMER_ID);
+      sendHtml(res, renderFindingsSummaryPage(vm));
+      return;
+    }
+    // /findings/:reference/evidence
+    const findingEvidenceMatch = path.match(/^\/findings\/([^/]+)\/evidence$/);
+    if (findingEvidenceMatch) {
+      const identifier = decodeURIComponent(findingEvidenceMatch[1]);
+      const vm = await findingEvidenceViewModel(deps, identifier);
+      if (vm === null) {
+        throw new HttpError(404, "FINDING_NOT_FOUND", "finding not found");
+      }
+      sendHtml(res, renderFindingEvidencePage(vm));
+      return;
+    }
+    // /findings/:reference
+    const findingMatch = path.match(/^\/findings\/([^/]+)$/);
+    if (findingMatch) {
+      const identifier = decodeURIComponent(findingMatch[1]);
+      const vm = await findingDeterminationViewModel(deps, identifier);
+      if (vm === null) {
+        throw new HttpError(404, "FINDING_NOT_FOUND", "finding not found");
+      }
+      sendHtml(res, renderFindingDeterminationPage(vm));
       return;
     }
     if (path === "/notifications") {

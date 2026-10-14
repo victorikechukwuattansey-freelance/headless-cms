@@ -26,6 +26,10 @@ import {
   type TransactionDetailViewModel,
   type TransactionsViewModel,
   type WalletViewModel,
+  type FindingDeterminationViewModel,
+  type FindingEvidenceViewModel,
+  type FindingRecordSide,
+  type FindingsSummaryViewModel,
 } from "./client.ts";
 
 export function renderHomePage(vm: DashboardViewModel): string {
@@ -1014,4 +1018,264 @@ function transactionForDispute(
 ): { readonly reference: string } | null {
   const row = rows.rows.find((candidate) => candidate.id === transactionId);
   return row === undefined ? null : { reference: row.reference };
+}
+
+// ============================================================
+// Phase 3D — Mismatch investigation render surface
+// ============================================================
+
+const FINDING_CODE_MEANINGS: Readonly<Record<string, string>> = {
+  AMOUNT_MISMATCH:
+    "The two records share a reference but disagree on amount. Do not fulfill until the difference is resolved.",
+  CURRENCY_MISMATCH:
+    "The two records agree on reference but disagree on currency. Do not fulfill until this is resolved.",
+  STATUS_MISMATCH:
+    "The two records share a reference but disagree on status. Investigate before acting on either status.",
+  TEMPORAL_ANOMALY:
+    "The two records agree on reference and amount but their timestamps are outside the tolerance. Verify which timestamp is authoritative.",
+  DUPLICATE_MERCHANT_RECORD:
+    "More than one merchant record shares this reference. Resolve the duplicate before continuing.",
+  DUPLICATE_PROVIDER_RECORD:
+    "More than one provider record shares this reference. Resolve the duplicate before continuing.",
+  CONFLICTING_ATTRIBUTES:
+    "The two records share a reference but disagree on one or more attributes. Investigate before acting.",
+  STATUS_UNRESOLVED:
+    "Merchant and provider statuses cannot be resolved by the engine. Do not fulfill; follow up with the customer; leave unresolved until evidence confirms.",
+  MISSING_REFERENCE:
+    "A record is missing its reference. Restore the reference before reconciling.",
+};
+
+const FINDING_OUTCOME_EXPLANATIONS: Readonly<Record<string, string>> = {
+  DISCREPANCY:
+    "The engine found a specific disagreement between the merchant and provider records. The codes above name the disagreement.",
+  UNRESOLVED:
+    "The engine could not resolve a status difference. Do not fulfill; follow up with the customer; leave unresolved until evidence confirms.",
+  MISSING_PROVIDER_RECORD:
+    "No provider record exists for this merchant record. The engine does not fabricate a match; investigate whether the provider call completed.",
+  UNMATCHED_PROVIDER_RECORD:
+    "Provider evidence exists with no matching merchant record. Match it to a transaction or document it as account history.",
+  HELD_AMBIGUOUS:
+    "Duplicate records prevent a clean determination. Resolve the duplicate before continuing.",
+  MISSING_REFERENCE:
+    "A record is missing its reference. The engine will not guess.",
+  INPUT_ERROR:
+    "The reconciliation input could not be processed. Correct the input records.",
+};
+
+export function renderFindingsSummaryPage(
+  vm: FindingsSummaryViewModel,
+): string {
+  const body =
+    vm.findings.length === 0
+      ? `<div class="empty-state">${icon("check")}<p>No open findings. Every persisted reconciliation is MATCH.</p></div>`
+      : `
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Reference</th>
+          <th>Outcome</th>
+          <th>Code(s)</th>
+          <th>Amount</th>
+          <th>Note</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${vm.findings
+          .map(
+            (row) => `<tr>
+          <td class="mono">${escapeHtml(row.reference)}</td>
+          <td>${statusPill(row.outcome, row.outcome)}</td>
+          <td class="mono">${escapeHtml(row.codes.join(", ") || "—")}</td>
+          <td class="nowrap">${escapeHtml(formatMinor(row.amountMinor, row.currency))}</td>
+          <td class="muted">${escapeHtml(row.note || "—")}</td>
+          <td><a class="btn" href="${attr(row.detailHref)}">${icon("eye")} Investigate</a></td>
+        </tr>`,
+          )
+          .join("")}
+      </tbody>
+    </table>
+  </div>`;
+
+  const content = `
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Findings</h1>
+      <p class="page-sub">Every non-MATCH reconciliation, from the persisted evidence packs. Read-only — nothing on this page changes a record.</p>
+    </div>
+  </div>
+  ${body}`;
+
+  return renderPage({ title: "Findings", active: "/findings" }, content);
+}
+
+function findingRecordSideHtml(side: FindingRecordSide | null): string {
+  if (side === null) {
+    return `<div class="empty-state">${icon("alert")}<p>No record on this side. The engine refused to fabricate one.</p></div>`;
+  }
+  return `
+  <dl class="kv">
+    <dt>Reference</dt><dd class="mono">${escapeHtml(side.reference ?? "—")}</dd>
+    <dt>Amount</dt><dd>${side.amountMinor === null ? "—" : escapeHtml(formatMinor(side.amountMinor, side.currency ?? "NGN"))}</dd>
+    <dt>Currency</dt><dd>${escapeHtml(side.currency ?? "—")}</dd>
+    <dt>Status</dt><dd>${side.status === null ? "—" : statusPill(side.status.toLowerCase(), side.status)}</dd>
+    <dt>Occurred at</dt><dd>${side.occurredAt === null ? "—" : escapeHtml(formatDate(side.occurredAt))}</dd>
+    <dt>${escapeHtml(side.extraLabel)}</dt><dd class="mono">${escapeHtml(side.extraValue)}</dd>
+  </dl>`;
+}
+
+function findingMeaningList(outcome: string, codes: readonly string[]): string {
+  if (codes.length === 0) {
+    const text =
+      FINDING_OUTCOME_EXPLANATIONS[outcome] ??
+      "No further explanation is available for this outcome.";
+    return `<p>${escapeHtml(text)}</p>`;
+  }
+  return `
+  <ul class="inline">
+    ${codes
+      .map(
+        (code) => `<li>
+      <div>
+        <div class="mono" style="font-weight:600">${escapeHtml(code)}</div>
+        <div class="muted" style="margin-top:4px">${escapeHtml(FINDING_CODE_MEANINGS[code] ?? "Unclassified code — see the frozen adapter documentation.")}</div>
+      </div>
+    </li>`,
+      )
+      .join("")}
+  </ul>`;
+}
+
+export function renderFindingDeterminationPage(
+  vm: FindingDeterminationViewModel,
+): string {
+  const content = `
+  <div class="detail-head">
+    <a class="back-link" href="/findings">${icon("arrowLeft")} All findings</a>
+  </div>
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Finding</h1>
+      <p class="page-sub">Ref <span class="mono">${escapeHtml(vm.transaction.reference)}</span> · join anchor <span class="mono">${escapeHtml(vm.transaction.id)}</span></p>
+    </div>
+    <div class="actions">
+      ${statusPill(vm.outcome, vm.outcome)}
+    </div>
+  </div>
+
+  <div class="section-label">Per-record determination — from the frozen engine's evaluation</div>
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>${icon("user")} ${escapeHtml(vm.merchantSide.label)}</h3>
+      ${findingRecordSideHtml(vm.merchantSide)}
+    </div>
+    <div class="card">
+      <h3>${icon("bolt")} ${escapeHtml(vm.providerSide?.label ?? "What the provider recorded")}</h3>
+      ${findingRecordSideHtml(vm.providerSide)}
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <h3>${icon("shield")} What ReconcileKit determined</h3>
+    <dl class="kv">
+      <dt>Outcome</dt><dd><span class="mono">${escapeHtml(vm.outcome)}</span></dd>
+      <dt>Code(s)</dt><dd class="mono">${escapeHtml(vm.codes.join(", ") || "none")}</dd>
+    </dl>
+    ${
+      vm.notes.length === 0
+        ? ""
+        : `<div class="section-label" style="margin-top:16px">Validation notes</div>
+    <ul class="inline">${vm.notes
+      .map((note) => `<li><div class="muted">${escapeHtml(note)}</div></li>`)
+      .join("")}</ul>`
+    }
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <h3>${icon("eye")} What this means</h3>
+    ${findingMeaningList(vm.outcome, vm.codes)}
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <h3>${icon("arrowLeft")} What happens next</h3>
+    <p style="margin:0"><strong>${escapeHtml(vm.whatHappensNext)}</strong></p>
+    <p class="muted" style="margin:10px 0 0;font-size:0.85em">This is the same operator action shown on the transaction detail page. 3D does not add a second action vocabulary.</p>
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <h3>${icon("cards")} Evidence</h3>
+    <p class="muted" style="margin:0 0 12px">Open the masked evidence pack to see the raw provider attributes the engine evaluated — sensitive values are removed by the existing redaction layer.</p>
+    <div class="actions">
+      <a class="btn primary" href="${attr(vm.evidenceHref)}">${icon("cards")} Open evidence pack</a>
+      <a class="btn" href="${attr(vm.transactionHref)}">${icon("list")} Transaction detail</a>
+    </div>
+  </div>`;
+
+  return renderPage(
+    {
+      title: `Finding · ${vm.transaction.reference}`,
+      active: "/findings",
+    },
+    content,
+  );
+}
+
+export function renderFindingEvidencePage(
+  vm: FindingEvidenceViewModel,
+): string {
+  const pack = vm.evidence;
+  const content = `
+  <div class="detail-head">
+    <a class="back-link" href="${attr(vm.determinationHref)}">${icon("arrowLeft")} Back to the finding</a>
+  </div>
+  <div class="page-head">
+    <div>
+      <h1 class="page-title">Evidence pack</h1>
+      <p class="page-sub">Finding <span class="mono">${escapeHtml(vm.transaction.reference)}</span> · <span class="mono">${escapeHtml(pack.id)}</span></p>
+    </div>
+    <div class="actions">${statusPill(vm.outcome, vm.outcome)}</div>
+  </div>
+
+  <div class="card">
+    <h3>${icon("cards")} Reconciliation snapshot</h3>
+    <dl class="kv">
+      <dt>Outcome</dt><dd class="mono">${escapeHtml(vm.outcome)}</dd>
+      <dt>Codes</dt><dd class="mono">${escapeHtml(vm.codes.join(", ") || "none")}</dd>
+      <dt>Mismatch flags</dt><dd class="mono">${escapeHtml(pack.mismatchFlags.join(", ") || "none")}</dd>
+      <dt>Provider reference</dt><dd class="mono">${escapeHtml(pack.providerReference ?? "—")}</dd>
+      <dt>Customer reference</dt><dd class="mono">${escapeHtml(pack.customerReference ?? "—")}</dd>
+      <dt>Amount</dt><dd>${escapeHtml(formatMinor(pack.amountMinor, pack.currency))}</dd>
+      <dt>Resolution</dt><dd>${escapeHtml(pack.resolutionStatus)}</dd>
+      <dt>Created</dt><dd>${escapeHtml(formatDate(pack.createdAt))}</dd>
+    </dl>
+  </div>
+
+  <div class="section-label">Provider facts — sensitive values masked</div>
+  <details class="proof-box" open>
+    <summary>${escapeHtml(String(Object.keys(pack.providerFacts).length))} keys</summary>
+    <div class="proof-open">${providerFactsGrid(pack.providerFacts as Record<string, string | number | null | undefined>)}</div>
+  </details>
+
+  <div class="card" style="margin-top:22px">
+    <h3>${icon("list")} Referenced events</h3>
+    <dl class="kv">
+      <dt>Timeline events</dt><dd class="mono">${escapeHtml(pack.timelineEventIds.join(", ") || "—")}</dd>
+      <dt>Audit events</dt><dd class="mono">${escapeHtml(pack.auditEventIds.join(", ") || "—")}</dd>
+    </dl>
+    <p class="muted" style="font-size:0.82em;margin-top:12px">Masking is applied by the existing redaction layer. Full gift-card / ticket codes never leave the provider; only masked previews are carried through.</p>
+  </div>
+
+  <div class="actions" style="margin-top:18px">
+    <a class="btn" href="${attr(vm.determinationHref)}">${icon("arrowLeft")} Back to the finding</a>
+    <a class="btn" href="${attr(vm.transactionHref)}">${icon("list")} Transaction detail</a>
+  </div>`;
+
+  return renderPage(
+    {
+      title: `Evidence · ${vm.transaction.reference}`,
+      active: "/findings",
+    },
+    content,
+  );
 }

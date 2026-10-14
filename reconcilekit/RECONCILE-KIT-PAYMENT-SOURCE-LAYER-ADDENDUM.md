@@ -1,6 +1,6 @@
 # RECONCILE KIT --- PAYMENT SOURCE LAYER ADDENDUM
 
-**Status:** Design patch for approval\
+**Status:** Implemented — see storefront/src/marketplace/payment-sources/ and docs/PHASE_3B_ACCEPTANCE_REPORT.md
 **Purpose:** Extend the existing Reconcile Kit architecture from a
 Paystack-first MVP boundary to a provider-neutral payment-source
 boundary without rewriting the canonical reconciliation engine.

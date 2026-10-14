@@ -1,5 +1,5 @@
 import type { JsonlStore } from "../store/jsonl-store.ts";
-import type { Outcome } from "../../../src/domain/model.ts";
+import type { Outcome, ReconciliationCode } from "../../../src/domain/model.ts";
 import {
   executeMarketplaceTransaction,
   marketplaceTransactionFacts,
@@ -922,5 +922,280 @@ export async function runCheckout(
   return {
     transaction: result.transaction,
     reference: result.transaction.reference,
+  };
+}
+
+// ============================================================
+// Phase 3D — Mismatch investigation view-models
+// ============================================================
+
+/**
+ * A "finding" is a persisted reconciliation result that is not MATCH.
+ * Findings are enumerated from `evidence_packs`, which the reconcile
+ * orchestrator writes exactly once per transaction (replay returns the
+ * existing pack unchanged). 3D never re-runs the engine.
+ */
+const FINDING_OUTCOME_RANK: Readonly<Record<string, number>> = {
+  DISCREPANCY: 1,
+  UNRESOLVED: 2,
+  HELD_AMBIGUOUS: 3,
+  MISSING_PROVIDER_RECORD: 4,
+  UNMATCHED_PROVIDER_RECORD: 5,
+  MISSING_REFERENCE: 6,
+  INPUT_ERROR: 7,
+};
+
+function isFindingOutcome(outcome: string): boolean {
+  return FINDING_OUTCOME_RANK[outcome] !== undefined;
+}
+
+export interface FindingSummaryRow {
+  readonly transactionId: string;
+  readonly reference: string;
+  readonly outcome: string;
+  readonly codes: readonly string[];
+  readonly note: string;
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly detailHref: string;
+}
+
+export interface FindingsSummaryViewModel {
+  readonly customer: CustomerProfile;
+  readonly findings: readonly FindingSummaryRow[];
+}
+
+export interface FindingRecordSide {
+  readonly role: "merchant" | "provider";
+  readonly label: string;
+  readonly reference: string | null;
+  readonly amountMinor: number | null;
+  readonly currency: string | null;
+  readonly status: string | null;
+  readonly occurredAt: string | null;
+  readonly extraLabel: string;
+  readonly extraValue: string;
+}
+
+export interface FindingDeterminationViewModel {
+  readonly customer: CustomerProfile;
+  readonly transaction: MarketplaceTransaction;
+  readonly pack: EvidencePack;
+  readonly outcome: string;
+  readonly codes: readonly string[];
+  readonly notes: readonly string[];
+  readonly merchantSide: FindingRecordSide;
+  readonly providerSide: FindingRecordSide | null;
+  readonly whatHappensNext: string;
+  readonly transactionHref: string;
+  readonly evidenceHref: string;
+}
+
+export interface FindingEvidenceViewModel {
+  readonly customer: CustomerProfile;
+  readonly transaction: MarketplaceTransaction;
+  readonly evidence: EvidencePack;
+  readonly outcome: string;
+  readonly codes: readonly string[];
+  readonly determinationHref: string;
+  readonly transactionHref: string;
+}
+
+function findingCodesFor(pack: EvidencePack): readonly ReconciliationCode[] {
+  const codes: ReconciliationCode[] = [];
+  for (const code of pack.reconciliation?.codes ?? []) {
+    codes.push(code);
+  }
+  for (const flag of pack.mismatchFlags) {
+    codes.push(flag);
+  }
+  return Array.from(new Set(codes));
+}
+
+function latestTransactionMap(
+  transactions: readonly MarketplaceTransaction[],
+): Map<string, MarketplaceTransaction> {
+  const map = new Map<string, MarketplaceTransaction>();
+  for (const record of transactions) {
+    const existing = map.get(record.id);
+    if (existing === undefined || record.updatedAt > existing.updatedAt) {
+      map.set(record.id, record);
+    }
+  }
+  return map;
+}
+
+function latestPackMap(
+  packs: readonly EvidencePack[],
+): Map<string, EvidencePack> {
+  const map = new Map<string, EvidencePack>();
+  for (const pack of packs) {
+    const existing = map.get(pack.transactionId);
+    if (existing === undefined || pack.createdAt > existing.createdAt) {
+      map.set(pack.transactionId, pack);
+    }
+  }
+  return map;
+}
+
+export async function findingsSummaryViewModel(
+  deps: MarketplaceTransactionDeps,
+  customerId: string,
+): Promise<FindingsSummaryViewModel> {
+  const customer = await customerProfile(deps.store, customerId);
+  const transactions = latestTransactionMap(
+    await deps.store.readAll<MarketplaceTransaction>(
+      "marketplace_transactions",
+    ),
+  );
+  const packs = latestPackMap(
+    await deps.store.readAll<EvidencePack>("evidence_packs"),
+  );
+
+  const rows: FindingSummaryRow[] = [];
+  for (const pack of packs.values()) {
+    const outcome = pack.reconciliation?.outcome ?? "UNRESOLVED";
+    if (!isFindingOutcome(outcome)) {
+      continue;
+    }
+    const transaction = transactions.get(pack.transactionId);
+    if (transaction === undefined) {
+      continue;
+    }
+    rows.push({
+      transactionId: transaction.id,
+      reference: transaction.reference,
+      outcome,
+      codes: findingCodesFor(pack),
+      note: pack.reconciliation?.notes[0] ?? "",
+      amountMinor: pack.amountMinor,
+      currency: pack.currency,
+      detailHref: `/findings/${encodeURIComponent(transaction.reference)}`,
+    });
+  }
+
+  rows.sort((a, b) => {
+    const rankDiff =
+      (FINDING_OUTCOME_RANK[a.outcome] ?? 100) -
+      (FINDING_OUTCOME_RANK[b.outcome] ?? 100);
+    if (rankDiff !== 0) {
+      return rankDiff;
+    }
+    return a.reference.localeCompare(b.reference);
+  });
+
+  return { customer, findings: rows };
+}
+
+function merchantSideFor(
+  transaction: MarketplaceTransaction,
+  pack: EvidencePack,
+  facts: TransactionReconciliationFacts | null,
+): FindingRecordSide {
+  return {
+    role: "merchant",
+    label: "What the merchant recorded",
+    reference: transaction.id,
+    amountMinor: facts?.expectedAmountMinor ?? pack.amountMinor,
+    currency: facts?.currency ?? pack.currency,
+    status: facts?.paymentState ?? null,
+    occurredAt: facts?.requestedAt ?? null,
+    extraLabel: "Order id",
+    extraValue: facts?.orderId ?? transaction.orderId,
+  };
+}
+
+function providerSideFor(
+  transaction: MarketplaceTransaction,
+  pack: EvidencePack,
+  facts: TransactionReconciliationFacts | null,
+): FindingRecordSide | null {
+  if (pack.providerReference === null) {
+    return null;
+  }
+  return {
+    role: "provider",
+    label: "What the provider recorded",
+    reference: transaction.id,
+    amountMinor: facts?.providerAmountMinor ?? null,
+    currency: facts?.currency ?? pack.currency,
+    status: facts?.providerState ?? null,
+    occurredAt: facts?.respondedAt ?? null,
+    extraLabel: "Provider id",
+    extraValue: facts?.providerId ?? transaction.providerId,
+  };
+}
+
+export async function findingDeterminationViewModel(
+  deps: MarketplaceTransactionDeps,
+  identifier: string,
+): Promise<FindingDeterminationViewModel | null> {
+  const transaction = await findTransactionByIdentifier(deps.store, identifier);
+  if (transaction === null) {
+    return null;
+  }
+  const pack = await deps.store.readLatestById<EvidencePack>(
+    "evidence_packs",
+    `evp_${transaction.id}`,
+  );
+  if (pack === null) {
+    return null;
+  }
+  const customer = await customerProfile(deps.store, transaction.customerId);
+  const facts = await marketplaceTransactionFacts(deps.store, transaction.id);
+  const outcome = pack.reconciliation?.outcome ?? "UNRESOLVED";
+  const codes = findingCodesFor(pack);
+  const notes = pack.reconciliation?.notes ?? [];
+  const truth = buildTransactionTruth({
+    transactionId: transaction.id,
+    outcome,
+    codes,
+    paymentState: facts?.paymentState ?? "UNKNOWN",
+    resolutionStatus: transaction.resolutionStatus,
+    expectedAmountMinor: facts?.expectedAmountMinor ?? pack.amountMinor,
+    currency: facts?.currency ?? pack.currency,
+    providerAmountMinor: facts?.providerAmountMinor ?? null,
+  });
+
+  return {
+    customer,
+    transaction,
+    pack,
+    outcome,
+    codes,
+    notes,
+    merchantSide: merchantSideFor(transaction, pack, facts),
+    providerSide: providerSideFor(transaction, pack, facts),
+    whatHappensNext: truth.nextAction,
+    transactionHref: `/transactions/${encodeURIComponent(transaction.reference)}`,
+    evidenceHref: `/findings/${encodeURIComponent(transaction.reference)}/evidence`,
+  };
+}
+
+export async function findingEvidenceViewModel(
+  deps: MarketplaceTransactionDeps,
+  identifier: string,
+): Promise<FindingEvidenceViewModel | null> {
+  const transaction = await findTransactionByIdentifier(deps.store, identifier);
+  if (transaction === null) {
+    return null;
+  }
+  const pack = await deps.store.readLatestById<EvidencePack>(
+    "evidence_packs",
+    `evp_${transaction.id}`,
+  );
+  if (pack === null) {
+    return null;
+  }
+  const customer = await customerProfile(deps.store, transaction.customerId);
+  const redacted = redactEvidencePack(pack);
+  return {
+    customer,
+    transaction,
+    evidence: redacted,
+    outcome: redacted.reconciliation?.outcome ?? "UNRESOLVED",
+    codes: redacted.reconciliation?.codes ?? [],
+    determinationHref: `/findings/${encodeURIComponent(transaction.reference)}`,
+    transactionHref: `/transactions/${encodeURIComponent(transaction.reference)}`,
   };
 }
