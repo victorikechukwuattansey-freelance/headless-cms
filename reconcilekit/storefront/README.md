@@ -52,7 +52,6 @@ npm install
 npm run typecheck
 npm test
 npm start          # serves the marketplace demo (no seed by default)
-npm run dev        # same as start; set STOREFRONT_SEED_DEMO=1 to preload
 ```
 
 Run the seeded demo:
@@ -142,11 +141,13 @@ storefront/
 ## Testing
 
 ```powershell
-npm test          # 359 tests: catalog, scenarios, validation, providers,
-                  # wallet, bridge, truth/evidence, resolution, HTTP pages,
+npm test          # catalog, scenarios, validation, providers, wallet,
+                  # bridge, truth/evidence, resolution, HTTP pages,
                   # walkthrough, legacy API/store/paystack
 npm run typecheck
 ```
+
+Current test baseline and standing guard: see `../docs/PHASE_3_CLOSURE.md` §5.
 
 The Phase 2K walkthrough suite
 (`test/marketplace/frontend-walkthrough.test.ts`) is the runnable contract for
