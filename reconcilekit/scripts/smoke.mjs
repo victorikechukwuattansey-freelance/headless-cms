@@ -150,7 +150,8 @@ try {
   fail(`--help failed: ${error.message}`);
 }
 process.stdout.write(helpOut);
-if (!/ReconcileKit/.test(helpOut)) fail("--help output does not mention ReconcileKit");
+if (!/ReconcileKit/.test(helpOut))
+  fail("--help output does not mention ReconcileKit");
 
 log("==> npx reconcilekit (real reconciliation)");
 let runOut;
@@ -187,4 +188,6 @@ log(`Artifacts: ${smokeDir}`);
 log(`Tarball:   ${tarballs[0]}`);
 log("");
 log("Clean up with:");
-log(`  node -e "require('node:fs').rmSync(${JSON.stringify(smokeDir)}, {recursive:true,force:true})"`);
+log(
+  `  node -e "require('node:fs').rmSync(${JSON.stringify(smokeDir)}, {recursive:true,force:true})"`,
+);
