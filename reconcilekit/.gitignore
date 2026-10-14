@@ -5,3 +5,4 @@
 # storefront pilot — local runtime data (JSONL), never committed
 storefront/data/
 dist/
+*.tgz
