@@ -119,17 +119,19 @@ no change to a frozen decision was required.
 - `OPERATOR-STATUS-SEMANTICS-REFERENCE.md` — Condition 1 discharge
 - `PHASE_3A_LOCAL_OPERATOR_GUIDE.md` — Conditions 2 and 3 discharge, and the 3D runbook section
 - This document — Phase 3 closure
+- This document's §8 — D2 recorded as blocked on upstream (typescript-eslint / TypeScript 7 incompatibility)
 
 ## 8. Standing exceptions (non-blocking)
 
-| Item                                                          | Source       | Status                                                                               |
-| ------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------ |
-| ESLint lints JS only; `.ts` sources are not linted            | Audit §21 D2 | Open — requires a new devDependency (`typescript-eslint`); not authorized in Phase 3 |
-| `WALLET_FIXED_TIMESTAMP` prototype determinism                | Freeze §10   | Intentional, not scheduled                                                           |
-| No auth, tenancy, DB, deployment, billing, FX, real providers | Freeze §10   | Out of scope; not Phase 3 work                                                       |
+| Item                                                          | Source       | Status                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ESLint lints JS only; `.ts` sources are not linted            | Audit §21 D2 | **BLOCKED ON UPSTREAM** — typescript-eslint does not support TypeScript 7 (peer range `>=4.8.4 <6.1.0`; TS 7 ships without a JS compiler API). Re-evaluate when upstream adds TS 7 support. Workarounds (TS 6 alias, downgrade, unofficial fork) rejected as disproportionate to the benefit. |
+| `WALLET_FIXED_TIMESTAMP` prototype determinism                | Freeze §10   | Intentional, not scheduled                                                                                                                                                                                                                                                                    |
+| No auth, tenancy, DB, deployment, billing, FX, real providers | Freeze §10   | Out of scope; not Phase 3 work                                                                                                                                                                                                                                                                |
 
-None of these blocks Phase 3 completion. D2 is the only one that could be
-closed by a small, self-contained follow-up if authorized.
+None of these blocks Phase 3 completion. D2 is blocked by an upstream
+incompatibility outside the project's control; it is recorded and deferred,
+not silently dropped.
 
 ## 9. Gated tracks — deferral reasons
 
