@@ -57,7 +57,7 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-    storefront:
+  storefront:
     name: Storefront (reconcilekit/storefront/)
     runs-on: ubuntu-latest
     steps:
