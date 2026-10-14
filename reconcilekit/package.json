@@ -6,7 +6,7 @@
   "type": "module",
   "private": false,
   "bin": {
-    "reconcilekit": "./dist/cli/index.js"
+    "reconcilekit": "dist/cli/index.js"
   },
   "files": [
     "dist",
