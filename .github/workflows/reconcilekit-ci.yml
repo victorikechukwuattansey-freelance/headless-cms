@@ -36,15 +36,23 @@ jobs:
           # '24' resolves to the latest 24.x line.
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: reconcilekit/package-lock.json
+          cache-dependency-path: |
+            reconcilekit/package-lock.json
+            reconcilekit/storefront/package-lock.json
 
-      - name: Install
+      - name: Install core dependencies
         run: npm ci
 
-      # The core's test runner is recursive: from reconcilekit/, `node --test`
-      # discovers both src/** and storefront/test/**. The storefront job below
-      # also runs its own suite; the duplication is intentional so each job
-      # fails independently and reports scoped results.
+      # The core's test runner is recursive: from reconcilekit/,
+      # `node --test` discovers both src/** and storefront/test/**. The
+      # storefront's auth modules import runtime dependencies (`cookie`,
+      # `@node-rs/argon2`) that resolve only if the storefront tree is
+      # installed too. Before Phase 5A the storefront had zero runtime
+      # dependencies, so this step was not needed.
+      - name: Install storefront dependencies
+        run: npm ci
+        working-directory: reconcilekit/storefront
+
       - name: Test
         run: npm test
 
