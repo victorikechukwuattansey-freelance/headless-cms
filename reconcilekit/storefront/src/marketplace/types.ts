@@ -164,6 +164,7 @@ export type NotificationStatus = "UNREAD" | "READ" | "ARCHIVED";
 
 export interface MarketplaceCustomer {
   readonly id: string;
+  readonly org_id: string;
   readonly name: string;
   readonly email: string;
   readonly phone: string | null;
@@ -578,5 +579,23 @@ export interface SessionRecord {
   readonly created_at: string;
   readonly expires_at: string;
   readonly revoked_at: string | null;
+  readonly simulated: true;
+}
+
+export interface OrganizationRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly created_at: string;
+  readonly simulated: true;
+}
+
+export type MembershipRole = "OWNER" | "OPERATOR" | "VIEWER";
+
+export interface MembershipRecord {
+  readonly id: string;
+  readonly user_id: string;
+  readonly org_id: string;
+  readonly role: MembershipRole;
+  readonly created_at: string;
   readonly simulated: true;
 }

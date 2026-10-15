@@ -28,6 +28,8 @@ export type StoreKind =
   | "notifications"
   | "ticket_artifacts"
   | "gift_card_artifacts"
+  | "organizations"
+  | "memberships"
   | "payment_events";
 
 const KIND_FILE_NAMES: Readonly<Record<StoreKind, string>> = {
@@ -57,6 +59,8 @@ const KIND_FILE_NAMES: Readonly<Record<StoreKind, string>> = {
   notifications: "notifications.jsonl",
   ticket_artifacts: "ticket-artifacts.jsonl",
   gift_card_artifacts: "gift-card-artifacts.jsonl",
+  organizations: "organizations.jsonl",
+  memberships: "memberships.jsonl",
   payment_events: "payment-events.jsonl",
 };
 

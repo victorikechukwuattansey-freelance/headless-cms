@@ -1,6 +1,13 @@
 import type { JsonlStore } from "../store/jsonl-store.ts";
 import { buildTransactionId, buildTransactionReference } from "../ids.ts";
 import { buildDemoCatalog } from "./catalog.ts";
+import { DEMO_MEMBERSHIP_ID, DEMO_ORG_ID, DEMO_ORG_NAME } from "./tenancy.ts";
+import type {
+  MarketplaceCustomer,
+  MembershipRecord,
+  OrganizationRecord,
+} from "./types.ts";
+import { DEMO_USER_ID } from "../auth/identity.ts";
 import { createMockProviderRegistry } from "./providers/registry.ts";
 import type { PaymentProvider } from "./providers/contracts.ts";
 import {
@@ -39,6 +46,7 @@ import {
  * used across the marketplace tests.
  */
 export const DEMO_SEED_TIMESTAMP = WALLET_FIXED_TIMESTAMP;
+export const DEMO_CUSTOMER_RECORD_ID = "cus_demo";
 
 export const DEMO_WALLET_FUNDING_CUSTOMER_ID = "cus_demo_wallet_funding";
 export const DEMO_WALLET_FUNDING_WALLET_ID = "wl_demo_wallet_funding";
@@ -70,6 +78,75 @@ export interface SeededWalletFundingEntry {
 }
 
 export type SeededDemoEntry = SeededOrderEntry | SeededWalletFundingEntry;
+
+/**
+ * Phase 5A.2 — seed the demo tenant.
+ *
+ * Creates one org, one membership tying the demo user to that org, and the
+ * two known demo customer records (the main demo customer and the wallet
+ * funding customer) with `org_id` set.
+ *
+ * Idempotent: repeated calls converge on the same records.
+ */
+export async function seedDemoTenancy(store: JsonlStore): Promise<void> {
+  const org = await store.readLatestById<OrganizationRecord>(
+    "organizations",
+    DEMO_ORG_ID,
+  );
+  if (org === null) {
+    await store.insert("organizations", {
+      id: DEMO_ORG_ID,
+      name: DEMO_ORG_NAME,
+      created_at: DEMO_SEED_TIMESTAMP,
+      simulated: true,
+    });
+  }
+
+  const membership = await store.readLatestById<MembershipRecord>(
+    "memberships",
+    DEMO_MEMBERSHIP_ID,
+  );
+  if (membership === null) {
+    await store.insert("memberships", {
+      id: DEMO_MEMBERSHIP_ID,
+      user_id: DEMO_USER_ID,
+      org_id: DEMO_ORG_ID,
+      role: "OWNER",
+      created_at: DEMO_SEED_TIMESTAMP,
+      simulated: true,
+    });
+  }
+
+  await ensureDemoCustomer(store, DEMO_CUSTOMER_RECORD_ID, "Demo Customer");
+  await ensureDemoCustomer(
+    store,
+    DEMO_WALLET_FUNDING_CUSTOMER_ID,
+    "Demo Wallet Funding Customer",
+  );
+}
+
+async function ensureDemoCustomer(
+  store: JsonlStore,
+  customerId: string,
+  name: string,
+): Promise<void> {
+  const existing = await store.readLatestById<MarketplaceCustomer>(
+    "marketplace_customers",
+    customerId,
+  );
+  if (existing !== null && existing.org_id === DEMO_ORG_ID) {
+    return;
+  }
+  await store.insert("marketplace_customers", {
+    id: customerId,
+    org_id: DEMO_ORG_ID,
+    name,
+    email: "demo@example.com",
+    phone: "+2340000000000",
+    isDemo: true,
+    createdAt: DEMO_SEED_TIMESTAMP,
+  });
+}
 
 export interface SeededDemoData {
   /** All 16 canonical demo scenarios, one entry each. */
@@ -208,6 +285,8 @@ export async function seedWalletFundingFailure(
  * store is indistinguishable in shape from one produced by real use.
  */
 export async function seedDemoData(store: JsonlStore): Promise<SeededDemoData> {
+  await seedDemoTenancy(store);
+
   const catalog = buildDemoCatalog();
   const registry = createMockProviderRegistry();
   const deps: MarketplaceTransactionDeps = { store, registry, catalog };

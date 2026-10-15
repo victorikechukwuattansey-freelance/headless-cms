@@ -44,11 +44,13 @@ import type {
   TransactionEvent,
   WalletLedgerEntry,
 } from "../marketplace/types.ts";
+import { DEMO_ORG_ID } from "../marketplace/tenancy.ts";
 
 export const DEMO_CUSTOMER_ID = "cus_demo";
 
 export interface ProfileLike {
   readonly id: string;
+  readonly org_id: string;
   readonly name: string;
   readonly email: string;
   readonly phone: string | null;
@@ -330,6 +332,7 @@ export async function customerProfile(
   if (found !== null) {
     return {
       id: found.id,
+      org_id: found.org_id,
       name: found.name,
       email: found.email,
       phone: found.phone,
@@ -338,6 +341,7 @@ export async function customerProfile(
   }
   return {
     id: customerId,
+    org_id: DEMO_ORG_ID,
     name: "Demo Customer",
     email: "demo@example.com",
     phone: "+2340000000000",
