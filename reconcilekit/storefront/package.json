@@ -9,16 +9,28 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "start": "node --env-file-if-exists=.env src/main.ts",
-    "pilot:run": "node src/cli/pilot-run.ts"
+    "pilot:run": "node src/cli/pilot-run.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset --force",
+    "db:smoke": "node src/db/smoke.ts"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
+    "prisma": "6.1.0",
     "typescript": "7.0.2"
   },
   "dependencies": {
     "@node-rs/argon2": "2.2.2",
+    "@prisma/client": "6.1.0",
     "cookie": "2.0.1"
+  },
+  "allowScripts": {
+    "@prisma/client@6.1.0": true,
+    "prisma@6.1.0": true,
+    "@prisma/engines@6.1.0": true
   }
 }

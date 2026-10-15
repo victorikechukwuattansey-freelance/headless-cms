@@ -1,0 +1,586 @@
+// ReconcileKit storefront — Postgres schema.
+//
+// Phase 5B.1a. The schema is the source of truth for the database shape.
+// Prisma Migrate generates SQL migrations under prisma/migrations/; those
+// files are committed. The generated client lives in node_modules/.
+//
+// Conventions:
+// - Model names are PascalCase; table names are snake_case (@@map).
+// - Column names are snake_case (@map where the field name differs).
+// - Money is integer minor units in `Int` columns (Postgres int4 max is
+//   2_147_483_647 kobo = ~21.4M NGN per transaction, which is far above
+//   the storefront's demo envelope). If a real amount ever exceeds the
+//   int4 range, that is a schema change with a real migration, not a
+//   silent data truncation.
+// - Foreign keys use `onDelete: Restrict`. Deletes are not part of the
+//   domain; the ledger and evidence are append-only by design.
+// - No `org_id` on wallet_ledger or evidence_packs (freeze §4.5 / §7).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------
+// Identity and tenancy (5A)
+// -----------------------------------------------------------------
+
+model User {
+  id           String   @id
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  displayName  String   @map("display_name")
+  createdAt    DateTime @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @map("updated_at") @db.Timestamptz(6)
+
+  memberships Membership[]
+  sessions    Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id          String    @id
+  userId      String    @map("user_id")
+  activeOrgId String    @map("active_org_id")
+  createdAt   DateTime  @map("created_at") @db.Timestamptz(6)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  activeOrg Organization @relation(fields: [activeOrgId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([activeOrgId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Organization {
+  id        String   @id
+  name      String
+  createdAt DateTime @map("created_at") @db.Timestamptz(6)
+
+  memberships Membership[]
+  customers   MarketplaceCustomer[]
+  sessions    Session[]
+
+  @@map("organizations")
+}
+
+enum MembershipRole {
+  OWNER
+  OPERATOR
+  VIEWER
+}
+
+model Membership {
+  id        String         @id
+  userId    String         @map("user_id")
+  orgId     String         @map("org_id")
+  role      MembershipRole
+  createdAt DateTime       @map("created_at") @db.Timestamptz(6)
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+  @@map("memberships")
+}
+
+// -----------------------------------------------------------------
+// Marketplace core
+// -----------------------------------------------------------------
+
+model MarketplaceCustomer {
+  id        String   @id
+  orgId     String   @map("org_id")
+  name      String
+  email     String
+  phone     String?
+  isDemo    Boolean  @map("is_demo")
+  createdAt DateTime @map("created_at") @db.Timestamptz(6)
+
+  org           Organization             @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  orders        MarketplaceOrder[]
+  transactions  MarketplaceTransaction[]
+  wallets       Wallet[]
+  disputes      Dispute[]
+  notifications Notification[]
+
+  @@index([orgId])
+  @@map("marketplace_customers")
+}
+
+model MarketplaceOrder {
+  id          String   @id
+  customerId  String   @map("customer_id")
+  serviceId   String   @map("service_id")
+  inputs      Json
+  amountMinor Int      @map("amount_minor")
+  currency    String
+  status      String
+  createdAt   DateTime @map("created_at") @db.Timestamptz(6)
+
+  customer     MarketplaceCustomer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  transactions MarketplaceTransaction[]
+
+  @@index([customerId])
+  @@map("marketplace_orders")
+}
+
+model MarketplaceTransaction {
+  id                String   @id
+  orderId           String   @map("order_id")
+  customerId        String   @map("customer_id")
+  reference         String   @unique
+  scenario          String
+  paymentStatus     String   @map("payment_status")
+  fulfillmentStatus String   @map("fulfillment_status")
+  reconcileOutcome  String?  @map("reconcile_outcome")
+  resolutionStatus  String   @map("resolution_status")
+  customerStatus    String   @map("customer_status")
+  adminStatus       String   @map("admin_status")
+  demoScenarioName  String?  @map("demo_scenario_name")
+  createdAt         DateTime @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @map("updated_at") @db.Timestamptz(6)
+
+  order            MarketplaceOrder             @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  customer         MarketplaceCustomer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  providerAttempts MarketplaceProviderAttempt[]
+  events           TransactionEvent[]
+  evidencePack     EvidencePack?
+  receipts         Receipt[]
+  refunds          Refund[]
+  reversals        Reversal[]
+  disputes         Dispute[]
+  manualReviews    ManualReview[]
+  tickets          TicketArtifact[]
+  giftCards        GiftCardArtifact[]
+  notifications    Notification[]
+
+  @@index([customerId])
+  @@index([orderId])
+  @@index([demoScenarioName])
+  @@map("marketplace_transactions")
+}
+
+model MarketplaceProviderAttempt {
+  id                String   @id
+  transactionId     String   @map("transaction_id")
+  providerId        String   @map("provider_id")
+  serviceId         String   @map("service_id")
+  scenario          String
+  requestReference  String   @map("request_reference")
+  providerReference String?  @map("provider_reference")
+  status            String
+  canonicalStatus   String?  @map("canonical_status")
+  amountMinor       Int?     @map("amount_minor")
+  currency          String?
+  latencyMs         Int      @map("latency_ms")
+  sourceAttributes  Json     @map("source_attributes")
+  attemptedAt       DateTime @map("attempted_at") @db.Timestamptz(6)
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@map("marketplace_provider_attempts")
+}
+
+// -----------------------------------------------------------------
+// Wallet (append-only ledger; no org_id per freeze §4.5 / §7)
+// -----------------------------------------------------------------
+
+model Wallet {
+  id                  String   @id
+  customerId          String   @map("customer_id")
+  currency            String
+  openingBalanceMinor Int      @map("opening_balance_minor")
+  status              String
+  createdAt           DateTime @map("created_at") @db.Timestamptz(6)
+
+  customer MarketplaceCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  ledger   WalletLedgerEntry[]
+
+  @@index([customerId])
+  @@map("wallets")
+}
+
+model WalletLedgerEntry {
+  id            String   @id
+  walletId      String   @map("wallet_id")
+  transactionId String?  @map("transaction_id")
+  type          String
+  amountMinor   Int      @map("amount_minor")
+  currency      String
+  status        String
+  reference     String
+  occurredAt    DateTime @map("occurred_at") @db.Timestamptz(6)
+  metadata      Json
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Restrict)
+
+  @@index([walletId])
+  @@index([transactionId])
+  @@map("wallet_ledger")
+}
+
+// -----------------------------------------------------------------
+// Evidence and reconciliation (append-only; no org_id per §3.4)
+// -----------------------------------------------------------------
+
+model EvidencePack {
+  id                String   @id
+  transactionId     String   @unique @map("transaction_id")
+  customerReference String   @map("customer_reference")
+  providerReference String?  @map("provider_reference")
+  paymentReference  String?  @map("payment_reference")
+  serviceSnapshot   Json     @map("service_snapshot")
+  amountMinor       Int      @map("amount_minor")
+  currency          String
+  timelineEventIds  String[] @map("timeline_event_ids")
+  providerFacts     Json     @map("provider_facts")
+  reconciliation    Json?
+  mismatchFlags     String[] @map("mismatch_flags")
+  resolutionStatus  String   @map("resolution_status")
+  auditEventIds     String[] @map("audit_event_ids")
+  createdAt         DateTime @map("created_at") @db.Timestamptz(6)
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  receipts    Receipt[]
+
+  @@map("evidence_packs")
+}
+
+model TransactionEvent {
+  id            String   @id
+  transactionId String   @map("transaction_id")
+  type          String
+  label         String
+  description   String
+  occurredAt    DateTime @map("occurred_at") @db.Timestamptz(6)
+  actor         String
+  source        String
+  metadata      Json
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@map("transaction_events")
+}
+
+model Receipt {
+  id             String   @id
+  transactionId  String   @map("transaction_id")
+  evidencePackId String   @map("evidence_pack_id")
+  amountMinor    Int      @map("amount_minor")
+  currency       String
+  issuedAt       DateTime @map("issued_at") @db.Timestamptz(6)
+
+  transaction  MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  evidencePack EvidencePack           @relation(fields: [evidencePackId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@map("receipts")
+}
+
+// -----------------------------------------------------------------
+// Resolution
+// -----------------------------------------------------------------
+
+model Refund {
+  id              String    @id
+  transactionId   String    @map("transaction_id")
+  amountMinor     Int       @map("amount_minor")
+  currency        String
+  status          String
+  reason          String
+  initiatedAt     DateTime  @map("initiated_at") @db.Timestamptz(6)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
+  ledgerReference String?   @map("ledger_reference")
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@map("refunds")
+}
+
+model Reversal {
+  id              String    @id
+  transactionId   String    @map("transaction_id")
+  amountMinor     Int       @map("amount_minor")
+  currency        String
+  status          String
+  reason          String
+  initiatedAt     DateTime  @map("initiated_at") @db.Timestamptz(6)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
+  ledgerReference String?   @map("ledger_reference")
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@map("reversals")
+}
+
+model Dispute {
+  id             String   @id
+  transactionId  String   @map("transaction_id")
+  customerId     String   @map("customer_id")
+  reason         String
+  status         String
+  message        String
+  createdAt      DateTime @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @map("updated_at") @db.Timestamptz(6)
+  resolutionNote String?  @map("resolution_note")
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  customer    MarketplaceCustomer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@index([customerId])
+  @@map("disputes")
+}
+
+model ManualReview {
+  id            String    @id
+  transactionId String    @map("transaction_id")
+  reason        String
+  status        String
+  assignedTo    String?   @map("assigned_to")
+  createdAt     DateTime  @map("created_at") @db.Timestamptz(6)
+  resolvedAt    DateTime? @map("resolved_at") @db.Timestamptz(6)
+  operatorNote  String?   @map("operator_note")
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@map("manual_reviews")
+}
+
+// -----------------------------------------------------------------
+// Artifacts
+// -----------------------------------------------------------------
+
+model TicketArtifact {
+  id                    String    @id
+  transactionId         String    @map("transaction_id")
+  ticketKind            String    @map("ticket_kind")
+  reservationReference  String?   @map("reservation_reference")
+  issueReference        String?   @map("issue_reference")
+  passengerOrAttendee   String    @map("passenger_or_attendee")
+  routeOrVenue          String    @map("route_or_venue")
+  seat                  String?
+  status                String
+  maskedCode            String?   @map("masked_code")
+  issuedAt              DateTime? @map("issued_at") @db.Timestamptz(6)
+  cancellationReference String?   @map("cancellation_reference")
+  cancelledAt           DateTime? @map("cancelled_at") @db.Timestamptz(6)
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@map("ticket_artifacts")
+}
+
+model GiftCardArtifact {
+  id                String   @id
+  transactionId     String   @map("transaction_id")
+  brand             String
+  region            String
+  denominationMinor Int      @map("denomination_minor")
+  currency          String
+  quantity          Int
+  deliveryStatus    String   @map("delivery_status")
+  redemptionStatus  String   @map("redemption_status")
+  maskedCodePreview String?  @map("masked_code_preview")
+  riskFlags         String[] @map("risk_flags")
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@map("gift_card_artifacts")
+}
+
+// -----------------------------------------------------------------
+// Notifications
+// -----------------------------------------------------------------
+
+model Notification {
+  id            String   @id
+  customerId    String   @map("customer_id")
+  transactionId String?  @map("transaction_id")
+  title         String
+  body          String
+  status        String
+  createdAt     DateTime @map("created_at") @db.Timestamptz(6)
+
+  customer    MarketplaceCustomer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  transaction MarketplaceTransaction? @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+  @@map("notifications")
+}
+
+// -----------------------------------------------------------------
+// Payment source layer
+// -----------------------------------------------------------------
+
+model PaymentEvent {
+  id                     String    @id
+  eventId                String    @unique @map("event_id")
+  idempotencyKey         String    @unique @map("idempotency_key")
+  transactionId          String?   @map("transaction_id")
+  merchantReference      String?   @map("merchant_reference")
+  paymentSource          String    @map("payment_source")
+  paymentSourceReference String?   @map("payment_source_reference")
+  sourceEventId          String?   @map("source_event_id")
+  eventType              String    @map("event_type")
+  amount                 Int
+  currency               String
+  status                 String?
+  occurredAt             DateTime? @map("occurred_at") @db.Timestamptz(6)
+  sourceConfidence       String    @map("source_confidence")
+  sourceAttributes       Json      @map("source_attributes")
+  observedAt             DateTime  @map("observed_at") @db.Timestamptz(6)
+
+  @@index([paymentSourceReference])
+  @@index([transactionId])
+  @@map("payment_events")
+}
+
+// -----------------------------------------------------------------
+// Catalog (read-mostly seed data)
+// -----------------------------------------------------------------
+
+model CatalogCategory {
+  id               String @id
+  group            String
+  name             String
+  description      String
+  complianceStatus String @map("compliance_status")
+  displayOrder     Int    @map("display_order")
+
+  services CatalogService[]
+  products CatalogProduct[]
+
+  @@map("catalog_categories")
+}
+
+model CatalogService {
+  id               String @id
+  categoryId       String @map("category_id")
+  providerId       String @map("provider_id")
+  kind             String
+  name             String
+  description      String
+  currency         String
+  baseAmountMinor  Int    @map("base_amount_minor")
+  complianceStatus String @map("compliance_status")
+  fulfillmentType  String @map("fulfillment_type")
+  availability     String
+  inputSchema      Json   @map("input_schema")
+
+  category CatalogCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  products CatalogProduct[]
+
+  @@index([categoryId])
+  @@map("catalog_services")
+}
+
+model CatalogProduct {
+  id              String @id
+  serviceId       String @map("service_id")
+  categoryId      String @map("category_id")
+  providerId      String @map("provider_id")
+  name            String
+  description     String
+  kind            String
+  fulfillmentType String @map("fulfillment_type")
+  pricing         Json
+  availability    String
+  attributes      Json
+
+  service  CatalogService  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  category CatalogCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([serviceId])
+  @@index([categoryId])
+  @@map("catalog_products")
+}
+
+// -----------------------------------------------------------------
+// Legacy Phase 2C Paystack acquisition surface
+// -----------------------------------------------------------------
+
+model Business {
+  id        String   @id
+  name      String
+  createdAt DateTime @map("created_at") @db.Timestamptz(6)
+
+  products Product[]
+  orders   Order[]
+  payments Payment[]
+
+  @@map("businesses")
+}
+
+model Product {
+  id         String   @id
+  businessId String   @map("business_id")
+  name       String
+  priceMinor Int      @map("price_minor")
+  currency   String
+  createdAt  DateTime @map("created_at") @db.Timestamptz(6)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  orders   Order[]
+
+  @@index([businessId])
+  @@map("products")
+}
+
+model Order {
+  id                  String   @id
+  businessId          String   @map("business_id")
+  productId           String   @map("product_id")
+  customerEmail       String   @map("customer_email")
+  expectedAmountMinor Int      @map("expected_amount_minor")
+  currency            String
+  status              String
+  paystackReference   String?  @map("paystack_reference")
+  authorizationUrl    String?  @map("authorization_url")
+  createdAt           DateTime @map("created_at") @db.Timestamptz(6)
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  product  Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  payments Payment[]
+
+  @@index([businessId])
+  @@map("orders")
+}
+
+model Payment {
+  id                String    @id
+  orderId           String    @map("order_id")
+  businessId        String    @map("business_id")
+  expectedAmount    Int       @map("expected_amount")
+  currency          String
+  paystackReference String?   @map("paystack_reference")
+  status            String
+  paidAt            DateTime? @map("paid_at") @db.Timestamptz(6)
+  refundStatus      String    @map("refund_status")
+  metadata          Json
+  recordedAt        DateTime  @map("recorded_at") @db.Timestamptz(6)
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([businessId])
+  @@map("payments")
+}
