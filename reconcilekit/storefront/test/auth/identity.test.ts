@@ -102,10 +102,7 @@ test("identity: loginUser returns null for wrong password", async (t) => {
 
 test("identity: loginUser returns null for an unknown email", async (t) => {
   const store = tempStore(t);
-  assert.equal(
-    await loginUser(store, "nobody@example.com", "anything"),
-    null,
-  );
+  assert.equal(await loginUser(store, "nobody@example.com", "anything"), null);
 });
 
 test("identity: seedDemoUser is idempotent", async (t) => {

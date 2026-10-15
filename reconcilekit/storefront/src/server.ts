@@ -93,17 +93,10 @@ import {
   renderAdminTransactionDetailPage,
 } from "./ui/admin-pages.ts";
 import { APP_CSS, APP_JS } from "./ui/styles.ts";
-import {
-  createSession,
-  revokeSession,
-} from "./auth/sessions.ts";
+import { createSession, revokeSession } from "./auth/sessions.ts";
 import { loginUser } from "./auth/identity.ts";
-import {
-  clearSessionCookie,
-  serializeSessionCookie,
-} from "./auth/cookies.ts";
+import { clearSessionCookie, serializeSessionCookie } from "./auth/cookies.ts";
 import { readSessionToken } from "./auth/middleware.ts";
-
 
 export interface ServerDependencies {
   readonly store: JsonlStore;
@@ -903,7 +896,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
   // POST routes
   if (method === "POST") {
     // /login
-      if (path === "/login") {
+    if (path === "/login") {
       const form = await readFormBody(req);
       const email = form.get("email") ?? "";
       const password = form.get("password") ?? "";

@@ -65,7 +65,9 @@ export async function registerUser(
   const now = input.now ?? new Date();
   const password_hash = await hashPassword(input.password);
   const user: UserRecord = {
-    id: input.id ?? `usr_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+    id:
+      input.id ??
+      `usr_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
     email,
     password_hash,
     display_name: input.displayName,

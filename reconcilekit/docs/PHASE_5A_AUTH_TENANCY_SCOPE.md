@@ -72,11 +72,11 @@ the first time. The current state cannot satisfy it.
 - **No change** to `reconcilekit/src/**`.
 - **No change** to any wallet, ledger, transaction, evidence, or
   reconciliation code path.
-**Runtime dependencies.** 5A.1 introduces the storefront's first runtime
-dependencies: `@node-rs/argon2` (password hashing) and `cookie` (cookie
-parsing). Both are devDependencies-of-nothing and runtime-deps-of-storefront.
-The core package (`reconcilekit/`) remains at one runtime dependency
-(`csv-parse`).
+  **Runtime dependencies.** 5A.1 introduces the storefront's first runtime
+  dependencies: `@node-rs/argon2` (password hashing) and `cookie` (cookie
+  parsing). Both are devDependencies-of-nothing and runtime-deps-of-storefront.
+  The core package (`reconcilekit/`) remains at one runtime dependency
+  (`csv-parse`).
 
 ### 2.5 Affected tests and contracts
 

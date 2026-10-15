@@ -88,7 +88,7 @@ export function loadConfig(
 
   const seedRaw = env.STOREFRONT_SEED_DEMO?.trim().toLowerCase();
   const seedDemo = seedRaw === "1" || seedRaw === "true" || seedRaw === "yes";
-  
+
   const sessionCookieName =
     env.STOREFRONT_SESSION_COOKIE_NAME?.trim() || DEFAULT_SESSION_COOKIE_NAME;
   if (!/^[A-Za-z0-9_.-]+$/.test(sessionCookieName)) {
@@ -97,16 +97,22 @@ export function loadConfig(
     );
   }
 
-  const ttlRaw = env.STOREFRONT_SESSION_TTL_HOURS ?? String(DEFAULT_SESSION_TTL_HOURS);
+  const ttlRaw =
+    env.STOREFRONT_SESSION_TTL_HOURS ?? String(DEFAULT_SESSION_TTL_HOURS);
   const sessionTtlHours = Number(ttlRaw);
-  if (!Number.isInteger(sessionTtlHours) || sessionTtlHours < 1 || sessionTtlHours > 8760) {
+  if (
+    !Number.isInteger(sessionTtlHours) ||
+    sessionTtlHours < 1 ||
+    sessionTtlHours > 8760
+  ) {
     throw new StorefrontConfigError(
       `STOREFRONT_SESSION_TTL_HOURS must be an integer between 1 and 8760, received ${JSON.stringify(ttlRaw)}`,
     );
   }
 
   const secureRaw = env.STOREFRONT_COOKIE_SECURE?.trim().toLowerCase();
-  const cookieSecure = secureRaw === "1" || secureRaw === "true" || secureRaw === "yes";
+  const cookieSecure =
+    secureRaw === "1" || secureRaw === "true" || secureRaw === "yes";
   return {
     port,
     dataDir,

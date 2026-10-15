@@ -44,7 +44,7 @@ const marketplaceDeps: MarketplaceTransactionDeps = {
 
 if (config.seedDemo) {
   await seedDemoData(store);
-   await seedDemoUser(store);
+  await seedDemoUser(store);
 }
 
 const server = createStorefrontServer(config, {

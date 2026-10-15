@@ -1,9 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  hashPassword,
-  verifyPassword,
-} from "../../src/auth/passwords.ts";
+import { hashPassword, verifyPassword } from "../../src/auth/passwords.ts";
 
 test("passwords: hash produces a PHC-encoded argon2id string", async () => {
   const hash = await hashPassword("correct-horse-battery-staple");

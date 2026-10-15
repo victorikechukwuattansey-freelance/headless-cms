@@ -40,7 +40,11 @@ test("sessions: lookupSession finds a valid session", async (t) => {
     ttlHours: 72,
     now: new Date("2026-01-01T00:00:00Z"),
   });
-  const found = await lookupSession(store, token, new Date("2026-01-02T00:00:00Z"));
+  const found = await lookupSession(
+    store,
+    token,
+    new Date("2026-01-02T00:00:00Z"),
+  );
   assert.ok(found !== null);
   assert.equal(found.user_id, "usr_demo");
 });
@@ -57,7 +61,11 @@ test("sessions: lookupSession rejects an expired session", async (t) => {
     ttlHours: 1,
     now: new Date("2026-01-01T00:00:00Z"),
   });
-  const found = await lookupSession(store, token, new Date("2026-01-01T02:00:00Z"));
+  const found = await lookupSession(
+    store,
+    token,
+    new Date("2026-01-01T02:00:00Z"),
+  );
   assert.equal(found, null);
 });
 
@@ -68,15 +76,26 @@ test("sessions: revokeSession marks the latest record revoked", async (t) => {
     ttlHours: 72,
     now: new Date("2026-01-01T00:00:00Z"),
   });
-  const revoked = await revokeSession(store, token, new Date("2026-01-01T01:00:00Z"));
+  const revoked = await revokeSession(
+    store,
+    token,
+    new Date("2026-01-01T01:00:00Z"),
+  );
   assert.equal(revoked, true);
-  const found = await lookupSession(store, token, new Date("2026-01-01T02:00:00Z"));
+  const found = await lookupSession(
+    store,
+    token,
+    new Date("2026-01-01T02:00:00Z"),
+  );
   assert.equal(found, null);
 });
 
 test("sessions: revokeSession is idempotent", async (t) => {
   const store = tempStore(t);
-  const { token } = await createSession(store, { userId: "usr_demo", ttlHours: 1 });
+  const { token } = await createSession(store, {
+    userId: "usr_demo",
+    ttlHours: 1,
+  });
   assert.equal(await revokeSession(store, token), true);
   assert.equal(await revokeSession(store, token), false);
 });
