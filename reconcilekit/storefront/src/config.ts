@@ -7,6 +7,9 @@ export interface StorefrontConfig {
   readonly paystackBaseUrl: string;
   readonly callbackBaseUrl: string;
   readonly seedDemo: boolean;
+  readonly sessionCookieName: string;
+  readonly sessionTtlHours: number;
+  readonly cookieSecure: boolean;
 }
 
 export class StorefrontConfigError extends Error {
@@ -16,6 +19,8 @@ export class StorefrontConfigError extends Error {
   }
 }
 
+export const DEFAULT_SESSION_COOKIE_NAME = "rk_session";
+export const DEFAULT_SESSION_TTL_HOURS = 72;
 export const DEFAULT_PORT = 8787;
 export const DEFAULT_PAYSTACK_BASE_URL = "https://api.paystack.co";
 export const DEFAULT_DATA_DIR = join(import.meta.dirname, "..", "data");
@@ -83,7 +88,25 @@ export function loadConfig(
 
   const seedRaw = env.STOREFRONT_SEED_DEMO?.trim().toLowerCase();
   const seedDemo = seedRaw === "1" || seedRaw === "true" || seedRaw === "yes";
+  
+  const sessionCookieName =
+    env.STOREFRONT_SESSION_COOKIE_NAME?.trim() || DEFAULT_SESSION_COOKIE_NAME;
+  if (!/^[A-Za-z0-9_.-]+$/.test(sessionCookieName)) {
+    throw new StorefrontConfigError(
+      "STOREFRONT_SESSION_COOKIE_NAME must be a valid cookie name (letters, digits, _.- )",
+    );
+  }
 
+  const ttlRaw = env.STOREFRONT_SESSION_TTL_HOURS ?? String(DEFAULT_SESSION_TTL_HOURS);
+  const sessionTtlHours = Number(ttlRaw);
+  if (!Number.isInteger(sessionTtlHours) || sessionTtlHours < 1 || sessionTtlHours > 8760) {
+    throw new StorefrontConfigError(
+      `STOREFRONT_SESSION_TTL_HOURS must be an integer between 1 and 8760, received ${JSON.stringify(ttlRaw)}`,
+    );
+  }
+
+  const secureRaw = env.STOREFRONT_COOKIE_SECURE?.trim().toLowerCase();
+  const cookieSecure = secureRaw === "1" || secureRaw === "true" || secureRaw === "yes";
   return {
     port,
     dataDir,
@@ -92,5 +115,8 @@ export function loadConfig(
     paystackBaseUrl: parsedBaseUrl.origin,
     callbackBaseUrl: parsedCallbackUrl.origin,
     seedDemo,
+    sessionCookieName,
+    sessionTtlHours,
+    cookieSecure,
   };
 }

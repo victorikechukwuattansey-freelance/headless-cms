@@ -93,6 +93,17 @@ import {
   renderAdminTransactionDetailPage,
 } from "./ui/admin-pages.ts";
 import { APP_CSS, APP_JS } from "./ui/styles.ts";
+import {
+  createSession,
+  revokeSession,
+} from "./auth/sessions.ts";
+import { loginUser } from "./auth/identity.ts";
+import {
+  clearSessionCookie,
+  serializeSessionCookie,
+} from "./auth/cookies.ts";
+import { readSessionToken } from "./auth/middleware.ts";
+
 
 export interface ServerDependencies {
   readonly store: JsonlStore;
@@ -155,6 +166,7 @@ async function handleRequest(
         res,
         url,
         deps.marketplace,
+        config,
       );
       if (handled) {
         return;
@@ -609,6 +621,7 @@ async function tryHandleMarketplace(
   res: import("node:http").ServerResponse,
   url: URL,
   deps: MarketplaceTransactionDeps,
+  config: StorefrontConfig,
 ): Promise<boolean> {
   const path = url.pathname;
   const method = req.method ?? "GET";
@@ -616,7 +629,7 @@ async function tryHandleMarketplace(
   // When marketplace deps are available, handle ALL paths with HTML responses
   // This ensures unknown routes return HTML 404 instead of JSON
   try {
-    await routeMarketplace(req, res, url, deps, method);
+    await routeMarketplace(req, res, url, deps, method, config);
     return true;
   } catch (error) {
     writeMarketplaceHtmlError(res, error, path);
@@ -658,6 +671,7 @@ async function routeMarketplace(
   url: URL,
   deps: MarketplaceTransactionDeps,
   method: string,
+  config: StorefrontConfig,
 ): Promise<void> {
   const path = url.pathname;
 
@@ -888,6 +902,52 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
 
   // POST routes
   if (method === "POST") {
+    // /login
+      if (path === "/login") {
+      const form = await readFormBody(req);
+      const email = form.get("email") ?? "";
+      const password = form.get("password") ?? "";
+      if (email === "" || password === "") {
+        const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
+        res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(renderLoginPage(customer, "Email and password are required."));
+        return;
+      }
+      const user = await loginUser(deps.store, email, password);
+      if (user === null) {
+        const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
+        res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(renderLoginPage(customer, "Invalid email or password."));
+        return;
+      }
+      const { token } = await createSession(deps.store, {
+        userId: user.id,
+        ttlHours: config.sessionTtlHours,
+      });
+      res.setHeader(
+        "Set-Cookie",
+        serializeSessionCookie(token, {
+          name: config.sessionCookieName,
+          maxAgeSeconds: config.sessionTtlHours * 3600,
+          secure: config.cookieSecure,
+        }),
+      );
+      redirect(res, 303, "/");
+      return;
+    }
+
+    if (path === "/logout") {
+      const token = readSessionToken(req, config.sessionCookieName);
+      if (token !== null) {
+        await revokeSession(deps.store, token);
+      }
+      res.setHeader(
+        "Set-Cookie",
+        clearSessionCookie(config.sessionCookieName, config.cookieSecure),
+      );
+      redirect(res, 303, "/login");
+      return;
+    }
     // /checkout
     if (path === "/checkout") {
       const form = await readFormBody(req);

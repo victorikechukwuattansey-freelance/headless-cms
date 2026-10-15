@@ -4,6 +4,8 @@ import { join } from "node:path";
 export type StoreKind =
   | "businesses"
   | "products"
+  | "users"
+  | "sessions"
   | "orders"
   | "payments"
   | "marketplace_customers"
@@ -31,6 +33,8 @@ export type StoreKind =
 const KIND_FILE_NAMES: Readonly<Record<StoreKind, string>> = {
   businesses: "businesses.jsonl",
   products: "products.jsonl",
+  users: "users.jsonl",
+  sessions: "sessions.jsonl",
   orders: "orders.jsonl",
   payments: "payments.jsonl",
   marketplace_customers: "marketplace-customers.jsonl",

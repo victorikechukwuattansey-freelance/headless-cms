@@ -561,3 +561,22 @@ export interface FxTransparency {
   readonly discrepancyStatus: Outcome | null;
   readonly simulated: true;
 }
+
+export interface UserRecord {
+  readonly id: string;
+  readonly email: string;
+  readonly password_hash: string;
+  readonly display_name: string;
+  readonly created_at: string;
+  readonly updated_at: string;
+  readonly simulated: true;
+}
+
+export interface SessionRecord {
+  readonly id: string;
+  readonly user_id: string;
+  readonly created_at: string;
+  readonly expires_at: string;
+  readonly revoked_at: string | null;
+  readonly simulated: true;
+}

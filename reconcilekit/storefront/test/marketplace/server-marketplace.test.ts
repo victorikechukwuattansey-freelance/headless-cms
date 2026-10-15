@@ -30,14 +30,16 @@ test("home page loads with dashboard data", async () => {
   }
 });
 
-test("login page loads with demo identity", async () => {
+test("login page loads with demo identity", async (t) => {
   const app = await startSeededServer();
   try {
     const res = await fetch(`${app.baseUrl}/login`);
     assert.equal(res.status, 200);
     const html = await res.text();
+    assert.match(html, /Sign in to MarketPlace/);
+    assert.match(html, /name="email"/);
+    assert.match(html, /name="password"/);
     assert.match(html, /demo@example\.com/);
-    assert.match(html, /demo identity/);
   } finally {
     await app.close();
   }

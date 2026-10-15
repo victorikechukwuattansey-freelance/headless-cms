@@ -126,29 +126,35 @@ function notificationsBrief(items: readonly BriefNotification[]): string {
   </ul>`;
 }
 
-export function renderLoginPage(customer: CustomerProfile): string {
+export function renderLoginPage(
+  customer: CustomerProfile,
+  errorMessage?: string,
+): string {
+  const errorBlock =
+    errorMessage === undefined
+      ? ""
+      : `<div class="notice notice-warn" role="alert">${icon("alert")}<span>${escapeHtml(errorMessage)}</span></div>`;
   const content = `
   <section class="hero">
     <h2>Sign in to MarketPlace</h2>
-    <p>Phase 2I ships a simulated identity so the whole surface can be explored locally. Real authentication is scoped out of this phase.</p>
+    <p>Sign in with your account to continue.</p>
   </section>
   <div class="card" style="max-width:460px;margin-top:22px">
+    ${errorBlock}
     <form method="post" action="/login" class="form-grid">
       <div class="field">
         <label for="email">Email</label>
-        <input id="email" name="email" type="email" value="${attr(customer.email)}">
+        <input id="email" name="email" type="email" autocomplete="username" required value="${attr(customer.email === "demo@example.com" ? "demo@example.com" : "")}">
       </div>
       <div class="field">
         <label for="password">Password</label>
-        <input id="password" name="password" type="password" value="demo-password">
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
       </div>
-      <button class="btn primary" type="submit">${icon("arrowLeft")} Continue as demo identity</button>
-      <p class="muted" style="font-size:0.82em">Any credentials continue as ${attr(customer.id)}.</p>
+      <button class="btn primary" type="submit">${icon("arrowLeft")} Sign in</button>
     </form>
   </div>`;
   return renderPage({ title: "Sign in", active: "/" }, content);
 }
-
 export function renderDashboardPage(vm: DashboardViewModel): string {
   const content = `
   <div class="page-head">

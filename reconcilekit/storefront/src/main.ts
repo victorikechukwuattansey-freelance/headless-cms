@@ -8,6 +8,7 @@ import type { MarketplaceTransactionDeps } from "./marketplace/transactions.ts";
 import { createMockProviderRegistry } from "./marketplace/providers/registry.ts";
 import { buildDemoCatalog } from "./marketplace/catalog.ts";
 import { seedDemoData } from "./marketplace/seed.ts";
+import { seedDemoUser } from "./auth/identity.ts";
 
 function buildPaystackGateway(config: StorefrontConfig): PaystackGateway {
   const withSecret =
@@ -43,6 +44,7 @@ const marketplaceDeps: MarketplaceTransactionDeps = {
 
 if (config.seedDemo) {
   await seedDemoData(store);
+   await seedDemoUser(store);
 }
 
 const server = createStorefrontServer(config, {
