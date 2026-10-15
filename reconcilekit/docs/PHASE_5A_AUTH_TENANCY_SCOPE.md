@@ -72,6 +72,11 @@ the first time. The current state cannot satisfy it.
 - **No change** to `reconcilekit/src/**`.
 - **No change** to any wallet, ledger, transaction, evidence, or
   reconciliation code path.
+**Runtime dependencies.** 5A.1 introduces the storefront's first runtime
+dependencies: `@node-rs/argon2` (password hashing) and `cookie` (cookie
+parsing). Both are devDependencies-of-nothing and runtime-deps-of-storefront.
+The core package (`reconcilekit/`) remains at one runtime dependency
+(`csv-parse`).
 
 ### 2.5 Affected tests and contracts
 
@@ -123,15 +128,13 @@ interface UserRecord {
 }
 ```
 
-Password hashing: **Node `node:crypto` `scrypt`.** Zero dependencies.
-Storage format (PHC-like):
+Password hashing: **`@node-rs/argon2`** (Argon2id). The `@node-rs` build ships
+prebuilt binaries for `linux-x64-gnu` and `win32-x64-msvc`; `npm ci` does not
+compile anything. This is the storefront's first runtime dependency.
 
-```
-scrypt$N=16384,r=8,p=1$<salt_base64>$<hash_base64>
-```
-
-Parameters chosen to match the OWASP 2023 recommended minimum for `scrypt`
-(N=16384, r=8, p=1). Salt is 16 random bytes.
+Parameters (OWASP 2024 minimum for Argon2id):
+`m=19456` (19 MiB), `t=2`, `p=1`, 16-byte salt, 32-byte output.
+Encoded as a standard PHC string: `$argon2id$v=19$m=19456,t=2,p=1$<salt>$<hash>`.
 
 `display_name` is a human label only, never used for authorization.
 
@@ -263,15 +266,9 @@ existing pattern of `STOREFRONT_SEED_DEMO`.
 ### 3.7 Cookie parsing
 
 The storefront's `node:http` server does not currently parse cookies. 5A.1
-adds a minimal parser in `storefront/src/auth/cookies.ts`:
-
-- `parseCookies(header: string): Map<string, string>` — splits on `;`,
-  trims, decodes.
-- `formatSetCookie(name: string, value: string, options): string` — builds
-  the `Set-Cookie` header value.
-
-No `cookie` npm package. The parser is ~30 lines and the RFC is simple for
-the well-formed case. Malformed cookie headers are ignored, not rejected.
+adds `storefront/src/auth/cookies.ts` — a thin wrapper around the **`cookie`**
+npm package (1.5 kB, zero deps). Handles RFC 6265 quoted values and encoding.
+Malformed cookie headers are swallowed, not rejected.
 
 ### 3.8 New auth module
 
