@@ -148,7 +148,7 @@ export function renderLoginPage(
       </div>
       <div class="field">
         <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
+          <input id="password" name="password" type="password" autocomplete="current-password" required value="${attr(customer.isDemo ? "demo-password" : "")}">
       </div>
       <button class="btn primary" type="submit">${icon("arrowLeft")} Sign in</button>
     </form>

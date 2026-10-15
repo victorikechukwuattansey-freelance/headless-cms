@@ -11,9 +11,13 @@ import { executeMarketplaceTransaction } from "../../src/marketplace/transaction
 import { reconcileMarketplaceTransaction } from "../../src/marketplace/reconcile.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import type { MarketplaceTransaction } from "../../src/marketplace/types.ts";
+import { seedDemoTenancy } from "../../src/marketplace/seed.ts";
+import { seedDemoUser } from "../../src/auth/identity.ts";
+import { loginAndGetCookie } from "../auth/helpers.ts";
 
 export interface SeededServerContext {
   readonly baseUrl: string;
+  readonly cookie: string;
   readonly close: () => Promise<void>;
   readonly store: JsonlStore;
   readonly transaction: MarketplaceTransaction;
@@ -46,6 +50,11 @@ export async function startSeededServer(): Promise<SeededServerContext> {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-marketplace-"));
   const store = new JsonlStore(dataDir);
 
+  // Phase 5A.3b — protected routes require a session. Seed the demo user and
+  // tenancy so the shared login helper can authenticate against this server.
+  await seedDemoUser(store);
+  await seedDemoTenancy(store);
+
   const transaction = await createSeededTransaction(store);
 
   const server: Server = createStorefrontServer(
@@ -66,9 +75,12 @@ export async function startSeededServer(): Promise<SeededServerContext> {
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const cookie = await loginAndGetCookie(baseUrl);
 
   return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl,
+    cookie,
     close: () =>
       new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),

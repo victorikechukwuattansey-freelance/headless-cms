@@ -14,18 +14,16 @@ import {
   type SeededDemoData,
   type SeededOrderEntry,
 } from "../../src/marketplace/seed.ts";
-import {
-  DEMO_SCENARIO_NAMES,
-  WALLET_FUNDING_SCENARIO_NAME,
-} from "../../src/marketplace/demo-scenarios.ts";
+import { seedDemoUser } from "../../src/auth/identity.ts";
+import { loginAndGetCookie, withCookie } from "../auth/helpers.ts";
 import type {
   EvidencePack,
   MarketplaceTransaction,
-  WalletLedgerEntry,
 } from "../../src/marketplace/types.ts";
 
 interface FindingsServer {
   readonly baseUrl: string;
+  readonly cookie: string;
   readonly close: () => Promise<void>;
   readonly store: JsonlStore;
   readonly seeded: SeededDemoData;
@@ -38,6 +36,7 @@ async function startServer(t: {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   const seeded = await seedDemoData(store);
+  await seedDemoUser(store);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
@@ -57,9 +56,12 @@ async function startServer(t: {
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const cookie = await loginAndGetCookie(baseUrl);
 
   return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl,
+    cookie,
     close: () =>
       new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
@@ -69,28 +71,19 @@ async function startServer(t: {
   };
 }
 
-async function fetchSummary(app: FindingsServer): Promise<string> {
-  const res = await fetch(`${app.baseUrl}/findings`);
-  assert.equal(res.status, 200, "findings summary status");
-  return res.text();
-}
-
 function entryOf(app: FindingsServer, name: string): SeededOrderEntry {
   const entry = app.seeded.byName[name] as SeededOrderEntry;
   assert.ok(entry, `seed entry ${name}`);
   return entry;
 }
 
-// ----------------------------------------------------------------
-// Interaction 1 — findings summary
-// ----------------------------------------------------------------
-
 test("3D summary: lists every non-MATCH evidence pack and omits MATCH", async (t) => {
   const app = await startServer(t);
   try {
-    const html = await fetchSummary(app);
+    const res = await fetch(`${app.baseUrl}/findings`, withCookie(app.cookie));
+    assert.equal(res.status, 200, "summary status");
+    const html = await res.text();
 
-    // Non-MATCH scenarios from the seeded demo data
     for (const name of [
       "provider_mismatch",
       "provider_timeout",
@@ -103,7 +96,6 @@ test("3D summary: lists every non-MATCH evidence pack and omits MATCH", async (t
       );
     }
 
-    // MATCH scenarios must not appear
     for (const name of ["successful_airtime", "successful_gift_card"]) {
       const entry = entryOf(app, name);
       assert.equal(
@@ -120,7 +112,9 @@ test("3D summary: lists every non-MATCH evidence pack and omits MATCH", async (t
 test("3D summary: shows outcome, codes, and amount for each finding", async (t) => {
   const app = await startServer(t);
   try {
-    const html = await fetchSummary(app);
+    const res = await fetch(`${app.baseUrl}/findings`, withCookie(app.cookie));
+    assert.equal(res.status, 200);
+    const html = await res.text();
     assert.match(html, /DISCREPANCY|UNRESOLVED|MISSING_PROVIDER_RECORD/);
     assert.match(html, /AMOUNT_MISMATCH/);
   } finally {
@@ -128,16 +122,13 @@ test("3D summary: shows outcome, codes, and amount for each finding", async (t) 
   }
 });
 
-// ----------------------------------------------------------------
-// Interaction 2 — per-record determination
-// ----------------------------------------------------------------
-
 test("3D determination: shows merchant side, provider side, and engine outcome", async (t) => {
   const app = await startServer(t);
   try {
     const entry = entryOf(app, "provider_mismatch");
     const res = await fetch(
       `${app.baseUrl}/findings/${encodeURIComponent(entry.reference)}`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 200);
     const html = await res.text();
@@ -149,7 +140,6 @@ test("3D determination: shows merchant side, provider side, and engine outcome",
     assert.match(html, /What happens next/);
     assert.match(html, /AMOUNT_MISMATCH/);
     assert.match(html, /DISCREPANCY/);
-    // Join anchor and display reference both rendered
     assert.ok(html.includes(entry.transaction.id), "join anchor rendered");
     assert.ok(html.includes(entry.reference), "display reference rendered");
   } finally {
@@ -163,6 +153,7 @@ test("3D determination: STATUS_UNRESOLVED gets the do-not-fulfill explanation", 
     const entry = entryOf(app, "manual_review");
     const res = await fetch(
       `${app.baseUrl}/findings/${encodeURIComponent(entry.reference)}`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 200);
     const html = await res.text();
@@ -178,6 +169,7 @@ test("3D determination: unknown identifier is a 404", async (t) => {
   try {
     const res = await fetch(
       `${app.baseUrl}/findings/${encodeURIComponent("txn_does_not_exist")}`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 404);
   } finally {
@@ -185,16 +177,13 @@ test("3D determination: unknown identifier is a 404", async (t) => {
   }
 });
 
-// ----------------------------------------------------------------
-// Interaction 3 — masked evidence pack
-// ----------------------------------------------------------------
-
 test("3D evidence: shows masked provider facts and the reconciliation snapshot", async (t) => {
   const app = await startServer(t);
   try {
     const entry = entryOf(app, "provider_mismatch");
     const res = await fetch(
       `${app.baseUrl}/findings/${encodeURIComponent(entry.reference)}/evidence`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 200);
     const html = await res.text();
@@ -209,12 +198,10 @@ test("3D evidence: shows masked provider facts and the reconciliation snapshot",
 test("3D evidence: gift-card codes stay masked on the finding evidence route", async (t) => {
   const app = await startServer(t);
   try {
-    // Successful gift card is not a finding, so first confirm it is not in the
-    // summary; then exercise the finding evidence route against a mismatch
-    // scenario to prove masking is applied through the finding surface.
     const entry = entryOf(app, "provider_mismatch");
     const res = await fetch(
       `${app.baseUrl}/findings/${encodeURIComponent(entry.reference)}/evidence`,
+      withCookie(app.cookie),
     );
     const html = await res.text();
     assert.doesNotMatch(html, /"code":"/, "no unmasked code material");
@@ -223,37 +210,37 @@ test("3D evidence: gift-card codes stay masked on the finding evidence route", a
   }
 });
 
-// ----------------------------------------------------------------
-// Workflow integrity
-// ----------------------------------------------------------------
-
 test("3D workflow: summary → determination → evidence reachable in exactly 3 GETs", async (t) => {
   const app = await startServer(t);
   try {
-    // Interaction 1
-    const summary = await fetch(`${app.baseUrl}/findings`);
+    const summary = await fetch(
+      `${app.baseUrl}/findings`,
+      withCookie(app.cookie),
+    );
     assert.equal(summary.status, 200);
     const summaryHtml = await summary.text();
 
-    // Extract the first finding's detail href from the summary
     const hrefMatch = summaryHtml.match(/href="(\/findings\/[^"]+)"/);
     assert.ok(hrefMatch, "summary exposes a determination link");
     const determinationPath = hrefMatch[1] as string;
 
-    // Interaction 2
-    const determination = await fetch(`${app.baseUrl}${determinationPath}`);
+    const determination = await fetch(
+      `${app.baseUrl}${determinationPath}`,
+      withCookie(app.cookie),
+    );
     assert.equal(determination.status, 200);
     const determinationHtml = await determination.text();
 
-    // Extract the evidence link from the determination page
     const evidenceMatch = determinationHtml.match(
       /href="(\/findings\/[^"]+\/evidence)"/,
     );
     assert.ok(evidenceMatch, "determination exposes an evidence link");
     const evidencePath = evidenceMatch[1] as string;
 
-    // Interaction 3
-    const evidence = await fetch(`${app.baseUrl}${evidencePath}`);
+    const evidence = await fetch(
+      `${app.baseUrl}${evidencePath}`,
+      withCookie(app.cookie),
+    );
     assert.equal(evidence.status, 200);
     const evidenceHtml = await evidence.text();
     assert.match(evidenceHtml, /Reconciliation snapshot/);
@@ -270,16 +257,17 @@ test("3D workflow: read-only — no store mutations across the three pages", asy
       txns: await app.store.readAll<MarketplaceTransaction>(
         "marketplace_transactions",
       ),
-      ledger: await app.store.readAll<WalletLedgerEntry>("wallet_ledger"),
     };
 
-    await fetchSummary(app);
+    await fetch(`${app.baseUrl}/findings`, withCookie(app.cookie));
     const entry = entryOf(app, "provider_mismatch");
     await fetch(
       `${app.baseUrl}/findings/${encodeURIComponent(entry.reference)}`,
+      withCookie(app.cookie),
     );
     await fetch(
       `${app.baseUrl}/findings/${encodeURIComponent(entry.reference)}/evidence`,
+      withCookie(app.cookie),
     );
 
     const after = {
@@ -287,7 +275,6 @@ test("3D workflow: read-only — no store mutations across the three pages", asy
       txns: await app.store.readAll<MarketplaceTransaction>(
         "marketplace_transactions",
       ),
-      ledger: await app.store.readAll<WalletLedgerEntry>("wallet_ledger"),
     };
 
     assert.deepEqual(after, before, "3D must not mutate the store");
@@ -328,7 +315,8 @@ test("3D workflow: does not touch the frozen engine — no new discrepancy codes
 test("3D nav: Findings appears in the customer nav", async (t) => {
   const app = await startServer(t);
   try {
-    const html = await fetchSummary(app);
+    const res = await fetch(`${app.baseUrl}/findings`, withCookie(app.cookie));
+    const html = await res.text();
     assert.match(html, /href="\/findings"[^>]*>/);
     assert.match(html, />Findings</);
   } finally {

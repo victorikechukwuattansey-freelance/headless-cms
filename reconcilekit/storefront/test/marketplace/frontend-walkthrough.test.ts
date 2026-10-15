@@ -14,6 +14,8 @@ import {
   type SeededDemoData,
   type SeededOrderEntry,
 } from "../../src/marketplace/seed.ts";
+import { seedDemoUser } from "../../src/auth/identity.ts";
+import { loginAndGetCookie, withCookie } from "../auth/helpers.ts";
 import {
   DEMO_SCENARIO_NAMES,
   WALLET_FUNDING_SCENARIO_NAME,
@@ -23,6 +25,7 @@ import type { GiftCardArtifact } from "../../src/marketplace/types.ts";
 
 interface WalkthroughServer {
   readonly baseUrl: string;
+  readonly cookie: string;
   readonly close: () => Promise<void>;
   readonly store: JsonlStore;
   readonly seeded: SeededDemoData;
@@ -35,6 +38,9 @@ async function startFullySeededServer(t: {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   const seeded = await seedDemoData(store);
+  // Phase 5A.3b — protected routes require a session; seed the demo user so
+  // the login helper can authenticate against this server.
+  await seedDemoUser(store);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
@@ -54,9 +60,12 @@ async function startFullySeededServer(t: {
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const cookie = await loginAndGetCookie(baseUrl);
 
   return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl,
+    cookie,
     close: () =>
       new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
@@ -78,7 +87,7 @@ test("every seeded order scenario serves detail, evidence and receipt over HTTP"
       assert.ok(entry, `seed entry ${name}`);
       const base = `${app.baseUrl}/transactions/${encodeURIComponent(entry.reference)}`;
 
-      const detail = await fetch(base);
+      const detail = await fetch(base, withCookie(app.cookie));
       assert.equal(detail.status, 200, `${name} detail status`);
       const detailHtml = await detail.text();
       assert.match(detailHtml, /What happened to your money/);
@@ -86,12 +95,12 @@ test("every seeded order scenario serves detail, evidence and receipt over HTTP"
       assert.match(detailHtml, /ReconcileKit determination/);
       assert.match(detailHtml, /Simulated data/);
 
-      const evidence = await fetch(`${base}/evidence`);
+      const evidence = await fetch(`${base}/evidence`, withCookie(app.cookie));
       assert.equal(evidence.status, 200, `${name} evidence status`);
       const evidenceHtml = await evidence.text();
       assert.match(evidenceHtml, /Evidence pack/);
 
-      const receipt = await fetch(`${base}/receipt`);
+      const receipt = await fetch(`${base}/receipt`, withCookie(app.cookie));
       assert.equal(receipt.status, 200, `${name} receipt status`);
       const receiptHtml = await receipt.text();
       assert.match(receiptHtml, /Receipt/);
@@ -107,6 +116,7 @@ test("money-at-risk transactions surface the badge on the detail page", async (t
     const entry = app.seeded.byName["manual_review"] as SeededOrderEntry;
     const detail = await fetch(
       `${app.baseUrl}/transactions/${encodeURIComponent(entry.reference)}`,
+      withCookie(app.cookie),
     );
     assert.equal(detail.status, 200);
     const detailHtml = await detail.text();
@@ -121,6 +131,7 @@ test("wallet funding failure exposes no marketplace transaction page", async (t)
   try {
     const res = await fetch(
       `${app.baseUrl}/transactions/${demoAliasFor(WALLET_FUNDING_SCENARIO_NAME)}`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 404);
     const html = await res.text();
@@ -149,6 +160,7 @@ test("gift card surfaces only masked code material", async (t) => {
     ] as SeededOrderEntry;
     const successDetail = await fetch(
       `${app.baseUrl}/transactions/${encodeURIComponent(successEntry.reference)}`,
+      withCookie(app.cookie),
     );
     const successDetailHtml = await successDetail.text();
     assert.ok(
@@ -156,10 +168,6 @@ test("gift card surfaces only masked code material", async (t) => {
       "detail page must show the masked preview",
     );
     assert.match(successDetailHtml, /Only masked code previews are shown/);
-    assert.ok(
-      successDetailHtml.includes(preview),
-      "detail page must show the masked preview",
-    );
     const withoutPreview = successDetailHtml.split(preview).join("");
     assert.doesNotMatch(
       withoutPreview,
@@ -169,6 +177,7 @@ test("gift card surfaces only masked code material", async (t) => {
 
     const successEvidence = await fetch(
       `${app.baseUrl}/transactions/${encodeURIComponent(successEntry.reference)}/evidence`,
+      withCookie(app.cookie),
     );
     const successEvidenceHtml = await successEvidence.text();
     assert.match(successEvidenceHtml, /sensitive values masked/i);
@@ -191,6 +200,7 @@ test("gift card surfaces only masked code material", async (t) => {
     ] as SeededOrderEntry;
     const failureDetail = await fetch(
       `${app.baseUrl}/transactions/${encodeURIComponent(failureEntry.reference)}`,
+      withCookie(app.cookie),
     );
     const failureDetailHtml = await failureDetail.text();
     const withoutMasked = failureDetailHtml.replace(/GC-[^-]+-\*\*\*\*/g, "");
@@ -212,6 +222,7 @@ test("pending airline ticket shows no code until issued", async (t) => {
     ] as SeededOrderEntry;
     const detail = await fetch(
       `${app.baseUrl}/transactions/${encodeURIComponent(entry.reference)}`,
+      withCookie(app.cookie),
     );
     assert.equal(detail.status, 200);
     const detailHtml = await detail.text();
@@ -224,7 +235,7 @@ test("pending airline ticket shows no code until issued", async (t) => {
 test("admin dashboard lists queues and moneys at risk", async (t) => {
   const app = await startFullySeededServer(t);
   try {
-    const res = await fetch(`${app.baseUrl}/admin`);
+    const res = await fetch(`${app.baseUrl}/admin`, withCookie(app.cookie));
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Operational overview/);
@@ -244,7 +255,10 @@ test("admin mismatch queue contains the provider_mismatch transaction", async (t
   const app = await startFullySeededServer(t);
   try {
     const entry = app.seeded.byName["provider_mismatch"] as SeededOrderEntry;
-    const res = await fetch(`${app.baseUrl}/admin/queues/mismatch`);
+    const res = await fetch(
+      `${app.baseUrl}/admin/queues/mismatch`,
+      withCookie(app.cookie),
+    );
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Mismatch/);

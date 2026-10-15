@@ -14,6 +14,8 @@ import {
   type SeededDemoData,
   type SeededOrderEntry,
 } from "../../src/marketplace/seed.ts";
+import { seedDemoUser } from "../../src/auth/identity.ts";
+import { loginAndGetCookie, withCookie } from "../auth/helpers.ts";
 import {
   DEMO_SCENARIO_NAMES,
   WALLET_FUNDING_SCENARIO_NAME,
@@ -22,6 +24,7 @@ import type { WalletLedgerEntry } from "../../src/marketplace/types.ts";
 
 interface WalkthroughServer {
   readonly baseUrl: string;
+  readonly cookie: string;
   readonly close: () => Promise<void>;
   readonly store: JsonlStore;
   readonly seeded: SeededDemoData;
@@ -34,6 +37,7 @@ async function startFullySeededServer(t: {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   const seeded = await seedDemoData(store);
+  await seedDemoUser(store);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
@@ -53,9 +57,12 @@ async function startFullySeededServer(t: {
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const cookie = await loginAndGetCookie(baseUrl);
 
   return {
-    baseUrl: `http://127.0.0.1:${address.port}`,
+    baseUrl,
+    cookie,
     close: () =>
       new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
@@ -73,6 +80,7 @@ async function fetchDetail(
   assert.ok(entry, `seed entry ${name}`);
   const res = await fetch(
     `${app.baseUrl}/transactions/${encodeURIComponent(entry.reference)}`,
+    withCookie(app.cookie),
   );
   assert.equal(res.status, 200, `${name} detail status`);
   return { entry, html: await res.text() };
@@ -210,6 +218,7 @@ test("masked evidence: no full gift-card code leaks on detail or evidence respon
     const entry = app.seeded.byName["successful_gift_card"] as SeededOrderEntry;
     const evidence = await fetch(
       `${app.baseUrl}/transactions/${encodeURIComponent(entry.reference)}/evidence`,
+      withCookie(app.cookie),
     );
     assert.equal(evidence.status, 200);
     const evidenceHtml = await evidence.text();
@@ -225,6 +234,7 @@ test("identifier semantics: join anchor and provider reference stay distinct row
   try {
     const res = await fetch(
       `${app.baseUrl}/transactions/${encodeURIComponent("txn_provider_mismatch")}`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 200);
     const html = await res.text();
@@ -260,11 +270,13 @@ test("receipt and evidence links still resolve on the enhanced detail page", asy
       const entry = app.seeded.byName[name] as SeededOrderEntry;
       const receipt = await fetch(
         `${app.baseUrl}/transactions/${encodeURIComponent(entry.reference)}/receipt`,
+        withCookie(app.cookie),
       );
       assert.equal(receipt.status, 200, `${name} receipt`);
       assert.match(await receipt.text(), /Receipt/);
       const evidence = await fetch(
         `${app.baseUrl}/transactions/${encodeURIComponent(entry.reference)}/evidence`,
+        withCookie(app.cookie),
       );
       assert.equal(evidence.status, 200, `${name} evidence`);
       assert.match(await evidence.text(), /Evidence pack/);

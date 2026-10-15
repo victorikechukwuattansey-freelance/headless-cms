@@ -23,11 +23,11 @@ import {
 } from "./reconcile/adapter.ts";
 import { buildReconcileView, RECONCILE_CONFIG } from "./reconcile/view.ts";
 import { toMerchantCsv } from "./reconcile/merchant-csv.ts";
-import type { MarketplaceTransactionDeps } from "./marketplace/transactions.ts";
 import type { MockProviderScenario } from "./marketplace/types.ts";
 import {
   OrchestrationError,
   ServiceInputValidationError,
+  type MarketplaceTransactionDeps,
 } from "./marketplace/transactions.ts";
 import { ReconcileError } from "./marketplace/reconcile.ts";
 import { ResolutionError } from "./marketplace/resolution.ts";
@@ -96,8 +96,11 @@ import { APP_CSS, APP_JS } from "./ui/styles.ts";
 import { createSession, revokeSession } from "./auth/sessions.ts";
 import { loginUser } from "./auth/identity.ts";
 import { clearSessionCookie, serializeSessionCookie } from "./auth/cookies.ts";
-import { readSessionToken } from "./auth/middleware.ts";
-import { listMembershipsForUser } from "./marketplace/tenancy.ts";
+import { readSessionToken, requireSession } from "./auth/middleware.ts";
+import {
+  listMembershipsForUser,
+  getMembership,
+} from "./marketplace/tenancy.ts";
 
 export interface ServerDependencies {
   readonly store: JsonlStore;
@@ -680,6 +683,51 @@ async function routeMarketplace(
       return;
     }
   }
+
+  // ---- Phase 5A.3b: session gate --------------------------------
+  //
+  // Public paths are:
+  //   GET /login    — the sign-in form
+  //   GET /assets/* — handled above, early-returned
+  //   POST /logout  — self-protecting (no session ⇒ no-op + redirect)
+  // Everything else requires a valid session. Admin routes additionally
+  // require a membership with role OWNER or OPERATOR in the active org.
+
+  const isPublicForAuth =
+    path === "/login" || (method === "POST" && path === "/logout");
+
+  if (!isPublicForAuth) {
+    const auth = await requireSession(req, {
+      store: deps.store,
+      cookieName: config.sessionCookieName,
+    });
+    if (auth === null) {
+      redirect(res, 303, "/login");
+      return;
+    }
+    if (path.startsWith("/admin")) {
+      const membership = await getMembership(
+        deps.store,
+        auth.user.id,
+        auth.session.active_org_id,
+      );
+      if (membership === null) {
+        throw new HttpError(
+          403,
+          "NOT_A_MEMBER",
+          "you are not a member of the active organization",
+        );
+      }
+      if (membership.role !== "OWNER" && membership.role !== "OPERATOR") {
+        throw new HttpError(
+          403,
+          "INSUFFICIENT_ROLE",
+          `role ${membership.role} cannot access admin routes`,
+        );
+      }
+    }
+  }
+  // ---- end Phase 5A.3b gate -------------------------------------
 
   // Customer GET pages
   if (method === "GET") {

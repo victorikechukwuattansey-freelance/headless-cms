@@ -1,11 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { startSeededServer } from "./seeded-server.ts";
+import { withCookie } from "../auth/helpers.ts";
 
 test("transaction detail page explains money provider and ReconcileKit result", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/transactions/${app.reference}`);
+    const res = await fetch(
+      `${app.baseUrl}/transactions/${app.reference}`,
+      withCookie(app.cookie),
+    );
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /What happened to your money/);
@@ -20,7 +24,7 @@ test("transaction detail page explains money provider and ReconcileKit result", 
 test("home page loads with dashboard data", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/`);
+    const res = await fetch(`${app.baseUrl}/`, withCookie(app.cookie));
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /ReconcileKit/);
@@ -30,9 +34,10 @@ test("home page loads with dashboard data", async () => {
   }
 });
 
-test("login page loads with demo identity", async (t) => {
+test("login page loads with demo identity", async () => {
   const app = await startSeededServer();
   try {
+    // /login is public — no cookie required.
     const res = await fetch(`${app.baseUrl}/login`);
     assert.equal(res.status, 200);
     const html = await res.text();
@@ -48,7 +53,7 @@ test("login page loads with demo identity", async (t) => {
 test("dashboard page shows wallet and transactions", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/dashboard`);
+    const res = await fetch(`${app.baseUrl}/dashboard`, withCookie(app.cookie));
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Wallet/);
@@ -61,7 +66,7 @@ test("dashboard page shows wallet and transactions", async () => {
 test("wallet page shows balance and ledger", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/wallet`);
+    const res = await fetch(`${app.baseUrl}/wallet`, withCookie(app.cookie));
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Available/);
@@ -74,7 +79,7 @@ test("wallet page shows balance and ledger", async () => {
 test("catalog page lists service groups", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/catalog`);
+    const res = await fetch(`${app.baseUrl}/catalog`, withCookie(app.cookie));
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /CORE VTU BILL PAYMENT/);
@@ -87,7 +92,10 @@ test("catalog page lists service groups", async () => {
 test("service detail page for airtime", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/services/svc_airtime_mtn`);
+    const res = await fetch(
+      `${app.baseUrl}/services/svc_airtime_mtn`,
+      withCookie(app.cookie),
+    );
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Airtime/);
@@ -100,7 +108,10 @@ test("service detail page for airtime", async () => {
 test("checkout page for airtime shows form and scenario selector", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/checkout/svc_airtime_mtn`);
+    const res = await fetch(
+      `${app.baseUrl}/checkout/svc_airtime_mtn`,
+      withCookie(app.cookie),
+    );
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Checkout/);
@@ -113,7 +124,10 @@ test("checkout page for airtime shows form and scenario selector", async () => {
 test("transactions list page", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/transactions`);
+    const res = await fetch(
+      `${app.baseUrl}/transactions`,
+      withCookie(app.cookie),
+    );
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Transactions/);
@@ -127,6 +141,7 @@ test("receipt page renders", async () => {
   try {
     const res = await fetch(
       `${app.baseUrl}/transactions/${app.reference}/receipt`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 200);
     const html = await res.text();
@@ -142,6 +157,7 @@ test("evidence page renders with provider facts", async () => {
   try {
     const res = await fetch(
       `${app.baseUrl}/transactions/${app.reference}/evidence`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 200);
     const html = await res.text();
@@ -155,7 +171,10 @@ test("evidence page renders with provider facts", async () => {
 test("notifications page", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/notifications`);
+    const res = await fetch(
+      `${app.baseUrl}/notifications`,
+      withCookie(app.cookie),
+    );
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Notifications/);
@@ -167,7 +186,7 @@ test("notifications page", async () => {
 test("disputes page", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/disputes`);
+    const res = await fetch(`${app.baseUrl}/disputes`, withCookie(app.cookie));
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Disputes/);
@@ -179,7 +198,7 @@ test("disputes page", async () => {
 test("profile page", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/profile`);
+    const res = await fetch(`${app.baseUrl}/profile`, withCookie(app.cookie));
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Profile/);
@@ -192,7 +211,7 @@ test("profile page", async () => {
 test("admin dashboard loads", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/admin`);
+    const res = await fetch(`${app.baseUrl}/admin`, withCookie(app.cookie));
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Admin/);
@@ -205,7 +224,10 @@ test("admin dashboard loads", async () => {
 test("admin queue page for HEALTHY", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/admin/queues/healthy`);
+    const res = await fetch(
+      `${app.baseUrl}/admin/queues/healthy`,
+      withCookie(app.cookie),
+    );
     assert.equal(res.status, 200);
     const html = await res.text();
     assert.match(html, /Healthy/);
@@ -219,6 +241,7 @@ test("admin transaction detail", async () => {
   try {
     const res = await fetch(
       `${app.baseUrl}/admin/transactions/${app.reference}`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 200);
     const html = await res.text();
@@ -235,6 +258,7 @@ test("admin evidence detail", async () => {
   try {
     const res = await fetch(
       `${app.baseUrl}/admin/transactions/${app.reference}/evidence`,
+      withCookie(app.cookie),
     );
     assert.equal(res.status, 200);
     const html = await res.text();
@@ -248,6 +272,7 @@ test("admin evidence detail", async () => {
 test("assets are served", async () => {
   const app = await startSeededServer();
   try {
+    // /assets/* is public — no cookie required.
     const css = await fetch(`${app.baseUrl}/assets/app.css`);
     assert.equal(css.status, 200);
     assert.match(css.headers.get("content-type") ?? "", /text\/css/);
@@ -263,11 +288,14 @@ test("assets are served", async () => {
 test("unknown marketplace route returns 404 HTML", async () => {
   const app = await startSeededServer();
   try {
-    const res = await fetch(`${app.baseUrl}/nonexistent-page`);
+    const res = await fetch(
+      `${app.baseUrl}/nonexistent-page`,
+      withCookie(app.cookie),
+    );
     assert.equal(res.status, 404);
     const html = await res.text();
     assert.match(html, /Error 404/);
-    assert.match(html, /Dashboard/); // back link to dashboard
+    assert.match(html, /Dashboard/);
   } finally {
     await app.close();
   }
@@ -283,12 +311,15 @@ test("POST /checkout creates transaction and redirects", async () => {
       "inputs[recipient]": "08030000000",
       "inputs[amount]": "1000",
     });
-    const res = await fetch(`${app.baseUrl}/checkout`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: form.toString(),
-      redirect: "manual",
-    });
+    const res = await fetch(
+      `${app.baseUrl}/checkout`,
+      withCookie(app.cookie, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+        redirect: "manual",
+      }),
+    );
     assert.equal(res.status, 303);
     const location = res.headers.get("location");
     assert.ok(location?.startsWith("/transactions/"));
