@@ -576,6 +576,7 @@ export interface UserRecord {
 export interface SessionRecord {
   readonly id: string;
   readonly user_id: string;
+  readonly active_org_id: string;
   readonly created_at: string;
   readonly expires_at: string;
   readonly revoked_at: string | null;

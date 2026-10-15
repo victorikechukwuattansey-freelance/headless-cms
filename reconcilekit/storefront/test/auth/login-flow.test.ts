@@ -11,6 +11,7 @@ import { createStorefrontServer } from "../../src/server.ts";
 import { demoDeps } from "../marketplace/demo-deps.ts";
 import { seedDemoUser } from "../../src/auth/identity.ts";
 import { lookupSession } from "../../src/auth/sessions.ts";
+import { seedDemoTenancy } from "../../src/marketplace/seed.ts";
 
 interface FlowServer {
   readonly baseUrl: string;
@@ -25,7 +26,7 @@ async function startServer(t: {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   await seedDemoUser(store);
-
+  await seedDemoTenancy(store);
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
@@ -79,6 +80,7 @@ test("login flow: correct credentials set a session cookie and redirect", async 
     const record = await lookupSession(app.store, token);
     assert.ok(record !== null, "session record exists");
     assert.equal(record.user_id, "usr_demo");
+    assert.equal(record.active_org_id, "org_demo");
   } finally {
     await app.close();
   }
@@ -157,6 +159,7 @@ test("login flow: sessions persist across a server restart", async (t) => {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   await seedDemoUser(store);
+  await seedDemoTenancy(store);
 
   const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
   const deps = {

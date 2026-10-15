@@ -97,6 +97,7 @@ import { createSession, revokeSession } from "./auth/sessions.ts";
 import { loginUser } from "./auth/identity.ts";
 import { clearSessionCookie, serializeSessionCookie } from "./auth/cookies.ts";
 import { readSessionToken } from "./auth/middleware.ts";
+import { listMembershipsForUser } from "./marketplace/tenancy.ts";
 
 export interface ServerDependencies {
   readonly store: JsonlStore;
@@ -913,8 +914,22 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         res.end(renderLoginPage(customer, "Invalid email or password."));
         return;
       }
+      const memberships = await listMembershipsForUser(deps.store, user.id);
+      if (memberships.length === 0) {
+        const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
+        res.writeHead(403, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(
+          renderLoginPage(
+            customer,
+            "This account is not a member of any organization. Contact an administrator.",
+          ),
+        );
+        return;
+      }
+      const activeOrgId = memberships[0]!.org_id;
       const { token } = await createSession(deps.store, {
         userId: user.id,
+        activeOrgId,
         ttlHours: config.sessionTtlHours,
       });
       res.setHeader(
@@ -928,7 +943,6 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
       redirect(res, 303, "/");
       return;
     }
-
     if (path === "/logout") {
       const token = readSessionToken(req, config.sessionCookieName);
       if (token !== null) {

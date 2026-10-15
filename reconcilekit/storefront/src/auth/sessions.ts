@@ -20,6 +20,7 @@ export function sessionRecordId(token: string): string {
 
 export interface CreateSessionInput {
   readonly userId: string;
+  readonly activeOrgId: string;
   readonly ttlHours: number;
   readonly now?: Date;
 }
@@ -36,6 +37,7 @@ export async function createSession(
   const record: SessionRecord = {
     id: sessionRecordId(token),
     user_id: input.userId,
+    active_org_id: input.activeOrgId,
     created_at: now.toISOString(),
     expires_at: expiresAt,
     revoked_at: null,

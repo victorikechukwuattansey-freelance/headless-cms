@@ -21,12 +21,14 @@ test("sessions: createSession persists a record with the expected shape", async 
   const store = tempStore(t);
   const { token, record } = await createSession(store, {
     userId: "usr_demo",
+    activeOrgId: "org_demo",
     ttlHours: 72,
     now: new Date("2026-01-01T00:00:00Z"),
   });
   assert.ok(token.length >= 32);
   assert.equal(record.id, sessionRecordId(token));
   assert.equal(record.user_id, "usr_demo");
+  assert.equal(record.active_org_id, "org_demo");
   assert.equal(record.revoked_at, null);
   assert.equal(record.created_at, "2026-01-01T00:00:00.000Z");
   assert.equal(record.expires_at, "2026-01-04T00:00:00.000Z");
@@ -37,6 +39,7 @@ test("sessions: lookupSession finds a valid session", async (t) => {
   const store = tempStore(t);
   const { token } = await createSession(store, {
     userId: "usr_demo",
+    activeOrgId: "org_demo",
     ttlHours: 72,
     now: new Date("2026-01-01T00:00:00Z"),
   });
@@ -58,6 +61,7 @@ test("sessions: lookupSession rejects an expired session", async (t) => {
   const store = tempStore(t);
   const { token } = await createSession(store, {
     userId: "usr_demo",
+    activeOrgId: "org_demo",
     ttlHours: 1,
     now: new Date("2026-01-01T00:00:00Z"),
   });
@@ -73,6 +77,7 @@ test("sessions: revokeSession marks the latest record revoked", async (t) => {
   const store = tempStore(t);
   const { token } = await createSession(store, {
     userId: "usr_demo",
+    activeOrgId: "org_demo",
     ttlHours: 72,
     now: new Date("2026-01-01T00:00:00Z"),
   });
@@ -94,6 +99,7 @@ test("sessions: revokeSession is idempotent", async (t) => {
   const store = tempStore(t);
   const { token } = await createSession(store, {
     userId: "usr_demo",
+    activeOrgId: "org_demo",
     ttlHours: 1,
   });
   assert.equal(await revokeSession(store, token), true);
@@ -102,7 +108,15 @@ test("sessions: revokeSession is idempotent", async (t) => {
 
 test("sessions: distinct calls produce distinct tokens", async (t) => {
   const store = tempStore(t);
-  const a = await createSession(store, { userId: "u", ttlHours: 1 });
-  const b = await createSession(store, { userId: "u", ttlHours: 1 });
+  const a = await createSession(store, {
+    userId: "u",
+    activeOrgId: "org_demo",
+    ttlHours: 1,
+  });
+  const b = await createSession(store, {
+    userId: "u",
+    activeOrgId: "org_demo",
+    ttlHours: 1,
+  });
   assert.notEqual(a.token, b.token);
 });
