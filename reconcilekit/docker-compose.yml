@@ -1,0 +1,29 @@
+# Local development services for ReconcileKit.
+#
+#   docker compose up -d         # start Postgres (and Redis in 5B.2)
+#   docker compose down          # stop
+#   docker compose down -v       # stop and delete volumes
+#
+# The storefront reads DATABASE_URL from storefront/.env.
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: reconcilekit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reconcilekit
+      POSTGRES_PASSWORD: reconcilekit
+      POSTGRES_DB: reconcilekit
+    ports:
+      - "5434:5432"
+    volumes:
+      - reconcilekit-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reconcilekit -d reconcilekit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  reconcilekit-pgdata:

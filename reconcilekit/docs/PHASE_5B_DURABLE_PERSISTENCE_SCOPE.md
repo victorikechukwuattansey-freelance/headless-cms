@@ -6,7 +6,7 @@
 **Baseline authority:** `PHASE_2_ACCEPTANCE_AND_ARCHITECTURE_FREEZE.md` (frozen)
 **Parent:** `PHASE_5_OPENING.md` §3 (5B definition)
 **Predecessor:** `PHASE_5A_CLOSURE.md`
-**Goal sentence:** *let a production operator run the storefront against real Paystack events.*
+**Goal sentence:** _let a production operator run the storefront against real Paystack events._
 
 ---
 
@@ -18,10 +18,10 @@ accessed through Prisma. It is storefront-only; it does not touch
 
 Two increments:
 
-| Increment | Deliverable | What changes |
-| --- | --- | --- |
-| **5B.1** — Prisma + Postgres | Full schema; every store call site migrated; every test fixture migrated; CI updated with a Postgres service. | The `JsonlStore` interface is deleted. Store reads and writes go through Prisma or a repository layer. |
-| **5B.2** — Redis sessions | Session storage moves to Redis for lookup; Postgres retains a durable audit trail. | Session CRUD helpers change backend. The public API (`createSession`, `lookupSession`, `revokeSession`) keeps its shape. |
+| Increment                    | Deliverable                                                                                                   | What changes                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **5B.1** — Prisma + Postgres | Full schema; every store call site migrated; every test fixture migrated; CI updated with a Postgres service. | The `JsonlStore` interface is deleted. Store reads and writes go through Prisma or a repository layer.                   |
+| **5B.2** — Redis sessions    | Session storage moves to Redis for lookup; Postgres retains a durable audit trail.                            | Session CRUD helpers change backend. The public API (`createSession`, `lookupSession`, `revokeSession`) keeps its shape. |
 
 5B.1 is the track. 5B.2 is a smaller follow-on that depends on 5B.1's
 data model being in place.
@@ -131,7 +131,7 @@ invariants, not implementation:
 
 - All 5A auth tests (login flow, sessions, identity, route protection).
 - All tenancy tests, especially `tenancy: no org dimension is fabricated
-  on wallet evidence`.
+on wallet evidence`.
 - All 3D tests.
 - The wallet lifecycle tests, especially
   `wallet lifecycle: exact reconciliation joins on mk_txn, never on wld`.
@@ -161,81 +161,81 @@ actual schema lands in 5B.1's own PR.
 
 **Identity and tenancy (5A):**
 
-| Table | Notes |
-| --- | --- |
-| `users` | id, email (unique), password_hash, display_name, created_at, updated_at |
-| `sessions` | id (token), user_id FK, active_org_id FK, created_at, expires_at, revoked_at. Index on user_id, active_org_id, expires_at |
-| `organizations` | id, name, created_at |
-| `memberships` | id, user_id FK, org_id FK, role, created_at. Unique on (user_id, org_id) |
+| Table           | Notes                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `users`         | id, email (unique), password_hash, display_name, created_at, updated_at                                                   |
+| `sessions`      | id (token), user_id FK, active_org_id FK, created_at, expires_at, revoked_at. Index on user_id, active_org_id, expires_at |
+| `organizations` | id, name, created_at                                                                                                      |
+| `memberships`   | id, user_id FK, org_id FK, role, created_at. Unique on (user_id, org_id)                                                  |
 
 **Marketplace core:**
 
-| Table | Notes |
-| --- | --- |
-| `marketplace_customers` | id, org_id FK, name, email, phone, is_demo, created_at. Index on org_id |
-| `marketplace_orders` | id, customer_id FK, service_id, inputs (JSONB), amount_minor, currency, status, created_at |
-| `marketplace_transactions` | id, order_id FK, customer_id FK, reference, scenario, payment_status, fulfillment_status, reconcile_outcome, resolution_status, customer_status, admin_status, demo_scenario_name, created_at, updated_at |
-| `marketplace_provider_attempts` | id, transaction_id FK, provider_id, scenario, request_reference, provider_reference, status, canonical_status, amount_minor, currency, latency_ms, source_attributes (JSONB), attempted_at |
+| Table                           | Notes                                                                                                                                                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `marketplace_customers`         | id, org_id FK, name, email, phone, is_demo, created_at. Index on org_id                                                                                                                                   |
+| `marketplace_orders`            | id, customer_id FK, service_id, inputs (JSONB), amount_minor, currency, status, created_at                                                                                                                |
+| `marketplace_transactions`      | id, order_id FK, customer_id FK, reference, scenario, payment_status, fulfillment_status, reconcile_outcome, resolution_status, customer_status, admin_status, demo_scenario_name, created_at, updated_at |
+| `marketplace_provider_attempts` | id, transaction_id FK, provider_id, scenario, request_reference, provider_reference, status, canonical_status, amount_minor, currency, latency_ms, source_attributes (JSONB), attempted_at                |
 
 **Wallet:**
 
-| Table | Notes |
-| --- | --- |
-| `wallets` | id, customer_id FK, currency, opening_balance_minor, status, created_at. **No org_id** |
+| Table           | Notes                                                                                                                                                       |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wallets`       | id, customer_id FK, currency, opening_balance_minor, status, created_at. **No org_id**                                                                      |
 | `wallet_ledger` | id, wallet_id FK, transaction_id, type, amount_minor, currency, status, reference, occurred_at, metadata (JSONB). **No org_id**. Append-only by convention. |
 
 **Evidence and reconciliation:**
 
-| Table | Notes |
-| --- | --- |
-| `evidence_packs` | id, transaction_id FK, customer_reference, provider_reference, service_snapshot (JSONB), amount_minor, currency, timeline_event_ids (text[]), provider_facts (JSONB), reconciliation (JSONB), mismatch_flags (text[]), resolution_status, audit_event_ids (text[]), created_at. **No org_id** |
-| `transaction_events` | id, transaction_id FK, type, label, description, occurred_at, actor, source, metadata (JSONB) |
-| `receipts` | id, transaction_id FK, evidence_pack_id FK, amount_minor, currency, issued_at |
+| Table                | Notes                                                                                                                                                                                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `evidence_packs`     | id, transaction_id FK, customer_reference, provider_reference, service_snapshot (JSONB), amount_minor, currency, timeline_event_ids (text[]), provider_facts (JSONB), reconciliation (JSONB), mismatch_flags (text[]), resolution_status, audit_event_ids (text[]), created_at. **No org_id** |
+| `transaction_events` | id, transaction_id FK, type, label, description, occurred_at, actor, source, metadata (JSONB)                                                                                                                                                                                                 |
+| `receipts`           | id, transaction_id FK, evidence_pack_id FK, amount_minor, currency, issued_at                                                                                                                                                                                                                 |
 
 **Resolution:**
 
-| Table | Notes |
-| --- | --- |
-| `refunds` | id, transaction_id FK, amount_minor, currency, status, reason, initiated_at, completed_at, ledger_reference |
-| `reversals` | id, transaction_id FK, amount_minor, currency, status, reason, initiated_at, completed_at, ledger_reference |
-| `disputes` | id, transaction_id FK, customer_id FK, reason, status, message, created_at, updated_at, resolution_note |
-| `manual_reviews` | id, transaction_id FK, reason, status, assigned_to, created_at, resolved_at, operator_note |
+| Table            | Notes                                                                                                       |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| `refunds`        | id, transaction_id FK, amount_minor, currency, status, reason, initiated_at, completed_at, ledger_reference |
+| `reversals`      | id, transaction_id FK, amount_minor, currency, status, reason, initiated_at, completed_at, ledger_reference |
+| `disputes`       | id, transaction_id FK, customer_id FK, reason, status, message, created_at, updated_at, resolution_note     |
+| `manual_reviews` | id, transaction_id FK, reason, status, assigned_to, created_at, resolved_at, operator_note                  |
 
 **Artifacts:**
 
-| Table | Notes |
-| --- | --- |
-| `ticket_artifacts` | id, transaction_id FK, ticket_kind, reservation_reference, issue_reference, passenger_or_attendee, route_or_venue, seat, status, masked_code, issued_at, cancellation_reference, cancelled_at |
-| `gift_card_artifacts` | id, transaction_id FK, brand, region, denomination_minor, currency, quantity, delivery_status, redemption_status, masked_code_preview, risk_flags (text[]) |
+| Table                 | Notes                                                                                                                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ticket_artifacts`    | id, transaction_id FK, ticket_kind, reservation_reference, issue_reference, passenger_or_attendee, route_or_venue, seat, status, masked_code, issued_at, cancellation_reference, cancelled_at |
+| `gift_card_artifacts` | id, transaction_id FK, brand, region, denomination_minor, currency, quantity, delivery_status, redemption_status, masked_code_preview, risk_flags (text[])                                    |
 
 **Notifications:**
 
-| Table | Notes |
-| --- | --- |
+| Table           | Notes                                                               |
+| --------------- | ------------------------------------------------------------------- |
 | `notifications` | id, customer_id FK, transaction_id, title, body, status, created_at |
 
 **Payment source layer:**
 
-| Table | Notes |
-| --- | --- |
+| Table            | Notes                                                                                                                                                                                                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `payment_events` | id, event_id, idempotency_key (unique), transaction_id, merchant_reference, payment_source, payment_source_reference, source_event_id, event_type, amount, currency, status, occurred_at, source_confidence, source_attributes (JSONB), observed_at. Index on idempotency_key |
 
 **Catalog (read-mostly seed data):**
 
-| Table | Notes |
-| --- | --- |
-| `catalog_categories` | id, group, name, description, compliance_status, display_order |
-| `catalog_services` | id, category_id FK, provider_id, kind, name, description, currency, base_amount_minor, compliance_status, fulfillment_type, availability, input_schema (JSONB) |
-| `catalog_products` | id, service_id FK, category_id FK, provider_id, name, description, kind, fulfillment_type, pricing (JSONB), availability, attributes (JSONB) |
+| Table                | Notes                                                                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `catalog_categories` | id, group, name, description, compliance_status, display_order                                                                                                 |
+| `catalog_services`   | id, category_id FK, provider_id, kind, name, description, currency, base_amount_minor, compliance_status, fulfillment_type, availability, input_schema (JSONB) |
+| `catalog_products`   | id, service_id FK, category_id FK, provider_id, name, description, kind, fulfillment_type, pricing (JSONB), availability, attributes (JSONB)                   |
 
 **Legacy (frozen Phase 2C surface):**
 
-| Table | Notes |
-| --- | --- |
-| `businesses` | id, name, created_at |
-| `products` | id, business_id FK, name, price_minor, currency, created_at |
-| `orders` | id, business_id FK, product_id FK, customer_email, expected_amount_minor, currency, status, paystack_reference, authorization_url, created_at |
-| `payments` | id, order_id FK, business_id FK, expected_amount, currency, paystack_reference, status, paid_at, refund_status, metadata (JSONB), recorded_at |
+| Table        | Notes                                                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `businesses` | id, name, created_at                                                                                                                          |
+| `products`   | id, business_id FK, name, price_minor, currency, created_at                                                                                   |
+| `orders`     | id, business_id FK, product_id FK, customer_email, expected_amount_minor, currency, status, paystack_reference, authorization_url, created_at |
+| `payments`   | id, order_id FK, business_id FK, expected_amount, currency, paystack_reference, status, paid_at, refund_status, metadata (JSONB), recorded_at |
 
 ### 3.3 Repository layer vs direct Prisma
 
@@ -406,7 +406,7 @@ To be resolved in 5B.1's own PR, not blocking this scope:
 - **Connection pool.** Prisma's built-in pool with default settings.
   Tuning is premature.
 - **Migration workflow.** `prisma migrate dev` locally, `prisma migrate
-  deploy` in CI. Confirmed by §3.1.
+deploy` in CI. Confirmed by §3.1.
 - **How to expose the Prisma client.** Singleton in
   `storefront/src/db/client.ts`, injected via the existing dependency
   object pattern (`ServerDependencies`). This replaces the current
