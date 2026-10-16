@@ -68,6 +68,28 @@ jobs:
   storefront:
     name: Storefront (reconcilekit/storefront/)
     runs-on: ubuntu-latest
+    # NEW — Postgres 17 service, mirroring reconcilekit/storefront/docker-compose.yml.
+    # Container port 5432 maps to host port 5434 so DATABASE_URL below is
+    # byte-identical to the local .env. One URL, two environments.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: reconcilekit
+          POSTGRES_PASSWORD: reconcilekit
+          POSTGRES_DB: reconcilekit
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U reconcilekit -d reconcilekit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    # NEW — job-level env. Do not quote the URL (Prisma 6.1.0's .env parser
+    # keeps surrounding quotes literal; the same caution applies here through
+    # the shell). This matches .env.example exactly.
+    env:
+      DATABASE_URL: postgresql://reconcilekit:reconcilekit@localhost:5434/reconcilekit?schema=public
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -95,6 +117,14 @@ jobs:
 
       - name: Install storefront dependencies
         run: npm ci
+        working-directory: reconcilekit/storefront
+
+        # NEW — apply migrations before running tests. The service container's
+      # healthcheck gates the start of this step, so Postgres is guaranteed
+      # ready when prisma migrate deploy runs. Uses the committed migration
+      # history (prisma/migrations/**) and the same DATABASE_URL as local.
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
         working-directory: reconcilekit/storefront
 
       - name: Test
