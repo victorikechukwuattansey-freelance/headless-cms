@@ -112,20 +112,23 @@ model MarketplaceCustomer {
   wallets       Wallet[]
   disputes      Dispute[]
   notifications Notification[]
+  marketplacePayments MarketplacePayment[]
 
   @@index([orgId])
   @@map("marketplace_customers")
 }
 
 model MarketplaceOrder {
-  id          String   @id
-  customerId  String   @map("customer_id")
-  serviceId   String   @map("service_id")
-  inputs      Json
-  amountMinor Int      @map("amount_minor")
-  currency    String
-  status      String
-  createdAt   DateTime @map("created_at") @db.Timestamptz(6)
+  id                String   @id
+  customerId        String   @map("customer_id")
+  serviceId         String   @map("service_id")
+  inputs            Json
+  quotedAmountMinor Int      @map("quoted_amount_minor")   // was: amountMinor @map("amount_minor")
+  currency          String
+  customerReference String   @map("customer_reference")    // added
+  status            String
+  createdAt         DateTime @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @map("updated_at") @db.Timestamptz(6)  // added
 
   customer     MarketplaceCustomer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   transactions MarketplaceTransaction[]
@@ -139,6 +142,8 @@ model MarketplaceTransaction {
   orderId           String   @map("order_id")
   customerId        String   @map("customer_id")
   reference         String   @unique
+  serviceId   String @map("service_id")
+  providerId  String @map("provider_id")
   scenario          String
   paymentStatus     String   @map("payment_status")
   fulfillmentStatus String   @map("fulfillment_status")
@@ -163,6 +168,7 @@ model MarketplaceTransaction {
   tickets          TicketArtifact[]
   giftCards        GiftCardArtifact[]
   notifications    Notification[]
+  marketplacePayments MarketplacePayment[]
 
   @@index([customerId])
   @@index([orderId])
@@ -190,6 +196,30 @@ model MarketplaceProviderAttempt {
 
   @@index([transactionId])
   @@map("marketplace_provider_attempts")
+}
+
+model MarketplacePayment {
+  id                  String    @id
+  transactionId       String    @map("transaction_id")
+  orderId             String    @map("order_id")
+  customerId          String    @map("customer_id")
+  walletReference     String    @map("wallet_reference")
+  providerReference   String?   @map("provider_reference")
+  expectedAmountMinor Int       @map("expected_amount_minor")
+  actualAmountMinor   Int?      @map("actual_amount_minor")
+  currency            String
+  status              String
+  paidAt              DateTime? @map("paid_at") @db.Timestamptz(6)
+  metadata            Json
+  recordedAt          DateTime  @map("recorded_at") @db.Timestamptz(6)
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  customer    MarketplaceCustomer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId])
+  @@index([orderId])
+  @@index([customerId])
+  @@map("marketplace_payments")
 }
 
 // -----------------------------------------------------------------
@@ -570,7 +600,7 @@ model Payment {
   businessId        String    @map("business_id")
   expectedAmount    Int       @map("expected_amount")
   currency          String
-  paystackReference String?   @map("paystack_reference")
+  paystackReference String   @map("paystack_reference")
   status            String
   paidAt            DateTime? @map("paid_at") @db.Timestamptz(6)
   refundStatus      String    @map("refund_status")

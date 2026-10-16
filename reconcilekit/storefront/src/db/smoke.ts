@@ -47,6 +47,7 @@ const EXPECTED_TABLES = [
   "products",
   "orders",
   "payments",
+  "marketplace_payments",
 ];
 
 async function main(): Promise<number> {
