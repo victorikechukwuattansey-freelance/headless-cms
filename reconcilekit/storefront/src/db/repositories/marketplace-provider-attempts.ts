@@ -42,9 +42,7 @@ export class MarketplaceProviderAttemptRepository {
     return record;
   }
 
-  async listByTransaction(
-    transactionId: string,
-  ): Promise<ProviderAttempt[]> {
+  async listByTransaction(transactionId: string): Promise<ProviderAttempt[]> {
     const rows = await this.client.marketplaceProviderAttempt.findMany({
       where: { transactionId },
       orderBy: [{ attemptedAt: "asc" }, { id: "asc" }],
@@ -86,7 +84,8 @@ function toPrismaAttempt(
     amountMinor: record.amountMinor,
     currency: record.currency,
     latencyMs: record.latencyMs,
-    sourceAttributes: record.sourceAttributes as unknown as Prisma.InputJsonValue,
+    sourceAttributes:
+      record.sourceAttributes as unknown as Prisma.InputJsonValue,
     attemptedAt: new Date(record.attemptedAt),
   };
 }

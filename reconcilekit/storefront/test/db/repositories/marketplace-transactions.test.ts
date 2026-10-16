@@ -4,11 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { getPrismaClient } from "../../../src/db/client.ts";
 import { buildRepositories } from "../../../src/db/repositories/index.ts";
 import { withRollback } from "../helpers.ts";
-import {
-  seedCustomer,
-  seedOrder,
-  seedOrg,
-} from "../fixtures.ts";
+import { seedCustomer, seedOrder, seedOrg } from "../fixtures.ts";
 import type { MarketplaceTransaction } from "../../../src/marketplace/types.ts";
 
 const prisma = getPrismaClient();
@@ -51,9 +47,8 @@ test("marketplaceTransactions: insert persists and readLatestById reads back", a
     const saved = await repos.marketplaceTransactions.insert(record);
     assert.deepEqual(saved, record);
 
-    const found = await repos.marketplaceTransactions.readLatestById(
-      "txn_test_1",
-    );
+    const found =
+      await repos.marketplaceTransactions.readLatestById("txn_test_1");
     assert.ok(found !== null);
     assert.equal(found.serviceId, "svc_airtime");
     assert.equal(found.providerId, "prv_mock");
@@ -92,9 +87,8 @@ test("marketplaceTransactions: insert with an existing id overwrites (reconcile 
       }),
     );
 
-    const found = await repos.marketplaceTransactions.readLatestById(
-      "txn_test_1",
-    );
+    const found =
+      await repos.marketplaceTransactions.readLatestById("txn_test_1");
     assert.ok(found !== null);
     assert.equal(found.reconcileOutcome, "MATCH");
     assert.equal(found.customerStatus, "CONFIRMED");
@@ -109,9 +103,8 @@ test("marketplaceTransactions: optional demoScenarioName round-trips absent and 
 
     // Absent case — the key must not appear on the read-back record.
     await repos.marketplaceTransactions.insert(sampleTransaction());
-    const without = await repos.marketplaceTransactions.readLatestById(
-      "txn_test_1",
-    );
+    const without =
+      await repos.marketplaceTransactions.readLatestById("txn_test_1");
     assert.ok(without !== null);
     assert.equal(
       Object.prototype.hasOwnProperty.call(without, "demoScenarioName"),
@@ -122,9 +115,8 @@ test("marketplaceTransactions: optional demoScenarioName round-trips absent and 
     await repos.marketplaceTransactions.insert(
       sampleTransaction({ demoScenarioName: "successful_airtime" }),
     );
-    const withName = await repos.marketplaceTransactions.readLatestById(
-      "txn_test_1",
-    );
+    const withName =
+      await repos.marketplaceTransactions.readLatestById("txn_test_1");
     assert.ok(withName !== null);
     assert.equal(withName.demoScenarioName, "successful_airtime");
   });

@@ -36,10 +36,7 @@ test("organizations: insert persists and readLatestById reads back", async () =>
 test("organizations: readLatestById returns null for an unknown id", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    assert.equal(
-      await repos.organizations.readLatestById("org_missing"),
-      null,
-    );
+    assert.equal(await repos.organizations.readLatestById("org_missing"), null);
   });
 });
 

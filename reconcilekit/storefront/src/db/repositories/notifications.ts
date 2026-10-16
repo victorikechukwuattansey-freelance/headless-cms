@@ -39,9 +39,7 @@ export class NotificationRepository {
     return row === null ? null : fromPrismaNotification(row);
   }
 
-  async listByCustomer(
-    customerId: string,
-  ): Promise<NotificationRecord[]> {
+  async listByCustomer(customerId: string): Promise<NotificationRecord[]> {
     const rows = await this.client.notification.findMany({
       where: { customerId },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],

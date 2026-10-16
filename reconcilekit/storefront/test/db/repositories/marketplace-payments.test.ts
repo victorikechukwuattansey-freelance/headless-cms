@@ -61,9 +61,8 @@ test("marketplacePayments: insert persists and readLatestById reads back", async
     const saved = await repos.marketplacePayments.insert(record);
     assert.deepEqual(saved, record);
 
-    const found = await repos.marketplacePayments.readLatestById(
-      "mkpay_txn_test_1",
-    );
+    const found =
+      await repos.marketplacePayments.readLatestById("mkpay_txn_test_1");
     assert.ok(found !== null);
     assert.equal(found.status, "SUCCESS");
     assert.equal(found.expectedAmountMinor, 12500);
@@ -88,15 +87,18 @@ test("marketplacePayments: insert with an existing id overwrites (PENDING → SU
     const repos = buildRepositories(tx);
     await seedChain(tx, "txn_test_1", "ord_test_1", "cus_test_1");
     await repos.marketplacePayments.insert(
-      samplePayment({ status: "PENDING", paidAt: null, actualAmountMinor: null }),
+      samplePayment({
+        status: "PENDING",
+        paidAt: null,
+        actualAmountMinor: null,
+      }),
     );
     await repos.marketplacePayments.insert(
       samplePayment({ status: "SUCCESS", paidAt: "2026-01-01T12:00:05.000Z" }),
     );
 
-    const found = await repos.marketplacePayments.readLatestById(
-      "mkpay_txn_test_1",
-    );
+    const found =
+      await repos.marketplacePayments.readLatestById("mkpay_txn_test_1");
     assert.ok(found !== null);
     assert.equal(found.status, "SUCCESS");
     assert.equal(found.paidAt, "2026-01-01T12:00:05.000Z");

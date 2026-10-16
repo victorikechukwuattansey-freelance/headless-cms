@@ -7,9 +7,7 @@ import type { PaymentEvent } from "../../../src/marketplace/payment-sources/type
 
 const prisma = getPrismaClient();
 
-function sampleEvent(
-  overrides: Partial<PaymentEvent> = {},
-): PaymentEvent {
+function sampleEvent(overrides: Partial<PaymentEvent> = {}): PaymentEvent {
   return {
     id: "pevt_test_1",
     event_id: "pevt_test_1",

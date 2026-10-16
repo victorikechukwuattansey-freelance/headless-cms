@@ -43,9 +43,7 @@ export class MarketplaceTransactionRepository {
     return record;
   }
 
-  async readLatestById(
-    id: string,
-  ): Promise<MarketplaceTransaction | null> {
+  async readLatestById(id: string): Promise<MarketplaceTransaction | null> {
     const row = await this.client.marketplaceTransaction.findUnique({
       where: { id },
     });

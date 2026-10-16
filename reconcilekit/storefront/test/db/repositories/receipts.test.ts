@@ -34,9 +34,7 @@ async function seedTxnContext(tx: Prisma.TransactionClient): Promise<void> {
   });
 }
 
-function sampleReceipt(
-  overrides: Partial<ReceiptRecord> = {},
-): ReceiptRecord {
+function sampleReceipt(overrides: Partial<ReceiptRecord> = {}): ReceiptRecord {
   return {
     id: "rcpt_txn_1",
     transactionId: "txn_1",

@@ -15,9 +15,7 @@ const prisma = getPrismaClient();
 
 async function seedTxn(): Promise<void> {}
 
-function sampleRefund(
-  overrides: Partial<RefundRecord> = {},
-): RefundRecord {
+function sampleRefund(overrides: Partial<RefundRecord> = {}): RefundRecord {
   return {
     id: "ref_txn_1",
     transactionId: "txn_1",
@@ -33,7 +31,9 @@ function sampleRefund(
   };
 }
 
-async function seedTxnContext(tx: Parameters<typeof seedOrg>[0]): Promise<void> {
+async function seedTxnContext(
+  tx: Parameters<typeof seedOrg>[0],
+): Promise<void> {
   await seedOrg(tx, "org_test");
   await seedCustomer(tx, { id: "cus_test_1", orgId: "org_test" });
   await seedOrder(tx, { id: "ord_test_1", customerId: "cus_test_1" });

@@ -51,12 +51,8 @@ test("catalogCategories: readLatestById returns null for an unknown id", async (
 test("catalogCategories: insert with an existing id overwrites", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    await repos.catalogCategories.insert(
-      sampleCategory({ name: "Old Name" }),
-    );
-    await repos.catalogCategories.insert(
-      sampleCategory({ name: "New Name" }),
-    );
+    await repos.catalogCategories.insert(sampleCategory({ name: "Old Name" }));
+    await repos.catalogCategories.insert(sampleCategory({ name: "New Name" }));
 
     const found = await repos.catalogCategories.readLatestById("cat_airtime");
     assert.ok(found !== null);

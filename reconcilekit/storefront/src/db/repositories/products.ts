@@ -43,9 +43,7 @@ interface ProductRow {
   readonly createdAt: Date;
 }
 
-function toPrismaProduct(
-  record: Product,
-): Prisma.ProductUncheckedCreateInput {
+function toPrismaProduct(record: Product): Prisma.ProductUncheckedCreateInput {
   return {
     id: record.id,
     businessId: record.businessId,

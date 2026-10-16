@@ -26,9 +26,7 @@ async function seedChain(tx: Prisma.TransactionClient): Promise<void> {
   });
 }
 
-function sampleTicket(
-  overrides: Partial<TicketArtifact> = {},
-): TicketArtifact {
+function sampleTicket(overrides: Partial<TicketArtifact> = {}): TicketArtifact {
   return {
     id: "tkt_txn_test_1",
     transactionId: "txn_test_1",

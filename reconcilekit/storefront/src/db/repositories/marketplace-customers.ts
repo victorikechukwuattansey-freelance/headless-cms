@@ -30,9 +30,7 @@ export class MarketplaceCustomerRepository {
     return record;
   }
 
-  async readLatestById(
-    id: string,
-  ): Promise<MarketplaceCustomer | null> {
+  async readLatestById(id: string): Promise<MarketplaceCustomer | null> {
     const row = await this.client.marketplaceCustomer.findUnique({
       where: { id },
     });
@@ -72,9 +70,7 @@ function toPrismaCustomer(
   };
 }
 
-function fromPrismaCustomer(
-  row: MarketplaceCustomerRow,
-): MarketplaceCustomer {
+function fromPrismaCustomer(row: MarketplaceCustomerRow): MarketplaceCustomer {
   return {
     id: row.id,
     org_id: row.orgId,

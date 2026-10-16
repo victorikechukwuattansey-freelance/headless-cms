@@ -51,9 +51,7 @@ export class WalletLedgerRepository {
     return rows.map(fromPrismaEntry);
   }
 
-  async listByTransaction(
-    transactionId: string,
-  ): Promise<WalletLedgerEntry[]> {
+  async listByTransaction(transactionId: string): Promise<WalletLedgerEntry[]> {
     const rows = await this.client.walletLedgerEntry.findMany({
       where: { transactionId },
       orderBy: [{ occurredAt: "asc" }, { id: "asc" }],

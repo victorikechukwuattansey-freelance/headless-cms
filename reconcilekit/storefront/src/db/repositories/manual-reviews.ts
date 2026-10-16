@@ -56,8 +56,7 @@ function toPrismaReview(
     status: record.status,
     assignedTo: record.assignedTo,
     createdAt: new Date(record.createdAt),
-    resolvedAt:
-      record.resolvedAt === null ? null : new Date(record.resolvedAt),
+    resolvedAt: record.resolvedAt === null ? null : new Date(record.resolvedAt),
     operatorNote: record.operatorNote,
   };
 }

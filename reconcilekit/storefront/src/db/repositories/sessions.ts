@@ -55,8 +55,7 @@ function toPrismaSession(
     activeOrgId: record.active_org_id,
     createdAt: new Date(record.created_at),
     expiresAt: new Date(record.expires_at),
-    revokedAt:
-      record.revoked_at === null ? null : new Date(record.revoked_at),
+    revokedAt: record.revoked_at === null ? null : new Date(record.revoked_at),
   };
 }
 

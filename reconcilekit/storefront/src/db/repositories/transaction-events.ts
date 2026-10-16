@@ -35,9 +35,7 @@ export class TransactionEventRepository {
     return record;
   }
 
-  async listByTransaction(
-    transactionId: string,
-  ): Promise<TransactionEvent[]> {
+  async listByTransaction(transactionId: string): Promise<TransactionEvent[]> {
     const rows = await this.client.transactionEvent.findMany({
       where: { transactionId },
       orderBy: [{ occurredAt: "asc" }, { id: "asc" }],

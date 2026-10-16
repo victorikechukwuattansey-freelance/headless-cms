@@ -102,9 +102,7 @@ test("giftCardArtifacts: riskFlags round-trip without aliasing", async () => {
     const repos = buildRepositories(tx);
     await seedChain(tx);
     const flags = ["AMOUNT_MISMATCH", "DUPLICATE_PROVIDER_RECORD"];
-    await repos.giftCardArtifacts.insert(
-      sampleGiftCard({ riskFlags: flags }),
-    );
+    await repos.giftCardArtifacts.insert(sampleGiftCard({ riskFlags: flags }));
 
     // Mutating the source array after insert must not affect the stored row.
     (flags as string[]).push("EXTRA");

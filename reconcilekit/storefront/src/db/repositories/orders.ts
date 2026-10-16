@@ -52,9 +52,7 @@ interface OrderRow {
   readonly createdAt: Date;
 }
 
-function toPrismaOrder(
-  record: Order,
-): Prisma.OrderUncheckedCreateInput {
+function toPrismaOrder(record: Order): Prisma.OrderUncheckedCreateInput {
   return {
     id: record.id,
     businessId: record.businessId,

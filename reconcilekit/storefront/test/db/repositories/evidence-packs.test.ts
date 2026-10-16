@@ -55,9 +55,7 @@ const SAMPLE_SNAPSHOT: ReconciliationSnapshot = {
   sourceAttributes: { engine: "reconcilekit" },
 };
 
-function samplePack(
-  overrides: Partial<EvidencePack> = {},
-): EvidencePack {
+function samplePack(overrides: Partial<EvidencePack> = {}): EvidencePack {
   return {
     id: "evp_txn_test_1",
     transactionId: "txn_test_1",
@@ -101,10 +99,7 @@ test("evidencePacks: insert persists and readLatestById reads back", async () =>
 test("evidencePacks: readLatestById returns null for an unknown id", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    assert.equal(
-      await repos.evidencePacks.readLatestById("evp_missing"),
-      null,
-    );
+    assert.equal(await repos.evidencePacks.readLatestById("evp_missing"), null);
   });
 });
 
@@ -133,7 +128,10 @@ test("evidencePacks: reconciliation null round-trips as null (DbNull, not JSON n
     const repos = buildRepositories(tx);
     await seedChain(tx);
     await repos.evidencePacks.insert(
-      samplePack({ reconciliation: null, mismatchFlags: ["STATUS_UNRESOLVED"] }),
+      samplePack({
+        reconciliation: null,
+        mismatchFlags: ["STATUS_UNRESOLVED"],
+      }),
     );
 
     const found = await repos.evidencePacks.readLatestById("evp_txn_test_1");

@@ -42,9 +42,7 @@ async function seedChain(
   });
 }
 
-function samplePayment(
-  overrides: Partial<PaymentRecord> = {},
-): PaymentRecord {
+function samplePayment(overrides: Partial<PaymentRecord> = {}): PaymentRecord {
   return {
     id: "ord_test_1",
     businessId: "biz_test_1",
@@ -120,9 +118,27 @@ test("payments: list returns every payment in id order", async () => {
     await seedChain(tx, "ord_a", "biz_test_1", "prd_test_1");
     await seedChain(tx, "ord_c", "biz_test_1", "prd_test_1");
 
-    await repos.payments.insert(samplePayment({ id: "ord_b", orderId: "ord_b", paystackReference: "ps_ref_ord_b" }));
-    await repos.payments.insert(samplePayment({ id: "ord_a", orderId: "ord_a", paystackReference: "ps_ref_ord_a" }));
-    await repos.payments.insert(samplePayment({ id: "ord_c", orderId: "ord_c", paystackReference: "ps_ref_ord_c" }));
+    await repos.payments.insert(
+      samplePayment({
+        id: "ord_b",
+        orderId: "ord_b",
+        paystackReference: "ps_ref_ord_b",
+      }),
+    );
+    await repos.payments.insert(
+      samplePayment({
+        id: "ord_a",
+        orderId: "ord_a",
+        paystackReference: "ps_ref_ord_a",
+      }),
+    );
+    await repos.payments.insert(
+      samplePayment({
+        id: "ord_c",
+        orderId: "ord_c",
+        paystackReference: "ps_ref_ord_c",
+      }),
+    );
 
     const rows = await repos.payments.list();
     assert.equal(rows.length, 3);
@@ -139,8 +155,20 @@ test("payments: findByOrderId returns the payment for that order only", async ()
     await seedChain(tx, "ord_a", "biz_test_1", "prd_test_1");
     await seedChain(tx, "ord_b", "biz_test_1", "prd_test_1");
 
-    await repos.payments.insert(samplePayment({ id: "ord_a", orderId: "ord_a", paystackReference: "ps_ref_ord_a" }));
-    await repos.payments.insert(samplePayment({ id: "ord_b", orderId: "ord_b", paystackReference: "ps_ref_ord_b" }));
+    await repos.payments.insert(
+      samplePayment({
+        id: "ord_a",
+        orderId: "ord_a",
+        paystackReference: "ps_ref_ord_a",
+      }),
+    );
+    await repos.payments.insert(
+      samplePayment({
+        id: "ord_b",
+        orderId: "ord_b",
+        paystackReference: "ps_ref_ord_b",
+      }),
+    );
 
     const found = await repos.payments.findByOrderId("ord_a");
     assert.ok(found !== null);

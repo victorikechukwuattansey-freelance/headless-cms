@@ -131,11 +131,9 @@ function fromPrismaEvent(row: PaymentEventRow): PaymentEvent {
     amount: row.amount,
     currency: row.currency,
     status: row.status as CanonicalPaymentStatus | null,
-    occurred_at:
-      row.occurredAt === null ? null : row.occurredAt.getTime(),
+    occurred_at: row.occurredAt === null ? null : row.occurredAt.getTime(),
     source_confidence: row.sourceConfidence as SourceConfidence,
-    source_attributes:
-      row.sourceAttributes as unknown as SourceAttributes,
+    source_attributes: row.sourceAttributes as unknown as SourceAttributes,
     observed_at: row.observedAt.getTime(),
   };
 }

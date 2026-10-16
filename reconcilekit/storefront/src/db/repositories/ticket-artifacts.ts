@@ -45,9 +45,7 @@ export class TicketArtifactRepository {
     return row === null ? null : fromPrismaTicket(row);
   }
 
-  async listByTransaction(
-    transactionId: string,
-  ): Promise<TicketArtifact[]> {
+  async listByTransaction(transactionId: string): Promise<TicketArtifact[]> {
     const rows = await this.client.ticketArtifact.findMany({
       where: { transactionId },
       orderBy: { id: "asc" },

@@ -66,9 +66,8 @@ test("marketplaceProviderAttempts: insert persists and listByTransaction reads b
     const saved = await repos.marketplaceProviderAttempts.insert(record);
     assert.deepEqual(saved, record);
 
-    const rows = await repos.marketplaceProviderAttempts.listByTransaction(
-      "txn_test_1",
-    );
+    const rows =
+      await repos.marketplaceProviderAttempts.listByTransaction("txn_test_1");
     assert.equal(rows.length, 1);
     assert.equal(rows[0].providerId, "prv_mock");
     assert.equal(rows[0].status, "SUCCESS");
@@ -113,18 +112,16 @@ test("marketplaceProviderAttempts: listByTransaction isolates and orders attempt
       sampleAttempt({ id: "att_txn_b_1", transactionId: "txn_b" }),
     );
 
-    const a = await repos.marketplaceProviderAttempts.listByTransaction(
-      "txn_a",
-    );
+    const a =
+      await repos.marketplaceProviderAttempts.listByTransaction("txn_a");
     assert.equal(a.length, 2);
     assert.deepEqual(
       a.map((row) => row.id),
       ["att_txn_a_1", "att_txn_a_2"],
     );
 
-    const b = await repos.marketplaceProviderAttempts.listByTransaction(
-      "txn_b",
-    );
+    const b =
+      await repos.marketplaceProviderAttempts.listByTransaction("txn_b");
     assert.equal(b.length, 1);
     assert.equal(b[0].transactionId, "txn_b");
   });

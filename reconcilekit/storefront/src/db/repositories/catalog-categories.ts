@@ -70,9 +70,7 @@ function toPrismaCategory(
   };
 }
 
-function fromPrismaCategory(
-  row: CatalogCategoryRow,
-): MarketplaceCategory {
+function fromPrismaCategory(row: CatalogCategoryRow): MarketplaceCategory {
   return {
     id: row.id,
     group: row.group as CatalogGroup,

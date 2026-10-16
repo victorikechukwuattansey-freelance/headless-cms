@@ -38,9 +38,7 @@ export class GiftCardArtifactRepository {
     return record;
   }
 
-  async listByTransaction(
-    transactionId: string,
-  ): Promise<GiftCardArtifact[]> {
+  async listByTransaction(transactionId: string): Promise<GiftCardArtifact[]> {
     const rows = await this.client.giftCardArtifact.findMany({
       where: { transactionId },
       orderBy: { id: "asc" },
@@ -81,9 +79,7 @@ function toPrismaGiftCard(
   };
 }
 
-function fromPrismaGiftCard(
-  row: GiftCardArtifactRow,
-): GiftCardArtifact {
+function fromPrismaGiftCard(row: GiftCardArtifactRow): GiftCardArtifact {
   return {
     id: row.id,
     transactionId: row.transactionId,

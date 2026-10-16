@@ -89,7 +89,9 @@ export function buildRepositories(client: RepositoryClient): Repositories {
     marketplaceOrders: new MarketplaceOrderRepository(client),
     marketplaceTransactions: new MarketplaceTransactionRepository(client),
     marketplacePayments: new MarketplacePaymentRepository(client),
-    marketplaceProviderAttempts: new MarketplaceProviderAttemptRepository(client),
+    marketplaceProviderAttempts: new MarketplaceProviderAttemptRepository(
+      client,
+    ),
     ticketArtifacts: new TicketArtifactRepository(client),
     giftCardArtifacts: new GiftCardArtifactRepository(client),
     paymentEvents: new PaymentEventRepository(client),
@@ -97,6 +99,6 @@ export function buildRepositories(client: RepositoryClient): Repositories {
     businesses: new BusinessRepository(client),
     products: new ProductRepository(client),
     orders: new OrderRepository(client),
-        payments: new PaymentRepository(client),
+    payments: new PaymentRepository(client),
   };
 }

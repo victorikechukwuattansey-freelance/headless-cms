@@ -8,9 +8,7 @@ import type { MembershipRecord } from "../../../src/marketplace/types.ts";
 
 const prisma = getPrismaClient();
 
-async function seedContext(
-  tx: Parameters<typeof seedOrg>[0],
-): Promise<void> {
+async function seedContext(tx: Parameters<typeof seedOrg>[0]): Promise<void> {
   await seedOrg(tx, "org_demo");
   await seedOrg(tx, "org_other");
   await seedUser(tx, { id: "usr_demo" });
@@ -86,13 +84,25 @@ test("memberships: listByUser isolates users and orders by id", async () => {
     await seedContext(tx);
 
     await repos.memberships.insert(
-      sampleMembership({ id: "mem_b", user_id: "usr_demo", org_id: "org_other" }),
+      sampleMembership({
+        id: "mem_b",
+        user_id: "usr_demo",
+        org_id: "org_other",
+      }),
     );
     await repos.memberships.insert(
-      sampleMembership({ id: "mem_a", user_id: "usr_demo", org_id: "org_demo" }),
+      sampleMembership({
+        id: "mem_a",
+        user_id: "usr_demo",
+        org_id: "org_demo",
+      }),
     );
     await repos.memberships.insert(
-      sampleMembership({ id: "mem_z", user_id: "usr_other", org_id: "org_demo" }),
+      sampleMembership({
+        id: "mem_z",
+        user_id: "usr_other",
+        org_id: "org_demo",
+      }),
     );
 
     const demo = await repos.memberships.listByUser("usr_demo");

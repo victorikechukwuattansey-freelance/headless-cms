@@ -39,7 +39,12 @@ function sampleService(
     fulfillmentType: "INSTANT_DIGITAL",
     availability: "AVAILABLE",
     inputSchema: [
-      { name: "recipient", label: "Recipient phone", type: "PHONE", required: true },
+      {
+        name: "recipient",
+        label: "Recipient phone",
+        type: "PHONE",
+        required: true,
+      },
       { name: "amount", label: "Amount (NGN)", type: "NUMBER", required: true },
     ],
     simulated: true,
@@ -47,9 +52,7 @@ function sampleService(
   };
 }
 
-async function seedCategory(
-  tx: Prisma.TransactionClient,
-): Promise<void> {
+async function seedCategory(tx: Prisma.TransactionClient): Promise<void> {
   const repos = buildRepositories(tx);
   await repos.catalogCategories.insert(sampleCategory());
 }
@@ -102,15 +105,9 @@ test("catalogServices: list returns all in id order", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     await seedCategory(tx);
-    await repos.catalogServices.insert(
-      sampleService({ id: "svc_c" }),
-    );
-    await repos.catalogServices.insert(
-      sampleService({ id: "svc_a" }),
-    );
-    await repos.catalogServices.insert(
-      sampleService({ id: "svc_b" }),
-    );
+    await repos.catalogServices.insert(sampleService({ id: "svc_c" }));
+    await repos.catalogServices.insert(sampleService({ id: "svc_a" }));
+    await repos.catalogServices.insert(sampleService({ id: "svc_b" }));
 
     const rows = await repos.catalogServices.list();
     assert.equal(rows.length, 3);

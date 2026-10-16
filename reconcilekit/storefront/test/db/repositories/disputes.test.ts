@@ -26,9 +26,7 @@ async function seedTxnContext(tx: Prisma.TransactionClient): Promise<void> {
   });
 }
 
-function sampleDispute(
-  overrides: Partial<DisputeRecord> = {},
-): DisputeRecord {
+function sampleDispute(overrides: Partial<DisputeRecord> = {}): DisputeRecord {
   return {
     id: "dsp_txn_1",
     transactionId: "txn_1",

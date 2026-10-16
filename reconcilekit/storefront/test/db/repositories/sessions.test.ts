@@ -8,16 +8,12 @@ import type { SessionRecord } from "../../../src/marketplace/types.ts";
 
 const prisma = getPrismaClient();
 
-async function seedContext(
-  tx: Parameters<typeof seedOrg>[0],
-): Promise<void> {
+async function seedContext(tx: Parameters<typeof seedOrg>[0]): Promise<void> {
   await seedOrg(tx, "org_demo");
   await seedUser(tx, { id: "usr_demo" });
 }
 
-function sampleSession(
-  overrides: Partial<SessionRecord> = {},
-): SessionRecord {
+function sampleSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
   return {
     id: "sess_token_abc",
     user_id: "usr_demo",
