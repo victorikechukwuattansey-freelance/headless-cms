@@ -1,5 +1,7 @@
 import { loadConfig } from "./config.ts";
 import type { StorefrontConfig } from "./config.ts";
+import { disconnectPrisma, getPrismaClient } from "./db/client.ts";
+import { buildRepositories } from "./db/repositories/index.ts";
 import { JsonlStore } from "./store/jsonl-store.ts";
 import { createStorefrontServer } from "./server.ts";
 import type { PaystackGateway } from "./paystack/gateway.ts";
@@ -35,6 +37,7 @@ function buildPaystackGateway(config: StorefrontConfig): PaystackGateway {
 
 const config = loadConfig();
 const store = new JsonlStore(config.dataDir);
+const repos = buildRepositories(getPrismaClient());
 
 const marketplaceDeps: MarketplaceTransactionDeps = {
   store,
@@ -44,11 +47,12 @@ const marketplaceDeps: MarketplaceTransactionDeps = {
 
 if (config.seedDemo) {
   await seedDemoData(store);
-  await seedDemoUser(store);
+  await seedDemoUser(repos); // was: seedDemoUser(store)
 }
 
 const server = createStorefrontServer(config, {
   store,
+  repos,
   paystack: buildPaystackGateway(config),
   marketplace: marketplaceDeps,
 });
@@ -68,3 +72,11 @@ server.listen(config.port, () => {
     );
   }
 });
+
+const shutdown = async (): Promise<void> => {
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await disconnectPrisma();
+  process.exit(0);
+};
+process.once("SIGINT", () => void shutdown());
+process.once("SIGTERM", () => void shutdown());

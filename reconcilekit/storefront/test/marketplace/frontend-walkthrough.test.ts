@@ -5,6 +5,8 @@ import type { Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { loadConfig } from "../../src/config.ts";
 import { createStorefrontServer } from "../../src/server.ts";
@@ -23,6 +25,9 @@ import {
 } from "../../src/marketplace/demo-scenarios.ts";
 import type { GiftCardArtifact } from "../../src/marketplace/types.ts";
 
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
+
 interface WalkthroughServer {
   readonly baseUrl: string;
   readonly cookie: string;
@@ -40,12 +45,13 @@ async function startFullySeededServer(t: {
   const seeded = await seedDemoData(store);
   // Phase 5A.3b — protected routes require a session; seed the demo user so
   // the login helper can authenticate against this server.
-  await seedDemoUser(store);
+  await seedDemoUser(repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
       store,
+      repos,
       paystack: {
         initializeTransaction: async () => {
           throw new Error("Paystack not used in marketplace tests");

@@ -8,6 +8,10 @@ import type { SessionRecord } from "../marketplace/types.ts";
  *
  * Revocation is append-only: a new record with `revoked_at` set is written,
  * and the latest record wins. No deletion, matching the store's contract.
+ *
+ * Phase 5B.1c: NOT yet migrated. `sessions` FKs both `users` and
+ * `organizations`; organizations live in JSONL until 5B.1c-1b. Migrating
+ * sessions before tenancy would fail the FK at runtime. Migrated in 5B.1c-1c.
  */
 
 export function newSessionToken(): string {

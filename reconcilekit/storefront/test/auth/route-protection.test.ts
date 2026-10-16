@@ -5,6 +5,8 @@ import type { Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { loadConfig } from "../../src/config.ts";
 import { createStorefrontServer } from "../../src/server.ts";
@@ -12,6 +14,9 @@ import { demoDeps } from "../marketplace/demo-deps.ts";
 import { seedDemoData } from "../../src/marketplace/seed.ts";
 import { seedDemoUser } from "../../src/auth/identity.ts";
 import { loginAndGetCookie, withCookie } from "./helpers.ts";
+
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
 
 interface ProtServer {
   readonly baseUrl: string;
@@ -26,12 +31,13 @@ async function startServer(t: {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   await seedDemoData(store);
-  await seedDemoUser(store);
+  await seedDemoUser(repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
       store,
+      repos,
       paystack: {
         initializeTransaction: async () => {
           throw new Error("not used");

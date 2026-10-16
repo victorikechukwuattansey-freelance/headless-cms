@@ -9,6 +9,7 @@ import type {
   Product,
 } from "./domain/types.ts";
 import type { JsonlStore } from "./store/jsonl-store.ts";
+import type { Repositories } from "./db/repositories/index.ts";
 import type { PaystackGateway } from "./paystack/gateway.ts";
 import type {
   InitializeTransactionInput,
@@ -104,6 +105,7 @@ import {
 
 export interface ServerDependencies {
   readonly store: JsonlStore;
+  readonly repos: Repositories;
   readonly paystack: PaystackGateway;
   readonly marketplace?: MarketplaceTransactionDeps;
 }
@@ -163,6 +165,7 @@ async function handleRequest(
         res,
         url,
         deps.marketplace,
+        deps.repos,
         config,
       );
       if (handled) {
@@ -618,15 +621,13 @@ async function tryHandleMarketplace(
   res: import("node:http").ServerResponse,
   url: URL,
   deps: MarketplaceTransactionDeps,
+  repos: Repositories,
   config: StorefrontConfig,
 ): Promise<boolean> {
   const path = url.pathname;
   const method = req.method ?? "GET";
-
-  // When marketplace deps are available, handle ALL paths with HTML responses
-  // This ensures unknown routes return HTML 404 instead of JSON
   try {
-    await routeMarketplace(req, res, url, deps, method, config);
+    await routeMarketplace(req, res, url, deps, repos, method, config);
     return true;
   } catch (error) {
     writeMarketplaceHtmlError(res, error, path);
@@ -667,6 +668,7 @@ async function routeMarketplace(
   res: import("node:http").ServerResponse,
   url: URL,
   deps: MarketplaceTransactionDeps,
+  repos: Repositories,
   method: string,
   config: StorefrontConfig,
 ): Promise<void> {
@@ -697,8 +699,10 @@ async function routeMarketplace(
     path === "/login" || (method === "POST" && path === "/logout");
 
   if (!isPublicForAuth) {
+    // session gate
     const auth = await requireSession(req, {
       store: deps.store,
+      repos,
       cookieName: config.sessionCookieName,
     });
     if (auth === null) {
@@ -955,7 +959,8 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         res.end(renderLoginPage(customer, "Email and password are required."));
         return;
       }
-      const user = await loginUser(deps.store, email, password);
+      // POST /login — user lookup
+      const user = await loginUser(repos, email, password);
       if (user === null) {
         const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
         res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
@@ -975,6 +980,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         return;
       }
       const activeOrgId = memberships[0]!.org_id;
+      // POST /login — session creation
       const { token } = await createSession(deps.store, {
         userId: user.id,
         activeOrgId,
@@ -993,6 +999,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
     }
     if (path === "/logout") {
       const token = readSessionToken(req, config.sessionCookieName);
+      // POST /logout — session revocation
       if (token !== null) {
         await revokeSession(deps.store, token);
       }

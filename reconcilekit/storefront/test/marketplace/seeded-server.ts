@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../../src/config.ts";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { createStorefrontServer } from "../../src/server.ts";
 import { demoDeps } from "./demo-deps.ts";
@@ -52,7 +54,12 @@ export async function startSeededServer(): Promise<SeededServerContext> {
 
   // Phase 5A.3b — protected routes require a session. Seed the demo user and
   // tenancy so the shared login helper can authenticate against this server.
-  await seedDemoUser(store);
+  const repos = buildRepositories(getPrismaClient());
+
+  // Phase 5B.1c-1a: the demo user lives in Postgres (loginUser reads it
+  // there); tenancy stays in JSONL until 1b. Sessions stay in JSONL until
+  // 1c, so the tenancy seed is still required for membership lookups.
+  await seedDemoUser(repos);
   await seedDemoTenancy(store);
 
   const transaction = await createSeededTransaction(store);
@@ -61,6 +68,7 @@ export async function startSeededServer(): Promise<SeededServerContext> {
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
       store,
+      repos,
       paystack: {
         initializeTransaction: async () => {
           throw new Error("Paystack not used in marketplace tests");

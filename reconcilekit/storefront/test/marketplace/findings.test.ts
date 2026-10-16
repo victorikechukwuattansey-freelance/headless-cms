@@ -5,6 +5,8 @@ import type { Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { loadConfig } from "../../src/config.ts";
 import { createStorefrontServer } from "../../src/server.ts";
@@ -21,6 +23,9 @@ import type {
   MarketplaceTransaction,
 } from "../../src/marketplace/types.ts";
 
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
+
 interface FindingsServer {
   readonly baseUrl: string;
   readonly cookie: string;
@@ -36,12 +41,13 @@ async function startServer(t: {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   const seeded = await seedDemoData(store);
-  await seedDemoUser(store);
+  await seedDemoUser(repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
       store,
+      repos,
       paystack: {
         initializeTransaction: async () => {
           throw new Error("Paystack not used in findings tests");

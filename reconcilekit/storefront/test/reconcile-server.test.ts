@@ -6,10 +6,14 @@ import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { loadConfig } from "../src/config.ts";
+import { getPrismaClient } from "../src/db/client.ts";
+import { buildRepositories } from "../src/db/repositories/index.ts";
 import { JsonlStore } from "../src/store/jsonl-store.ts";
 import { createStorefrontServer } from "../src/server.ts";
 import type { PaystackGateway } from "../src/paystack/gateway.ts";
 import type { PaymentRecord } from "../src/domain/types.ts";
+
+const repos = buildRepositories(getPrismaClient());
 
 interface TestContext {
   baseUrl: string;
@@ -45,6 +49,7 @@ async function startServer(
   const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
   const server: Server = createStorefrontServer(config, {
     store,
+    repos,
     paystack: gateway,
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

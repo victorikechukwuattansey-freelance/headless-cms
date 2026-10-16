@@ -5,6 +5,8 @@ import type { Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { loadConfig } from "../../src/config.ts";
 import { createStorefrontServer } from "../../src/server.ts";
@@ -12,6 +14,9 @@ import { demoDeps } from "../marketplace/demo-deps.ts";
 import { seedDemoUser } from "../../src/auth/identity.ts";
 import { lookupSession } from "../../src/auth/sessions.ts";
 import { seedDemoTenancy } from "../../src/marketplace/seed.ts";
+
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
 
 interface FlowServer {
   readonly baseUrl: string;
@@ -25,12 +30,13 @@ async function startServer(t: {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-login-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
-  await seedDemoUser(store);
+  await seedDemoUser(repos);
   await seedDemoTenancy(store);
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
       store,
+      repos,
       paystack: {
         initializeTransaction: async () => {
           throw new Error("not used");
@@ -158,12 +164,13 @@ test("login flow: sessions persist across a server restart", async (t) => {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-login-restart-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
-  await seedDemoUser(store);
+  await seedDemoUser(repos);
   await seedDemoTenancy(store);
 
   const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
   const deps = {
     store,
+    repos,
     paystack: {
       initializeTransaction: async () => {
         throw new Error("not used");

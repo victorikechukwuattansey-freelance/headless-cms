@@ -1,10 +1,15 @@
-import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import type { UserRecord } from "../marketplace/types.ts";
 import { hashPassword, verifyPassword } from "./passwords.ts";
 
 /**
  * User identity. A user is anyone who can hold a session. Membership (the
  * user's relation to an org) is a 5A.2 concern and is not modeled here.
+ *
+ * Phase 5B.1c-1a: reads and writes go through UserRepository. The
+ * repository normalizes email on findByEmail, so the local normalizeEmail
+ * helper is used only for registerUser's pre-check and the empty-email
+ * guard, which are module policy, not storage.
  */
 
 export const DEMO_USER_ID = "usr_demo";
@@ -17,26 +22,17 @@ function normalizeEmail(email: string): string {
 }
 
 export async function getUserByEmail(
-  store: JsonlStore,
+  repos: Repositories,
   email: string,
 ): Promise<UserRecord | null> {
-  const target = normalizeEmail(email);
-  const all = await store.readAll<UserRecord>("users");
-  // Latest record per id wins, so scan and keep the last match.
-  let latest: UserRecord | null = null;
-  for (const user of all) {
-    if (user.email === target) {
-      latest = user;
-    }
-  }
-  return latest;
+  return repos.users.findByEmail(email);
 }
 
 export async function getUserById(
-  store: JsonlStore,
+  repos: Repositories,
   userId: string,
 ): Promise<UserRecord | null> {
-  return store.readLatestById<UserRecord>("users", userId);
+  return repos.users.findById(userId);
 }
 
 export interface RegisterUserInput {
@@ -48,7 +44,7 @@ export interface RegisterUserInput {
 }
 
 export async function registerUser(
-  store: JsonlStore,
+  repos: Repositories,
   input: RegisterUserInput,
 ): Promise<UserRecord> {
   const email = normalizeEmail(input.email);
@@ -58,7 +54,7 @@ export async function registerUser(
   if (input.password.length < 8) {
     throw new Error("registerUser: password must be at least 8 characters");
   }
-  const existing = await getUserByEmail(store, email);
+  const existing = await getUserByEmail(repos, email);
   if (existing !== null) {
     throw new Error(`registerUser: email ${email} already registered`);
   }
@@ -75,7 +71,7 @@ export async function registerUser(
     updated_at: now.toISOString(),
     simulated: true,
   };
-  await store.insert("users", user);
+  await repos.users.insert(user);
   return user;
 }
 
@@ -84,11 +80,11 @@ export interface LoginResult {
 }
 
 export async function loginUser(
-  store: JsonlStore,
+  repos: Repositories,
   email: string,
   password: string,
 ): Promise<UserRecord | null> {
-  const user = await getUserByEmail(store, email);
+  const user = await getUserByEmail(repos, email);
   if (user === null) {
     // Still hash to avoid a timing oracle on email existence.
     await hashPassword(password);
@@ -99,12 +95,12 @@ export async function loginUser(
 }
 
 /**
- * Idempotent demo user seeding. Called from the demo-seed path. Repeated
- * calls are safe: the deterministic id means the store's last-write-wins
- * reduction collapses to a single record.
+ * Idempotent demo user seeding. Called from the demo-seed path and by the
+ * HTTP test fixtures. Repeated calls are safe: the deterministic id means
+ * the repository's upsert returns the existing record.
  */
-export async function seedDemoUser(store: JsonlStore): Promise<UserRecord> {
-  const existing = await getUserById(store, DEMO_USER_ID);
+export async function seedDemoUser(repos: Repositories): Promise<UserRecord> {
+  const existing = await getUserById(repos, DEMO_USER_ID);
   if (existing !== null) {
     return existing;
   }
@@ -119,6 +115,6 @@ export async function seedDemoUser(store: JsonlStore): Promise<UserRecord> {
     updated_at: now.toISOString(),
     simulated: true,
   };
-  await store.insert("users", user);
+  await repos.users.insert(user);
   return user;
 }
