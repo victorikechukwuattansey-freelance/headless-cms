@@ -16,7 +16,6 @@ import {
   type SeededDemoData,
   type SeededOrderEntry,
 } from "../../src/marketplace/seed.ts";
-import { seedDemoUser } from "../../src/auth/identity.ts";
 import { loginAndGetCookie, withCookie } from "../auth/helpers.ts";
 import type {
   EvidencePack,
@@ -40,8 +39,7 @@ async function startServer(t: {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-findings-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
-  const seeded = await seedDemoData(store);
-  await seedDemoUser(repos);
+  const seeded = await seedDemoData(store, repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),

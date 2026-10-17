@@ -105,6 +105,11 @@ import {
 
 export interface ServerDependencies {
   readonly store: JsonlStore;
+  /**
+   * Top-level repository handle. Mirrors `marketplace.repos` when
+   * marketplace is configured; kept separately so non-marketplace paths
+   * can reach Postgres without going through MarketplaceTransactionDeps.
+   */
   readonly repos: Repositories;
   readonly paystack: PaystackGateway;
   readonly marketplace?: MarketplaceTransactionDeps;
@@ -711,7 +716,7 @@ async function routeMarketplace(
     }
     if (path.startsWith("/admin")) {
       const membership = await getMembership(
-        deps.store,
+        repos,
         auth.user.id,
         auth.session.active_org_id,
       );
@@ -967,7 +972,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         res.end(renderLoginPage(customer, "Invalid email or password."));
         return;
       }
-      const memberships = await listMembershipsForUser(deps.store, user.id);
+      const memberships = await listMembershipsForUser(repos, user.id);
       if (memberships.length === 0) {
         const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
         res.writeHead(403, { "Content-Type": "text/html; charset=utf-8" });

@@ -43,15 +43,25 @@ test("organizations: readLatestById returns null for an unknown id", async () =>
 test("organizations: list returns all in id order", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    await repos.organizations.insert(sampleOrg({ id: "org_c", name: "C" }));
-    await repos.organizations.insert(sampleOrg({ id: "org_a", name: "A" }));
-    await repos.organizations.insert(sampleOrg({ id: "org_b", name: "B" }));
+    await repos.organizations.insert(
+      sampleOrg({ id: "test_org_c", name: "C" }),
+    );
+    await repos.organizations.insert(
+      sampleOrg({ id: "test_org_a", name: "A" }),
+    );
+    await repos.organizations.insert(
+      sampleOrg({ id: "test_org_b", name: "B" }),
+    );
 
-    const rows = await repos.organizations.list();
-    assert.equal(rows.length, 3);
+    // Filter to the rows this test inserted. The DB may already contain
+    // demo data (org_demo) committed by HTTP test fixtures that seed
+    // outside any transaction, so an unfiltered count is not reliable.
+    const all = await repos.organizations.list();
+    const testRows = all.filter((row) => row.id.startsWith("test_org_"));
+    assert.equal(testRows.length, 3);
     assert.deepEqual(
-      rows.map((row) => row.id),
-      ["org_a", "org_b", "org_c"],
+      testRows.map((row) => row.id),
+      ["test_org_a", "test_org_b", "test_org_c"],
     );
   });
 });

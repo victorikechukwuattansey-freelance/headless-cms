@@ -1,4 +1,5 @@
 import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import { buildTransactionId, buildTransactionReference } from "../ids.ts";
 import { buildDemoCatalog } from "./catalog.ts";
 import { DEMO_MEMBERSHIP_ID, DEMO_ORG_ID, DEMO_ORG_NAME } from "./tenancy.ts";
@@ -7,7 +8,7 @@ import type {
   MembershipRecord,
   OrganizationRecord,
 } from "./types.ts";
-import { DEMO_USER_ID } from "../auth/identity.ts";
+import { DEMO_USER_ID, seedDemoUser } from "../auth/identity.ts";
 import { createMockProviderRegistry } from "./providers/registry.ts";
 import type { PaymentProvider } from "./providers/contracts.ts";
 import {
@@ -82,19 +83,23 @@ export type SeededDemoEntry = SeededOrderEntry | SeededWalletFundingEntry;
 /**
  * Phase 5A.2 — seed the demo tenant.
  *
+ * Phase 5B.1c-1b: organizations and memberships move to Postgres. Customers
+ * stay in JSONL for this increment (they migrate with `marketplace_customers`
+ * later).
+ *
  * Creates one org, one membership tying the demo user to that org, and the
  * two known demo customer records (the main demo customer and the wallet
  * funding customer) with `org_id` set.
  *
  * Idempotent: repeated calls converge on the same records.
  */
-export async function seedDemoTenancy(store: JsonlStore): Promise<void> {
-  const org = await store.readLatestById<OrganizationRecord>(
-    "organizations",
-    DEMO_ORG_ID,
-  );
+export async function seedDemoTenancy(
+  store: JsonlStore,
+  repos: Repositories,
+): Promise<void> {
+  const org = await repos.organizations.readLatestById(DEMO_ORG_ID);
   if (org === null) {
-    await store.insert("organizations", {
+    await repos.organizations.insert({
       id: DEMO_ORG_ID,
       name: DEMO_ORG_NAME,
       created_at: DEMO_SEED_TIMESTAMP,
@@ -102,12 +107,12 @@ export async function seedDemoTenancy(store: JsonlStore): Promise<void> {
     });
   }
 
-  const membership = await store.readLatestById<MembershipRecord>(
-    "memberships",
-    DEMO_MEMBERSHIP_ID,
+  const membership = await repos.memberships.findByUserAndOrg(
+    DEMO_USER_ID,
+    DEMO_ORG_ID,
   );
   if (membership === null) {
-    await store.insert("memberships", {
+    await repos.memberships.insert({
       id: DEMO_MEMBERSHIP_ID,
       user_id: DEMO_USER_ID,
       org_id: DEMO_ORG_ID,
@@ -284,8 +289,15 @@ export async function seedWalletFundingFailure(
  * orderable scenarios, fundWallet for wallet funding failure), so a seeded
  * store is indistinguishable in shape from one produced by real use.
  */
-export async function seedDemoData(store: JsonlStore): Promise<SeededDemoData> {
-  await seedDemoTenancy(store);
+export async function seedDemoData(
+  store: JsonlStore,
+  repos: Repositories,
+): Promise<SeededDemoData> {
+  // Postgres FK ordering: memberships.user_id -> users.id, so the demo user
+  // must exist before seedDemoTenancy inserts the membership. Under JSONL
+  // this ordering did not matter; under Postgres it does.
+  await seedDemoUser(repos);
+  await seedDemoTenancy(store, repos);
 
   const catalog = buildDemoCatalog();
   const registry = createMockProviderRegistry();

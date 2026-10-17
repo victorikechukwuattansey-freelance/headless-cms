@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   DEMO_ORDER_SCENARIOS,
@@ -23,6 +25,9 @@ import type {
   WalletLedgerEntry,
 } from "../../src/marketplace/types.ts";
 
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
+
 function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
   const dir = mkdtempSync(join(tmpdir(), "storefront-demo-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -33,7 +38,7 @@ async function seededStore(t: {
   after: (fn: () => void) => void;
 }): Promise<{ store: JsonlStore; seeded: SeededDemoData }> {
   const store = tempStore(t);
-  const seeded = await seedDemoData(store);
+  const seeded = await seedDemoData(store, repos);
   return { store, seeded };
 }
 

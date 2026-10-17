@@ -13,8 +13,7 @@ import { executeMarketplaceTransaction } from "../../src/marketplace/transaction
 import { reconcileMarketplaceTransaction } from "../../src/marketplace/reconcile.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import type { MarketplaceTransaction } from "../../src/marketplace/types.ts";
-import { seedDemoTenancy } from "../../src/marketplace/seed.ts";
-import { seedDemoUser } from "../../src/auth/identity.ts";
+import { seedDemoData } from "../../src/marketplace/seed.ts";
 import { loginAndGetCookie } from "../auth/helpers.ts";
 
 export interface SeededServerContext {
@@ -51,16 +50,12 @@ async function createSeededTransaction(
 export async function startSeededServer(): Promise<SeededServerContext> {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-marketplace-"));
   const store = new JsonlStore(dataDir);
-
-  // Phase 5A.3b — protected routes require a session. Seed the demo user and
-  // tenancy so the shared login helper can authenticate against this server.
   const repos = buildRepositories(getPrismaClient());
 
-  // Phase 5B.1c-1a: the demo user lives in Postgres (loginUser reads it
-  // there); tenancy stays in JSONL until 1b. Sessions stay in JSONL until
-  // 1c, so the tenancy seed is still required for membership lookups.
-  await seedDemoUser(repos);
-  await seedDemoTenancy(store);
+  // seedDemoData seeds the demo user (Postgres) and the demo tenancy
+  // (Postgres) in the correct FK order, then executes the marketplace
+  // scenarios into JSONL.
+  await seedDemoData(store, repos);
 
   const transaction = await createSeededTransaction(store);
 

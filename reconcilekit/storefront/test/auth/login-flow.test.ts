@@ -31,7 +31,7 @@ async function startServer(t: {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   await seedDemoUser(repos);
-  await seedDemoTenancy(store);
+  await seedDemoTenancy(store, repos);
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
@@ -165,7 +165,7 @@ test("login flow: sessions persist across a server restart", async (t) => {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   await seedDemoUser(repos);
-  await seedDemoTenancy(store);
+  await seedDemoTenancy(store, repos);
 
   const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
   const deps = {

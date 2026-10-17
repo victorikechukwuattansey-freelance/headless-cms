@@ -81,38 +81,44 @@ test("memberships: insert with an existing id overwrites (role change)", async (
 test("memberships: listByUser isolates users and orders by id", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    await seedContext(tx);
+    await seedOrg(tx, "test_org_1");
+    await seedOrg(tx, "test_org_2");
+    await seedUser(tx, { id: "test_usr_1" });
+    await seedUser(tx, { id: "test_usr_2" });
 
+    // Use test-scoped (user, org) pairs: the unique constraint is on
+    // (user_id, org_id), and HTTP test fixtures commit the demo pair
+    // outside any transaction, so the demo pair must not be reused here.
     await repos.memberships.insert(
       sampleMembership({
-        id: "mem_b",
-        user_id: "usr_demo",
-        org_id: "org_other",
+        id: "test_mem_b",
+        user_id: "test_usr_1",
+        org_id: "test_org_2",
       }),
     );
     await repos.memberships.insert(
       sampleMembership({
-        id: "mem_a",
-        user_id: "usr_demo",
-        org_id: "org_demo",
+        id: "test_mem_a",
+        user_id: "test_usr_1",
+        org_id: "test_org_1",
       }),
     );
     await repos.memberships.insert(
       sampleMembership({
-        id: "mem_z",
-        user_id: "usr_other",
-        org_id: "org_demo",
+        id: "test_mem_z",
+        user_id: "test_usr_2",
+        org_id: "test_org_1",
       }),
     );
 
-    const demo = await repos.memberships.listByUser("usr_demo");
+    const demo = await repos.memberships.listByUser("test_usr_1");
     assert.equal(demo.length, 2);
     assert.deepEqual(
       demo.map((row) => row.id),
-      ["mem_a", "mem_b"],
+      ["test_mem_a", "test_mem_b"],
     );
     for (const row of demo) {
-      assert.equal(row.user_id, "usr_demo");
+      assert.equal(row.user_id, "test_usr_1");
     }
   });
 });

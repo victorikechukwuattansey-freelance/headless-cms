@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
+import { withRollback } from "../db/helpers.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   DEMO_ORDER_SCENARIOS,
@@ -34,6 +37,8 @@ import type {
   SeededWalletFundingEntry,
 } from "../../src/marketplace/seed.ts";
 
+const prisma = getPrismaClient();
+
 function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
   const dir = mkdtempSync(join(tmpdir(), "storefront-seed-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -59,120 +64,140 @@ function orderEntries(seeded: {
 
 test("demo seed creates all required validation scenarios", async (t) => {
   const store = tempStore(t);
-  const seeded = await seedDemoData(store);
-  const names = seeded.transactions.map((entry) => entry.demoScenarioName);
-  assert.deepEqual(names.slice().sort(), DEMO_SCENARIO_NAMES.slice().sort());
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const seeded = await seedDemoData(store, repos);
+    const names = seeded.transactions.map((entry) => entry.demoScenarioName);
+    assert.deepEqual(names.slice().sort(), DEMO_SCENARIO_NAMES.slice().sort());
+  });
 });
 
 test("demo seed produces stable, unique identities with friendly names", async (t) => {
   const store = tempStore(t);
-  const seeded = await seedDemoData(store);
-  const orders = orderEntries(seeded);
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const seeded = await seedDemoData(store, repos);
+    const orders = orderEntries(seeded);
 
-  assert.equal(seeded.transactions.length, 16);
-  assert.equal(orders.length, 15);
-  assert.equal(
-    seeded.transactions.filter((entry) => entry.kind === "WALLET_FUNDING")
-      .length,
-    1,
-  );
-
-  const ids = seeded.transactions.map((entry) => entry.transactionId);
-  const references = seeded.transactions.map((entry) => entry.reference);
-  assert.equal(new Set(ids).size, ids.length, "transaction ids must be unique");
-  assert.equal(
-    new Set(references).size,
-    references.length,
-    "references must be unique",
-  );
-
-  for (const name of DEMO_SCENARIO_NAMES) {
-    assert.ok(seeded.byName[name], `byName missing ${name}`);
+    assert.equal(seeded.transactions.length, 16);
+    assert.equal(orders.length, 15);
     assert.equal(
-      seeded.transactions.some((e) => e.demoScenarioName === name),
-      true,
-      name,
+      seeded.transactions.filter((entry) => entry.kind === "WALLET_FUNDING")
+        .length,
+      1,
     );
-  }
 
-  for (const entry of orders) {
-    assert.ok(entry.transactionId.startsWith("mk_txn_"), entry.transactionId);
-    assert.ok(entry.reference.startsWith("txn_"), entry.reference);
-    assert.equal(entry.transaction.demoScenarioName, entry.demoScenarioName);
-    assert.equal(entry.transaction.reference, entry.reference);
-    const persisted = await store.readLatestById<MarketplaceTransaction>(
-      "marketplace_transactions",
-      entry.transactionId,
+    const ids = seeded.transactions.map((entry) => entry.transactionId);
+    const references = seeded.transactions.map((entry) => entry.reference);
+    assert.equal(
+      new Set(ids).size,
+      ids.length,
+      "transaction ids must be unique",
     );
     assert.equal(
-      persisted?.demoScenarioName,
-      entry.demoScenarioName,
-      "friendly name must be persisted on the latest transaction record",
+      new Set(references).size,
+      references.length,
+      "references must be unique",
     );
-    assert.ok(entry.truth, "reconciled truth expected");
-    assert.ok(entry.pack, "evidence pack expected");
-  }
+
+    for (const name of DEMO_SCENARIO_NAMES) {
+      assert.ok(seeded.byName[name], `byName missing ${name}`);
+      assert.equal(
+        seeded.transactions.some((e) => e.demoScenarioName === name),
+        true,
+        name,
+      );
+    }
+
+    for (const entry of orders) {
+      assert.ok(entry.transactionId.startsWith("mk_txn_"), entry.transactionId);
+      assert.ok(entry.reference.startsWith("txn_"), entry.reference);
+      assert.equal(entry.transaction.demoScenarioName, entry.demoScenarioName);
+      assert.equal(entry.transaction.reference, entry.reference);
+      const persisted = await store.readLatestById<MarketplaceTransaction>(
+        "marketplace_transactions",
+        entry.transactionId,
+      );
+      assert.equal(
+        persisted?.demoScenarioName,
+        entry.demoScenarioName,
+        "friendly name must be persisted on the latest transaction record",
+      );
+      assert.ok(entry.truth, "reconciled truth expected");
+      assert.ok(entry.pack, "evidence pack expected");
+    }
+  });
 });
 
 test("friendly reference aliases resolve through the existing transaction lookup", async (t) => {
   const store = tempStore(t);
-  const seeded = await seedDemoData(store);
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const seeded = await seedDemoData(store, repos);
 
-  for (const scenario of DEMO_ORDER_SCENARIOS) {
-    const entry = seeded.byName[scenario.name] as SeededOrderEntry;
-    const alias = demoAliasFor(scenario.name);
-    const resolved = resolveDemoAlias(alias);
-    assert.ok(resolved, alias);
-    assert.equal(resolved.id, entry.transactionId);
+    for (const scenario of DEMO_ORDER_SCENARIOS) {
+      const entry = seeded.byName[scenario.name] as SeededOrderEntry;
+      const alias = demoAliasFor(scenario.name);
+      const resolved = resolveDemoAlias(alias);
+      assert.ok(resolved, alias);
+      assert.equal(resolved.id, entry.transactionId);
 
-    const found = await findTransactionByIdentifier(store, alias);
-    assert.ok(found, `lookup by alias should find ${alias}`);
-    assert.equal(found.id, entry.transactionId);
-    assert.equal(found.demoScenarioName, scenario.name);
-  }
+      const found = await findTransactionByIdentifier(store, alias);
+      assert.ok(found, `lookup by alias should find ${alias}`);
+      assert.equal(found.id, entry.transactionId);
+      assert.equal(found.demoScenarioName, scenario.name);
+    }
 
-  const funding = await findTransactionByIdentifier(
-    store,
-    demoAliasFor(WALLET_FUNDING_SCENARIO_NAME),
-  );
-  assert.equal(funding, null, "wallet funding has no marketplace transaction");
+    const funding = await findTransactionByIdentifier(
+      store,
+      demoAliasFor(WALLET_FUNDING_SCENARIO_NAME),
+    );
+    assert.equal(
+      funding,
+      null,
+      "wallet funding has no marketplace transaction",
+    );
+  });
 });
 
 test("demo seed is idempotent and leaves no duplicate money movement", async (t) => {
   const store = tempStore(t);
-  const first = await seedDemoData(store);
-  const second = await seedDemoData(store);
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const first = await seedDemoData(store, repos);
+    const second = await seedDemoData(store, repos);
 
-  assert.deepEqual(
-    first.transactions.map((e) => e.demoScenarioName).sort(),
-    second.transactions.map((e) => e.demoScenarioName).sort(),
-  );
-  assert.deepEqual(
-    first.transactions.map((e) => e.transactionId),
-    second.transactions.map((e) => e.transactionId),
-    "transaction ids must not change across repeated runs",
-  );
-
-  for (const entry of orderEntries(first)) {
-    const once = await ledgerFor(store, entry.transactionId);
-    assert.equal(once.length >= 1, true, entry.demoScenarioName);
-    const replayLedger = await ledgerFor(store, entry.transactionId);
-    assert.equal(
-      replayLedger.length,
-      once.length,
-      `no extra movement on replay for ${entry.demoScenarioName}`,
+    assert.deepEqual(
+      first.transactions.map((e) => e.demoScenarioName).sort(),
+      second.transactions.map((e) => e.demoScenarioName).sort(),
     );
-  }
+    assert.deepEqual(
+      first.transactions.map((e) => e.transactionId),
+      second.transactions.map((e) => e.transactionId),
+      "transaction ids must not change across repeated runs",
+    );
 
-  const fundingLedger = await ledgerFor(
-    store,
-    DEMO_WALLET_FUNDING_TRANSACTION_ID,
-  );
-  assert.equal(
-    fundingLedger.length,
-    2,
-    "wallet funding failure must be recorded exactly once (initiated + failed)",
-  );
+    for (const entry of orderEntries(first)) {
+      const once = await ledgerFor(store, entry.transactionId);
+      assert.equal(once.length >= 1, true, entry.demoScenarioName);
+      const replayLedger = await ledgerFor(store, entry.transactionId);
+      assert.equal(
+        replayLedger.length,
+        once.length,
+        `no extra movement on replay for ${entry.demoScenarioName}`,
+      );
+    }
+
+    const fundingLedger = await ledgerFor(
+      store,
+      DEMO_WALLET_FUNDING_TRANSACTION_ID,
+    );
+    assert.equal(
+      fundingLedger.length,
+      2,
+      "wallet funding failure must be recorded exactly once (initiated + failed)",
+    );
+  });
 });
 
 test("wallet funding failure leaves the opening balance intact and is guarded", async (t) => {

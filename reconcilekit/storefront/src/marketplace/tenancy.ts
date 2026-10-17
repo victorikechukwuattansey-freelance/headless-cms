@@ -1,3 +1,4 @@
+import type { Repositories } from "../db/repositories/index.ts";
 import type { JsonlStore } from "../store/jsonl-store.ts";
 import type {
   MarketplaceCustomer,
@@ -9,14 +10,13 @@ import type {
 /**
  * Tenancy layer for the storefront. Phase 5A.2.
  *
- * Scope: organizations, memberships, and the org dimension on customers.
- * Enforcement at the route level is 5A.3; this module provides the queries
- * and assertions that the view-model layer and the future middleware use.
+ * Phase 5B.1c-1b: reads and writes go through repositories. Organizations,
+ * memberships, and the org dimension on marketplace_customers now live in
+ * Postgres.
  *
- * Design: tenancy attaches only to `marketplace_customers`. Wallet, ledger,
- * transactions, and evidence records are scoped transitively through the
- * customer reference — which preserves the wallet-evidence invariant
- * ("no tenant/org dimension is fabricated on wallet evidence").
+ * The wallet-evidence invariant is unaffected: wallet_ledger and
+ * evidence_packs carry no org_id at any layer; scoping flows through
+ * marketplace_customers.org_id, which is now a real Postgres column.
  */
 
 export const DEMO_ORG_ID = "org_demo";
@@ -24,50 +24,31 @@ export const DEMO_ORG_NAME = "Demo Organization";
 export const DEMO_MEMBERSHIP_ID = "mem_demo";
 
 export async function getOrganization(
-  store: JsonlStore,
+  repos: Repositories,
   orgId: string,
 ): Promise<OrganizationRecord | null> {
-  return store.readLatestById<OrganizationRecord>("organizations", orgId);
+  return repos.organizations.readLatestById(orgId);
 }
 
 export async function listOrganizations(
-  store: JsonlStore,
+  repos: Repositories,
 ): Promise<readonly OrganizationRecord[]> {
-  const all = await store.readAll<OrganizationRecord>("organizations");
-  const latest = new Map<string, OrganizationRecord>();
-  for (const record of all) {
-    latest.set(record.id, record);
-  }
-  return Array.from(latest.values());
+  return repos.organizations.list();
 }
 
 export async function getMembership(
-  store: JsonlStore,
+  repos: Repositories,
   userId: string,
   orgId: string,
 ): Promise<MembershipRecord | null> {
-  const all = await store.readAll<MembershipRecord>("memberships");
-  let latest: MembershipRecord | null = null;
-  for (const record of all) {
-    if (record.user_id === userId && record.org_id === orgId) {
-      latest = record;
-    }
-  }
-  return latest;
+  return repos.memberships.findByUserAndOrg(userId, orgId);
 }
 
 export async function listMembershipsForUser(
-  store: JsonlStore,
+  repos: Repositories,
   userId: string,
 ): Promise<readonly MembershipRecord[]> {
-  const all = await store.readAll<MembershipRecord>("memberships");
-  const latest = new Map<string, MembershipRecord>();
-  for (const record of all) {
-    if (record.user_id === userId) {
-      latest.set(record.org_id, record);
-    }
-  }
-  return Array.from(latest.values());
+  return repos.memberships.listByUser(userId);
 }
 
 export async function listCustomersInOrg(
