@@ -77,10 +77,10 @@ async function ledgerFor(
 }
 
 async function orderLatest(
-  store: JsonlStore,
+  repos: Repositories,
   orderId: string,
 ): Promise<MarketplaceOrder | null> {
-  return store.readLatestById<MarketplaceOrder>("marketplace_orders", orderId);
+  return repos.marketplaceOrders.readLatestById(orderId);
 }
 
 async function paymentForOrder(
@@ -113,7 +113,7 @@ test("airtime SUCCESS: quote, debit, provider response, and fulfillment share on
     assert.equal(result.transaction.customerStatus, "CONFIRMED");
     assert.equal(result.transaction.adminStatus, "HEALTHY");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "COMPLETED",
     );
 
@@ -164,7 +164,7 @@ test("airtime FAILED: payment settles, provider declines, fulfillment is failed 
     assert.equal(result.transaction.paymentStatus, "SUCCESS");
     assert.equal(result.transaction.fulfillmentStatus, "FAILED");
     assert.equal(result.transaction.adminStatus, "PROVIDER_FAILED");
-    assert.equal((await orderLatest(store, result.order.id))?.status, "FAILED");
+    assert.equal((await orderLatest(repos, result.order.id))?.status, "FAILED");
     assert.deepEqual(result.facts?.flags, ["STATUS_MISMATCH"]);
 
     const attemptList = await attemptsFor(store, result.transaction.id);
@@ -207,7 +207,7 @@ test("electricity PENDING: funds are held while the provider is pending", async 
     assert.equal(result.transaction.fulfillmentStatus, "PENDING");
     assert.equal(result.transaction.adminStatus, "PENDING_PROVIDER");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "PROVIDER_PENDING",
     );
 
@@ -252,7 +252,7 @@ test("electricity TIMEOUT: pending hold, no provider facts, escalated for review
     assert.equal(result.transaction.fulfillmentStatus, "PENDING");
     assert.equal(result.transaction.adminStatus, "UNRESOLVED");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "MANUAL_REVIEW",
     );
 
@@ -284,7 +284,7 @@ test("airtime DUPLICATE: a single debit and single fulfillment are preserved", a
     assert.equal(result.transaction.fulfillmentStatus, "FULFILLED");
     assert.equal(result.transaction.adminStatus, "DUPLICATE");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "COMPLETED",
     );
     assert.deepEqual(result.facts?.flags, ["DUPLICATE_PROVIDER_RECORD"]);
@@ -323,7 +323,7 @@ test("airtime MISMATCH: provider amount differs from the quote and is flagged", 
     assert.equal(result.transaction.fulfillmentStatus, "PENDING");
     assert.equal(result.transaction.adminStatus, "MISMATCH");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "MANUAL_REVIEW",
     );
     assert.equal(result.facts?.providerAmountMinor, 1100);
@@ -351,7 +351,7 @@ test("airtime PARTIAL_SUCCESS: partial fulfillment is flagged, not silently acce
     assert.equal(result.transaction.fulfillmentStatus, "PARTIAL");
     assert.equal(result.transaction.adminStatus, "UNRESOLVED");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "MANUAL_REVIEW",
     );
     assert.equal(result.facts?.providerAmountMinor, 500);
@@ -380,7 +380,7 @@ test("airtime REVERSED: the reversal restores the wallet balance", async (t) => 
     assert.equal(result.transaction.resolutionStatus, "REVERSED");
     assert.equal(result.transaction.customerStatus, "REVERSED");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "CANCELLED",
     );
     assert.equal(result.facts?.reversal.status, "COMPLETED");
@@ -415,7 +415,7 @@ test("airtime REFUND_PENDING: refund is queued and funds remain held", async (t)
     assert.equal(result.transaction.resolutionStatus, "REFUND_PENDING");
     assert.equal(result.transaction.adminStatus, "REFUND_QUEUE");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "PROVIDER_PENDING",
     );
     assert.equal(result.facts?.refund.status, "PENDING");
@@ -452,7 +452,7 @@ test("airtime REFUND_COMPLETED: refund restores the balance and closes the trans
     assert.equal(result.transaction.customerStatus, "REFUNDED");
     assert.equal(result.transaction.adminStatus, "HEALTHY");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "CANCELLED",
     );
     assert.equal(result.facts?.refund.status, "COMPLETED");
@@ -485,7 +485,7 @@ test("airtime UNKNOWN: unmapped provider status goes to manual review with facts
     assert.equal(result.transaction.fulfillmentStatus, "PENDING");
     assert.equal(result.transaction.adminStatus, "MANUAL_REVIEW");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "MANUAL_REVIEW",
     );
 
@@ -523,7 +523,7 @@ test("gift card SUCCESS: only a masked code preview is delivered with the artifa
 
     assert.equal(result.transaction.fulfillmentStatus, "FULFILLED");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "COMPLETED",
     );
 
@@ -606,7 +606,7 @@ test("gift card TIMEOUT: funds held and the gift card is escalated for review", 
     assert.equal(result.transaction.paymentStatus, "PENDING");
     assert.equal(result.transaction.adminStatus, "UNRESOLVED");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "MANUAL_REVIEW",
     );
     assert.equal(result.facts?.providerReference, null);
@@ -668,7 +668,7 @@ test("cinema SUCCESS: search, reservation, and issuance leave a two-attempt trai
 
     assert.equal(result.transaction.fulfillmentStatus, "FULFILLED");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "COMPLETED",
     );
 
@@ -721,7 +721,7 @@ test("cinema PENDING: reservation is held but issuance has not completed", async
     assert.equal(result.transaction.paymentStatus, "PENDING");
     assert.equal(result.transaction.adminStatus, "PENDING_PROVIDER");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "PROVIDER_PENDING",
     );
 
@@ -800,7 +800,7 @@ test("airline PENDING: a large booking holds funds without issuing", async (t) =
 
     assert.equal(result.transaction.paymentStatus, "PENDING");
     assert.equal(
-      (await orderLatest(store, result.order.id))?.status,
+      (await orderLatest(repos, result.order.id))?.status,
       "PROVIDER_PENDING",
     );
 
@@ -923,7 +923,7 @@ test("failed payment guard: an underfunded wallet never reaches the provider", a
 
     assert.equal(result.transaction.paymentStatus, "FAILED");
     assert.equal(result.transaction.fulfillmentStatus, "NOT_STARTED");
-    assert.equal((await orderLatest(store, result.order.id))?.status, "FAILED");
+    assert.equal((await orderLatest(repos, result.order.id))?.status, "FAILED");
     assert.equal(result.providerAttempts.length, 0);
 
     const types = (

@@ -57,8 +57,8 @@ async function providerAttempts(store: JsonlStore): Promise<number> {
   return (await store.readAll("marketplace_provider_attempts")).length;
 }
 
-async function orders(store: JsonlStore): Promise<number> {
-  return (await store.readAll("marketplace_orders")).length;
+async function orders(repos: Repositories): Promise<number> {
+  return (await repos.marketplaceOrders.listByCustomer("cus_demo")).length;
 }
 
 async function ticketArtifacts(store: JsonlStore): Promise<number> {
@@ -122,6 +122,7 @@ test("generic validator: missing required fields and SELECT membership are deter
 
 test("validation boundary: unknown service throws TransactionInputError, betting compliance blocks before validation", async (t) => {
   const store = tempStore(t);
+  const ordersBefore = await orders(repos);
   await assert.rejects(
     executeMarketplaceTransaction(
       demoDeps(store, repos),
@@ -141,7 +142,7 @@ test("validation boundary: unknown service throws TransactionInputError, betting
       error instanceof Error && !(error instanceof ServiceInputValidationError),
   );
   assert.equal(await providerAttempts(store), 0);
-  assert.equal(await orders(store), 0);
+  assert.equal(await orders(repos), ordersBefore);
 });
 
 test("valid airtime input executes successfully", async (t) => {
@@ -158,6 +159,7 @@ test("valid airtime input executes successfully", async (t) => {
 test("missing airtime recipient is rejected before any write", async (t) => {
   const store = tempStore(t);
   const ledgerBefore = await ledgerEntries(repos);
+  const ordersBefore = await orders(repos);
   await expectValidationError(
     store,
     txn({
@@ -167,7 +169,7 @@ test("missing airtime recipient is rejected before any write", async (t) => {
     "MISSING_REQUIRED",
   );
   assert.equal(await providerAttempts(store), 0);
-  assert.equal(await orders(store), 0);
+  assert.equal(await orders(repos), ordersBefore);
   assert.equal(await ledgerEntries(repos), ledgerBefore);
 });
 
@@ -634,6 +636,7 @@ test("invalid input never calls the provider", async (t) => {
 
 test("invalid input never creates fulfillment artifacts or orders", async (t) => {
   const store = tempStore(t);
+  const ordersBefore = await orders(repos);
   await expectValidationError(
     store,
     txn({
@@ -645,5 +648,5 @@ test("invalid input never creates fulfillment artifacts or orders", async (t) =>
   );
   assert.equal(await giftArtifacts(store), 0);
   assert.equal(await ticketArtifacts(store), 0);
-  assert.equal(await orders(store), 0);
+  assert.equal(await orders(repos), ordersBefore);
 });

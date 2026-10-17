@@ -39,6 +39,14 @@ export class MarketplaceOrderRepository {
     });
     return row === null ? null : fromPrismaOrder(row);
   }
+
+  async listByCustomer(customerId: string): Promise<MarketplaceOrder[]> {
+    const rows = await this.client.marketplaceOrder.findMany({
+      where: { customerId },
+      orderBy: { id: "asc" },
+    });
+    return rows.map(fromPrismaOrder);
+  }
 }
 
 interface MarketplaceOrderRow {

@@ -87,10 +87,10 @@ async function artifactsFor(
 }
 
 async function orderFor(
-  store: JsonlStore,
+  repos: Repositories,
   orderId: string,
 ): Promise<MarketplaceOrder | null> {
-  return store.readLatestById<MarketplaceOrder>("marketplace_orders", orderId);
+  return repos.marketplaceOrders.readLatestById(orderId);
 }
 
 function outcomeOf(pack: EvidencePack): string | null {
@@ -130,7 +130,7 @@ test("successful_airtime reconciles to MATCH with fulfilled top-up", async (t) =
   assert.equal(entry.truth.moneyAtRisk, false);
   assert.equal(outcomeOf(entry.pack), "MATCH");
   assert.equal(
-    (await orderFor(store, entry.transaction.orderId))?.status,
+    (await orderFor(repos, entry.transaction.orderId))?.status,
     "COMPLETED",
   );
   const events = await eventsFor(store, transactionId);
@@ -199,7 +199,7 @@ test("duplicate_debit completes cleanly and fires the duplicate marker", async (
   assert.equal(entry.transaction.customerStatus, "CONFIRMED");
   assert.equal(entry.transaction.adminStatus, "HEALTHY");
   assert.equal(
-    (await orderFor(store, entry.transaction.orderId))?.status,
+    (await orderFor(repos, entry.transaction.orderId))?.status,
     "COMPLETED",
   );
   assert.equal(entry.truth.reconcileOutcome, "MATCH");

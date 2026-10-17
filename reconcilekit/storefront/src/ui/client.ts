@@ -463,13 +463,10 @@ async function walletSummary(
 }
 
 async function orderAmounts(
-  store: JsonlStore,
+  repos: Repositories,
   orderId: string,
 ): Promise<{ amountMinor: number; currency: string }> {
-  const order = await store.readLatestById<MarketplaceOrder>(
-    "marketplace_orders",
-    orderId,
-  );
+  const order = await repos.marketplaceOrders.readLatestById(orderId);
   return {
     amountMinor: order?.quotedAmountMinor ?? 0,
     currency: order?.currency ?? "NGN",
@@ -507,7 +504,7 @@ async function buildTransactionRows(
   const rows: TransactionRow[] = [];
   for (const transaction of await latestTransactions(deps.store)) {
     const service = findServiceById(deps.catalog, transaction.serviceId);
-    const amounts = await orderAmounts(deps.store, transaction.orderId);
+    const amounts = await orderAmounts(deps.repos, transaction.orderId);
     const truth = await truthFor(deps.store, transaction);
     rows.push(
       transactionRow(
@@ -640,8 +637,7 @@ export async function transactionDetailViewModel(
     return null;
   }
   const customer = await customerProfile(deps.repos, transaction.customerId);
-  const order = await deps.store.readLatestById<MarketplaceOrder>(
-    "marketplace_orders",
+  const order = await deps.repos.marketplaceOrders.readLatestById(
     transaction.orderId,
   );
   const payments =
@@ -779,8 +775,7 @@ export async function ensureReceipt(
     return null;
   }
   const customer = await customerProfile(deps.repos, transaction.customerId);
-  const order = await deps.store.readLatestById<MarketplaceOrder>(
-    "marketplace_orders",
+  const order = await deps.repos.marketplaceOrders.readLatestById(
     transaction.orderId,
   );
   const service = findServiceById(deps.catalog, transaction.serviceId);

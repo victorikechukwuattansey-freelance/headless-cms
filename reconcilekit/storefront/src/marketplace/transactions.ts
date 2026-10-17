@@ -467,12 +467,12 @@ export async function executeMarketplaceTransaction(
     transactionId,
   );
   if (existing !== null) {
-    return replayResult(store, existing, orderId, transactionId);
+    return replayResult(store, deps.repos, existing, orderId, transactionId);
   }
 
   const quote = quoteService(deps.catalog, service);
   const customerReference = buildCustomerReference(input.customerId);
-  const createdOrder = await insertOrder(store, {
+  const createdOrder = await insertOrder(deps.repos, {
     id: orderId,
     customerId: input.customerId,
     serviceId: service.id,
@@ -697,9 +697,9 @@ async function runPaymentAndFulfillment(input: {
       state,
       now,
     });
-    await persistOrderStatus(store, orderId, state.orderStatus, now);
+    await persistOrderStatus(deps.repos, orderId, state.orderStatus, now);
     return finishResult({
-      store,
+      repos: deps.repos,
       transaction: finalTx,
       service,
       scenario: sourceInput.scenario,
@@ -903,7 +903,7 @@ async function runProvider(run: {
     now,
   });
 
-  const terminal = await finalizeTransaction(store, {
+  const terminal = await finalizeTransaction(store, run.deps.repos, {
     transactionId,
     orderId,
     customerId: sourceInput.customerId,
@@ -918,7 +918,7 @@ async function runProvider(run: {
   });
 
   return finishResult({
-    store,
+    repos: run.deps.repos,
     transaction: terminal.transaction,
     service,
     scenario,
@@ -1099,7 +1099,7 @@ async function runGiftCardFlow(run: {
     now,
   });
 
-  const terminal = await finalizeTransaction(store, {
+  const terminal = await finalizeTransaction(store, run.deps.repos, {
     transactionId,
     orderId,
     customerId: sourceInput.customerId,
@@ -1117,7 +1117,7 @@ async function runGiftCardFlow(run: {
   });
 
   return finishResult({
-    store,
+    repos: run.deps.repos,
     transaction: terminal.transaction,
     service,
     scenario,
@@ -1370,7 +1370,7 @@ async function runTicketingFlow(run: {
     now,
   });
 
-  const terminal = await finalizeTransaction(store, {
+  const terminal = await finalizeTransaction(store, run.deps.repos, {
     transactionId,
     orderId,
     customerId: sourceInput.customerId,
@@ -1387,7 +1387,7 @@ async function runTicketingFlow(run: {
   });
 
   return finishResult({
-    store,
+    repos: run.deps.repos,
     transaction: terminal.transaction,
     service,
     scenario,
@@ -1694,6 +1694,7 @@ async function appendScenarioEvents(
 
 async function finalizeTransaction(
   store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly orderId: string;
@@ -1754,7 +1755,7 @@ async function finalizeTransaction(
     state,
     now,
   });
-  await persistOrderStatus(store, orderId, state.orderStatus, now);
+  await persistOrderStatus(repos, orderId, state.orderStatus, now);
   return { transaction: tx, attempts, artifacts, events };
 }
 
@@ -1879,19 +1880,16 @@ async function persistTransaction(
 }
 
 async function persistOrderStatus(
-  store: JsonlStore,
+  repos: Repositories,
   orderId: string,
   status: MarketplaceOrderStatus,
   now: string,
 ): Promise<void> {
-  const order = await store.readLatestById<MarketplaceOrder>(
-    "marketplace_orders",
-    orderId,
-  );
+  const order = await repos.marketplaceOrders.readLatestById(orderId);
   if (order === null) {
     return;
   }
-  await store.insert("marketplace_orders", {
+  await repos.marketplaceOrders.insert({
     ...order,
     status,
     updatedAt: now,
@@ -1899,7 +1897,7 @@ async function persistOrderStatus(
 }
 
 async function insertOrder(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly id: string;
     readonly customerId: string;
@@ -1924,7 +1922,7 @@ async function insertOrder(
     updatedAt: input.now,
     simulated: true,
   };
-  await store.insert("marketplace_orders", order);
+  await repos.marketplaceOrders.insert(order);
   return order;
 }
 
@@ -2288,7 +2286,7 @@ function parseDenomination(
 }
 
 async function finishResult(input: {
-  readonly store: JsonlStore;
+  readonly repos: Repositories;
   readonly transaction: MarketplaceTransaction;
   readonly service: MarketplaceService;
   readonly scenario: MockProviderScenario;
@@ -2348,8 +2346,7 @@ async function finishResult(input: {
   };
   return {
     transaction: input.transaction,
-    order: (await input.store.readLatestById<MarketplaceOrder>(
-      "marketplace_orders",
+    order: (await input.repos.marketplaceOrders.readLatestById(
       input.transaction.orderId,
     ))!,
     payment: input.paymentRecord,
@@ -2442,14 +2439,12 @@ export async function marketplaceTransactionFacts(
 
 async function replayResult(
   store: JsonlStore,
+  repos: Repositories,
   transaction: MarketplaceTransaction,
   orderId: string,
   transactionId: string,
 ): Promise<ExecuteTransactionResult> {
-  const order = await store.readLatestById<MarketplaceOrder>(
-    "marketplace_orders",
-    orderId,
-  );
+  const order = await repos.marketplaceOrders.readLatestById(orderId);
   const attempts = (
     await store.readAll<ProviderAttempt>("marketplace_provider_attempts")
   ).filter((attempt) => attempt.transactionId === transactionId);
