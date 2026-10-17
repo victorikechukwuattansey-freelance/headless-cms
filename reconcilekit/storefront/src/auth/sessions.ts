@@ -1,17 +1,18 @@
 import { randomBytes } from "node:crypto";
-import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import type { SessionRecord } from "../marketplace/types.ts";
 
 /**
  * Server-side sessions. The cookie stores an opaque random token; the
  * session record is stored under `sess_<token>`.
  *
- * Revocation is append-only: a new record with `revoked_at` set is written,
- * and the latest record wins. No deletion, matching the store's contract.
+ * Revocation is append-only by semantics: a new record with `revoked_at`
+ * set is written, and the latest record wins. Under Postgres the
+ * repository's upsert-on-id gives the same observable behaviour.
  *
- * Phase 5B.1c: NOT yet migrated. `sessions` FKs both `users` and
- * `organizations`; organizations live in JSONL until 5B.1c-1b. Migrating
- * sessions before tenancy would fail the FK at runtime. Migrated in 5B.1c-1c.
+ * Phase 5B.1c-1c: reads and writes go through SessionRepository. The
+ * expiry/revocation logic does not move — the repository returns the
+ * stored record and never invents a time comparison.
  */
 
 export function newSessionToken(): string {
@@ -30,7 +31,7 @@ export interface CreateSessionInput {
 }
 
 export async function createSession(
-  store: JsonlStore,
+  repos: Repositories,
   input: CreateSessionInput,
 ): Promise<{ token: string; record: SessionRecord }> {
   const now = input.now ?? new Date();
@@ -47,19 +48,16 @@ export async function createSession(
     revoked_at: null,
     simulated: true,
   };
-  await store.insert("sessions", record);
+  await repos.sessions.insert(record);
   return { token, record };
 }
 
 export async function lookupSession(
-  store: JsonlStore,
+  repos: Repositories,
   token: string,
   now: Date = new Date(),
 ): Promise<SessionRecord | null> {
-  const record = await store.readLatestById<SessionRecord>(
-    "sessions",
-    sessionRecordId(token),
-  );
+  const record = await repos.sessions.readLatestById(sessionRecordId(token));
   if (record === null) {
     return null;
   }
@@ -73,14 +71,11 @@ export async function lookupSession(
 }
 
 export async function revokeSession(
-  store: JsonlStore,
+  repos: Repositories,
   token: string,
   now: Date = new Date(),
 ): Promise<boolean> {
-  const record = await store.readLatestById<SessionRecord>(
-    "sessions",
-    sessionRecordId(token),
-  );
+  const record = await repos.sessions.readLatestById(sessionRecordId(token));
   if (record === null || record.revoked_at !== null) {
     return false;
   }
@@ -88,6 +83,6 @@ export async function revokeSession(
     ...record,
     revoked_at: now.toISOString(),
   };
-  await store.insert("sessions", revoked);
+  await repos.sessions.insert(revoked);
   return true;
 }

@@ -83,7 +83,7 @@ test("login flow: correct credentials set a session cookie and redirect", async 
     assert.equal(res.headers.get("location"), "/");
     const token = extractSessionCookie(res.headers);
     assert.ok(token !== null, "session cookie set");
-    const record = await lookupSession(app.store, token);
+    const record = await lookupSession(repos, token);
     assert.ok(record !== null, "session record exists");
     assert.equal(record.user_id, "usr_demo");
     assert.equal(record.active_org_id, "org_demo");
@@ -153,7 +153,7 @@ test("login flow: logout revokes the session and clears the cookie", async (t) =
     const cleared = logoutRes.headers.get("set-cookie") ?? "";
     assert.match(cleared, /Max-Age=0/);
 
-    const record = await lookupSession(app.store, token);
+    const record = await lookupSession(repos, token);
     assert.equal(record, null);
   } finally {
     await app.close();
@@ -200,7 +200,7 @@ test("login flow: sessions persist across a server restart", async (t) => {
   const server2 = createStorefrontServer(config, deps);
   await new Promise<void>((r) => server2.listen(0, "127.0.0.1", r));
   try {
-    const record = await lookupSession(store, token as string);
+    const record = await lookupSession(repos, token as string);
     assert.ok(record !== null, "session survives restart (stored on disk)");
   } finally {
     await new Promise<void>((r, j) => server2.close((e) => (e ? j(e) : r())));

@@ -1,5 +1,4 @@
 import type { IncomingMessage } from "node:http";
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import type { Repositories } from "../db/repositories/index.ts";
 import type { SessionRecord, UserRecord } from "../marketplace/types.ts";
 import { parseCookies } from "./cookies.ts";
@@ -9,10 +8,9 @@ import { getUserById } from "./identity.ts";
 /**
  * Request-level session resolution.
  *
- * Phase 5B.1c-1a transitional shape: user reads go through `repos`
- * (Postgres), session reads still go through `store` (JSONL). This dual
- * parameter goes away in 5B.1c-1c when sessions migrate. It is honest
- * about the phase boundary, not a permanent design.
+ * Phase 5B.1c-1c: both session and user lookups go through `repos`.
+ * The dual store+repos shape from 1a is gone — nothing in this module
+ * touches JSONL anymore.
  */
 
 export interface AuthenticatedSession {
@@ -22,7 +20,6 @@ export interface AuthenticatedSession {
 }
 
 export interface RequireSessionOptions {
-  readonly store: JsonlStore;
   readonly repos: Repositories;
   readonly cookieName: string;
   readonly now?: Date;
@@ -37,7 +34,7 @@ export async function requireSession(
   if (token === undefined || token === "") {
     return null;
   }
-  const session = await lookupSession(options.store, token, options.now);
+  const session = await lookupSession(options.repos, token, options.now);
   if (session === null) {
     return null;
   }

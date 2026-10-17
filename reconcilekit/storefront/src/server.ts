@@ -706,7 +706,6 @@ async function routeMarketplace(
   if (!isPublicForAuth) {
     // session gate
     const auth = await requireSession(req, {
-      store: deps.store,
       repos,
       cookieName: config.sessionCookieName,
     });
@@ -986,7 +985,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
       }
       const activeOrgId = memberships[0]!.org_id;
       // POST /login — session creation
-      const { token } = await createSession(deps.store, {
+      const { token } = await createSession(repos, {
         userId: user.id,
         activeOrgId,
         ttlHours: config.sessionTtlHours,
@@ -1006,7 +1005,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
       const token = readSessionToken(req, config.sessionCookieName);
       // POST /logout — session revocation
       if (token !== null) {
-        await revokeSession(deps.store, token);
+        await revokeSession(repos, token);
       }
       res.setHeader(
         "Set-Cookie",
