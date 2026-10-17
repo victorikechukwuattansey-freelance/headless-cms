@@ -3,6 +3,7 @@ import type {
   ReconciliationCode,
   SourceAttributes,
 } from "../../../src/domain/model.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import type { JsonlStore } from "../store/jsonl-store.ts";
 import {
   buildCorrelationId,
@@ -79,6 +80,7 @@ import type {
 
 export interface MarketplaceTransactionDeps {
   readonly store: JsonlStore;
+  readonly repos: Repositories;
   readonly registry: MarketplaceProviderRegistry;
   readonly catalog: MarketplaceCatalog;
 }
@@ -534,7 +536,7 @@ export async function executeMarketplaceTransaction(
   });
   await store.insert("marketplace_transactions", initial);
 
-  const walletId = await resolveWallet(deps.store, {
+  const walletId = await resolveWallet(deps.repos, {
     customerId: input.customerId,
     currency: quote.currency,
     walletId: input.walletId,
@@ -641,7 +643,7 @@ async function runPaymentAndFulfillment(input: {
     }),
   );
 
-  const debit = await debitWallet(store, {
+  const debit = await debitWallet(deps.repos, {
     walletId,
     transactionId,
     customerId: sourceInput.customerId,
@@ -891,7 +893,7 @@ async function runProvider(run: {
     now,
   });
 
-  const withResolution = await applyResolutionToEvents(store, {
+  const withResolution = await applyResolutionToEvents(store, run.deps.repos, {
     transactionId,
     scenario,
     result,
@@ -1087,7 +1089,7 @@ async function runGiftCardFlow(run: {
     now,
   });
 
-  const withResolution = await applyResolutionToEvents(store, {
+  const withResolution = await applyResolutionToEvents(store, run.deps.repos, {
     transactionId,
     scenario,
     result,
@@ -1358,7 +1360,7 @@ async function runTicketingFlow(run: {
     now,
   });
 
-  const withResolution = await applyResolutionToEvents(store, {
+  const withResolution = await applyResolutionToEvents(store, run.deps.repos, {
     transactionId,
     scenario,
     result: issuedResult ?? reserveResult,
@@ -1409,6 +1411,7 @@ async function runTicketingFlow(run: {
 
 async function applyResolutionToEvents(
   store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly scenario: MockProviderScenario;
@@ -1444,7 +1447,7 @@ async function applyResolutionToEvents(
         occurredAt: now,
       }),
     );
-    const reversal = await reverseDebit(store, {
+    const reversal = await reverseDebit(repos, {
       walletId,
       transactionId,
       amountMinor: quote.expectedCheckoutMinor,
@@ -1488,7 +1491,7 @@ async function applyResolutionToEvents(
         occurredAt: now,
       }),
     );
-    const refund = await initiateRefund(store, {
+    const refund = await initiateRefund(repos, {
       walletId,
       transactionId,
       amountMinor: quote.expectedCheckoutMinor,
@@ -1531,7 +1534,7 @@ async function applyResolutionToEvents(
         occurredAt: now,
       }),
     );
-    const initiated = await initiateRefund(store, {
+    const initiated = await initiateRefund(repos, {
       walletId,
       transactionId,
       amountMinor: quote.expectedCheckoutMinor,
@@ -1540,7 +1543,7 @@ async function applyResolutionToEvents(
       now,
       scenario: "REFUND_PENDING",
     });
-    const refund = await completeRefund(store, {
+    const refund = await completeRefund(repos, {
       walletId,
       transactionId,
       amountMinor: quote.expectedCheckoutMinor,
@@ -1926,7 +1929,7 @@ async function insertOrder(
 }
 
 async function resolveWallet(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly customerId: string;
     readonly currency: string;
@@ -1938,11 +1941,9 @@ async function resolveWallet(
   const walletId =
     input.walletId ??
     `wl_${buildStableSuffix(input.customerId)}_${buildStableSuffix(input.currency)}`;
-  const existing = await readWalletById(store, walletId);
-  if (existing !== null) {
-    return walletId;
-  }
-  await createWallet(store, {
+  const existing = await readWalletById(repos, walletId);
+  if (existing !== null) return walletId;
+  await createWallet(repos, {
     id: walletId,
     customerId: input.customerId,
     currency: input.currency,

@@ -45,6 +45,7 @@ import type {
   WalletLedgerEntry,
 } from "../marketplace/types.ts";
 import { DEMO_ORG_ID } from "../marketplace/tenancy.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 
 export const DEMO_CUSTOMER_ID = "cus_demo";
 
@@ -322,13 +323,10 @@ export function adminStatusLabel(status: string): string {
 }
 
 export async function customerProfile(
-  store: JsonlStore,
+  repos: Repositories,
   customerId: string,
 ): Promise<CustomerProfile> {
-  const found = await store.readLatestById<MarketplaceCustomer>(
-    "marketplace_customers",
-    customerId,
-  );
+  const found = await repos.marketplaceCustomers.readLatestById(customerId);
   if (found !== null) {
     return {
       id: found.id,
@@ -432,32 +430,28 @@ async function artifactsFor(
 }
 
 async function ledgerFor(
-  store: JsonlStore,
+  repos: Repositories,
   walletId: string,
 ): Promise<readonly WalletLedgerEntry[]> {
-  const entries = await store.readAll<WalletLedgerEntry>("wallet_ledger");
-  return entries
-    .filter((entry) => entry.walletId === walletId)
-    .sort((a, b) => {
-      const byTime = b.occurredAt.localeCompare(a.occurredAt);
-      return byTime !== 0 ? byTime : b.id.localeCompare(a.id);
-    });
+  const entries = await repos.walletLedger.listByWallet(walletId);
+  return entries.slice().sort((a, b) => {
+    const byTime = b.occurredAt.localeCompare(a.occurredAt);
+    return byTime !== 0 ? byTime : b.id.localeCompare(a.id);
+  });
 }
 
 async function walletSummary(
-  store: JsonlStore,
+  repos: Repositories,
   customerId: string,
 ): Promise<WalletSummary | null> {
-  const wallet = await findWalletByCustomer(store, customerId);
-  if (wallet === null) {
-    return null;
-  }
+  const wallet = await findWalletByCustomer(repos, customerId);
+  if (wallet === null) return null;
   const balance: WalletBalance = await getWalletBalance(
-    store,
+    repos,
     wallet.id,
     wallet.currency,
   );
-  const ledger = await ledgerFor(store, wallet.id);
+  const ledger = await ledgerFor(repos, wallet.id);
   return {
     id: wallet.id,
     currency: wallet.currency,
@@ -533,8 +527,8 @@ export async function dashboardViewModel(
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<DashboardViewModel> {
-  const customer = await customerProfile(deps.store, customerId);
-  const wallet = await walletSummary(deps.store, customerId);
+  const customer = await customerProfile(deps.repos, customerId);
+  const wallet = await walletSummary(deps.repos, customerId);
   const rows = await buildTransactionRows(deps);
   const notifications = (
     await listNotificationsByCustomer(deps.store, customerId)
@@ -560,13 +554,13 @@ export async function walletViewModel(
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<WalletViewModel> {
-  const customer = await customerProfile(deps.store, customerId);
-  const wallet = await walletSummary(deps.store, customerId);
-  const walletRecord = await findWalletByCustomer(deps.store, customerId);
+  const customer = await customerProfile(deps.repos, customerId);
+  const wallet = await walletSummary(deps.repos, customerId);
+  const walletRecord = await findWalletByCustomer(deps.repos, customerId);
   const ledger =
     walletRecord === null
       ? []
-      : (await ledgerFor(deps.store, walletRecord.id)).map((entry) => ({
+      : (await ledgerFor(deps.repos, walletRecord.id)).map((entry) => ({
           id: entry.id,
           type: entry.type,
           amountMinor: entry.amountMinor,
@@ -582,7 +576,7 @@ export async function catalogViewModel(
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<CatalogViewModel> {
-  const customer = await customerProfile(deps.store, customerId);
+  const customer = await customerProfile(deps.repos, customerId);
   const groups: CatalogGroupView[] = [];
   for (const category of deps.catalog.categories) {
     const services = deps.catalog.services.filter(
@@ -621,7 +615,7 @@ export async function serviceDetailViewModel(
   if (service === undefined) {
     return null;
   }
-  const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
+  const customer = await customerProfile(deps.repos, DEMO_CUSTOMER_ID);
   const products = deps.catalog.products.filter(
     (product) => product.serviceId === service.id,
   );
@@ -632,7 +626,7 @@ export async function transactionsViewModel(
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<TransactionsViewModel> {
-  const customer = await customerProfile(deps.store, customerId);
+  const customer = await customerProfile(deps.repos, customerId);
   const rows = await buildTransactionRows(deps);
   return { customer, rows };
 }
@@ -645,7 +639,7 @@ export async function transactionDetailViewModel(
   if (transaction === null) {
     return null;
   }
-  const customer = await customerProfile(deps.store, transaction.customerId);
+  const customer = await customerProfile(deps.repos, transaction.customerId);
   const order = await deps.store.readLatestById<MarketplaceOrder>(
     "marketplace_orders",
     transaction.orderId,
@@ -689,9 +683,9 @@ export async function transactionDetailViewModel(
     await listNotificationsByCustomer(deps.store, transaction.customerId)
   ).filter((record) => record.transactionId === transaction.id);
   const facts = await marketplaceTransactionFacts(deps.store, transaction.id);
-  const ledger = (
-    await deps.store.readAll<WalletLedgerEntry>("wallet_ledger")
-  ).filter((entry) => entry.transactionId === transaction.id);
+  const ledger = await deps.repos.walletLedger.listByTransaction(
+    transaction.id,
+  );
 
   const terminal =
     transaction.resolutionStatus === "REFUNDED" ||
@@ -764,7 +758,7 @@ export async function evidenceViewModel(
   if (transaction === null) {
     return null;
   }
-  const customer = await customerProfile(deps.store, transaction.customerId);
+  const customer = await customerProfile(deps.repos, transaction.customerId);
   const pack = await deps.store.readLatestById<EvidencePack>(
     "evidence_packs",
     `evp_${transaction.id}`,
@@ -784,7 +778,7 @@ export async function ensureReceipt(
   if (transaction === null) {
     return null;
   }
-  const customer = await customerProfile(deps.store, transaction.customerId);
+  const customer = await customerProfile(deps.repos, transaction.customerId);
   const order = await deps.store.readLatestById<MarketplaceOrder>(
     "marketplace_orders",
     transaction.orderId,
@@ -822,7 +816,7 @@ export async function notificationsViewModel(
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<NotificationsViewModel> {
-  const customer = await customerProfile(deps.store, customerId);
+  const customer = await customerProfile(deps.repos, customerId);
   const notifications = await listNotificationsByCustomer(
     deps.store,
     customerId,
@@ -834,7 +828,7 @@ export async function disputesViewModel(
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<DisputesViewModel> {
-  const customer = await customerProfile(deps.store, customerId);
+  const customer = await customerProfile(deps.repos, customerId);
   const allDisputes = await deps.store.readAll<DisputeRecord>("disputes");
   const disputes = allDisputes
     .filter((record) => record.customerId === customerId)
@@ -893,7 +887,7 @@ export async function checkoutOptionsViewModel(
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<CheckoutOptionsViewModel> {
-  const customer = await customerProfile(deps.store, customerId);
+  const customer = await customerProfile(deps.repos, customerId);
   const services = deps.catalog.services
     .filter((service) => service.id !== "svc_betting_examplebet")
     .map((service) => ({
@@ -1046,7 +1040,7 @@ export async function findingsSummaryViewModel(
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<FindingsSummaryViewModel> {
-  const customer = await customerProfile(deps.store, customerId);
+  const customer = await customerProfile(deps.repos, customerId);
   const transactions = latestTransactionMap(
     await deps.store.readAll<MarketplaceTransaction>(
       "marketplace_transactions",
@@ -1145,7 +1139,7 @@ export async function findingDeterminationViewModel(
   if (pack === null) {
     return null;
   }
-  const customer = await customerProfile(deps.store, transaction.customerId);
+  const customer = await customerProfile(deps.repos, transaction.customerId);
   const facts = await marketplaceTransactionFacts(deps.store, transaction.id);
   const outcome = pack.reconciliation?.outcome ?? "UNRESOLVED";
   const codes = findingCodesFor(pack);
@@ -1191,7 +1185,7 @@ export async function findingEvidenceViewModel(
   if (pack === null) {
     return null;
   }
-  const customer = await customerProfile(deps.store, transaction.customerId);
+  const customer = await customerProfile(deps.repos, transaction.customerId);
   const redacted = redactEvidencePack(pack);
   return {
     customer,

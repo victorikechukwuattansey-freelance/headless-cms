@@ -745,7 +745,7 @@ async function routeMarketplace(
       return;
     }
     if (path === "/login") {
-      const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
+      const customer = await customerProfile(repos, DEMO_CUSTOMER_ID);
       sendHtml(res, renderLoginPage(customer));
       return;
     }
@@ -884,7 +884,7 @@ async function routeMarketplace(
       return;
     }
     if (path === "/profile") {
-      const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
+      const customer = await customerProfile(repos, DEMO_CUSTOMER_ID);
       sendHtml(res, renderProfilePage(customer));
       return;
     }
@@ -958,7 +958,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
       const email = form.get("email") ?? "";
       const password = form.get("password") ?? "";
       if (email === "" || password === "") {
-        const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
+        const customer = await customerProfile(repos, DEMO_CUSTOMER_ID);
         res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
         res.end(renderLoginPage(customer, "Email and password are required."));
         return;
@@ -966,14 +966,14 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
       // POST /login — user lookup
       const user = await loginUser(repos, email, password);
       if (user === null) {
-        const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
+        const customer = await customerProfile(repos, DEMO_CUSTOMER_ID);
         res.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
         res.end(renderLoginPage(customer, "Invalid email or password."));
         return;
       }
       const memberships = await listMembershipsForUser(repos, user.id);
       if (memberships.length === 0) {
-        const customer = await customerProfile(deps.store, DEMO_CUSTOMER_ID);
+        const customer = await customerProfile(repos, DEMO_CUSTOMER_ID);
         res.writeHead(403, { "Content-Type": "text/html; charset=utf-8" });
         res.end(
           renderLoginPage(
@@ -1074,7 +1074,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
       switch (action) {
         case "refund": {
           const reason = form.get("reason") ?? "OPERATOR_INITIATED_REFUND";
-          await initiateTransactionRefund(deps.store, {
+          await initiateTransactionRefund(deps.store, repos, {
             transactionId: txn.id,
             reason,
           });
@@ -1082,7 +1082,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
           return;
         }
         case "refund/complete": {
-          await completeTransactionRefund(deps.store, {
+          await completeTransactionRefund(deps.store, repos, {
             transactionId: txn.id,
           });
           redirect(res, 303, `/admin/transactions/${txn.reference}`);
@@ -1090,7 +1090,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         }
         case "reversal": {
           const reason = form.get("reason") ?? "OPERATOR_INITIATED_REVERSAL";
-          await reverseTransactionDebit(deps.store, {
+          await reverseTransactionDebit(deps.store, repos, {
             transactionId: txn.id,
             reason,
           });

@@ -41,6 +41,7 @@ const repos = buildRepositories(getPrismaClient());
 
 const marketplaceDeps: MarketplaceTransactionDeps = {
   store,
+  repos,
   registry: createMockProviderRegistry(),
   catalog: buildDemoCatalog(),
 };

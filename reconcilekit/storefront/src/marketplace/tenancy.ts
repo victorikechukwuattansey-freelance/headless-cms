@@ -1,5 +1,4 @@
 import type { Repositories } from "../db/repositories/index.ts";
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import type {
   MarketplaceCustomer,
   MembershipRecord,
@@ -52,28 +51,18 @@ export async function listMembershipsForUser(
 }
 
 export async function listCustomersInOrg(
-  store: JsonlStore,
+  repos: Repositories,
   orgId: string,
 ): Promise<readonly MarketplaceCustomer[]> {
-  const all = await store.readAll<MarketplaceCustomer>("marketplace_customers");
-  const latest = new Map<string, MarketplaceCustomer>();
-  for (const record of all) {
-    if (record.org_id === orgId) {
-      latest.set(record.id, record);
-    }
-  }
-  return Array.from(latest.values());
+  return repos.marketplaceCustomers.listByOrg(orgId);
 }
 
 export async function customerBelongsToOrg(
-  store: JsonlStore,
+  repos: Repositories,
   customerId: string,
   orgId: string,
 ): Promise<boolean> {
-  const record = await store.readLatestById<MarketplaceCustomer>(
-    "marketplace_customers",
-    customerId,
-  );
+  const record = await repos.marketplaceCustomers.readLatestById(customerId);
   return record !== null && record.org_id === orgId;
 }
 

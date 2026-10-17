@@ -93,10 +93,7 @@ export type SeededDemoEntry = SeededOrderEntry | SeededWalletFundingEntry;
  *
  * Idempotent: repeated calls converge on the same records.
  */
-export async function seedDemoTenancy(
-  store: JsonlStore,
-  repos: Repositories,
-): Promise<void> {
+export async function seedDemoTenancy(repos: Repositories): Promise<void> {
   const org = await repos.organizations.readLatestById(DEMO_ORG_ID);
   if (org === null) {
     await repos.organizations.insert({
@@ -122,27 +119,41 @@ export async function seedDemoTenancy(
     });
   }
 
-  await ensureDemoCustomer(store, DEMO_CUSTOMER_RECORD_ID, "Demo Customer");
-  await ensureDemoCustomer(
-    store,
+  // Each demo scenario uses its own per-scenario customer (e.g.
+  // `cus_demo_airtime`, `cus_demo_data`) so its wallet stays independent of
+  // the others. Every one of those customers must exist in Postgres before
+  // executeMarketplaceTransaction creates a wallet for it — otherwise
+  // wallets.customer_id → marketplace_customers.id fails.
+  const customerNames = new Map<string, string>();
+  customerNames.set(DEMO_CUSTOMER_RECORD_ID, "Demo Customer");
+  customerNames.set(
     DEMO_WALLET_FUNDING_CUSTOMER_ID,
     "Demo Wallet Funding Customer",
   );
+  for (const scenario of DEMO_ORDER_SCENARIOS) {
+    if (!customerNames.has(scenario.customerId)) {
+      customerNames.set(
+        scenario.customerId,
+        `Demo Customer ${scenario.customerId}`,
+      );
+    }
+  }
+
+  for (const [customerId, name] of customerNames) {
+    await ensureDemoCustomer(repos, customerId, name);
+  }
 }
 
 async function ensureDemoCustomer(
-  store: JsonlStore,
+  repos: Repositories,
   customerId: string,
   name: string,
 ): Promise<void> {
-  const existing = await store.readLatestById<MarketplaceCustomer>(
-    "marketplace_customers",
-    customerId,
-  );
+  const existing = await repos.marketplaceCustomers.readLatestById(customerId);
   if (existing !== null && existing.org_id === DEMO_ORG_ID) {
     return;
   }
-  await store.insert("marketplace_customers", {
+  await repos.marketplaceCustomers.insert({
     id: customerId,
     org_id: DEMO_ORG_ID,
     name,
@@ -235,13 +246,13 @@ async function seedOrderScenario(
  * funding is not attempted again.
  */
 export async function seedWalletFundingFailure(
-  store: JsonlStore,
+  repos: Repositories,
   provider: PaymentProvider,
   now: string = DEMO_SEED_TIMESTAMP,
 ): Promise<SeededWalletFundingEntry> {
-  const wallet = await readWalletById(store, DEMO_WALLET_FUNDING_WALLET_ID);
+  const wallet = await readWalletById(repos, DEMO_WALLET_FUNDING_WALLET_ID);
   if (wallet === null) {
-    await createWallet(store, {
+    await createWallet(repos, {
       id: DEMO_WALLET_FUNDING_WALLET_ID,
       customerId: DEMO_WALLET_FUNDING_CUSTOMER_ID,
       currency: DEMO_WALLET_FUNDING_CURRENCY,
@@ -250,16 +261,16 @@ export async function seedWalletFundingFailure(
     });
   }
 
-  const ledger = await store.readAll<WalletLedgerEntry>("wallet_ledger");
+  const ledger = await repos.walletLedger.listByWallet(
+    DEMO_WALLET_FUNDING_WALLET_ID,
+  );
   const prior = ledger.find(
-    (entry) =>
-      entry.walletId === DEMO_WALLET_FUNDING_WALLET_ID &&
-      entry.transactionId === DEMO_WALLET_FUNDING_TRANSACTION_ID,
+    (entry) => entry.transactionId === DEMO_WALLET_FUNDING_TRANSACTION_ID,
   );
 
   let outcome: FundWalletOutcome | null = null;
   if (prior === undefined) {
-    outcome = await fundWallet(store, provider, {
+    outcome = await fundWallet(repos, provider, {
       walletId: DEMO_WALLET_FUNDING_WALLET_ID,
       customerId: DEMO_WALLET_FUNDING_CUSTOMER_ID,
       amountMinor: DEMO_WALLET_FUNDING_AMOUNT_MINOR,
@@ -297,11 +308,11 @@ export async function seedDemoData(
   // must exist before seedDemoTenancy inserts the membership. Under JSONL
   // this ordering did not matter; under Postgres it does.
   await seedDemoUser(repos);
-  await seedDemoTenancy(store, repos);
+  await seedDemoTenancy(repos);
 
   const catalog = buildDemoCatalog();
   const registry = createMockProviderRegistry();
-  const deps: MarketplaceTransactionDeps = { store, registry, catalog };
+  const deps: MarketplaceTransactionDeps = { store, repos, registry, catalog };
   const reconcileDeps: MarketplaceReconcileDeps = { store, catalog };
 
   const entries: SeededDemoEntry[] = [];
@@ -314,7 +325,7 @@ export async function seedDemoData(
   }
 
   const funding = await seedWalletFundingFailure(
-    store,
+    repos,
     registry.payment,
     DEMO_SEED_TIMESTAMP,
   );

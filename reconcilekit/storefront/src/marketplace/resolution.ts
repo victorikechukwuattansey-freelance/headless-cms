@@ -1,4 +1,5 @@
 import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import { WALLET_FIXED_TIMESTAMP } from "./wallet.ts";
 import {
   completeRefund,
@@ -96,10 +97,10 @@ async function requirePayment(
 }
 
 async function requireWallet(
-  store: JsonlStore,
+  repos: Repositories,
   customerId: string,
 ): Promise<MarketplaceWallet> {
-  const wallet = await findWalletByCustomer(store, customerId);
+  const wallet = await findWalletByCustomer(repos, customerId);
   if (wallet === null) {
     throw new ResolutionError(
       "WALLET_NOT_FOUND",
@@ -153,6 +154,7 @@ export interface RefundActionOutcome {
  */
 export async function initiateTransactionRefund(
   store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly reason?: string;
@@ -179,9 +181,9 @@ export async function initiateTransactionRefund(
   }
 
   const payment = await requirePayment(store, transaction.orderId);
-  const wallet = await requireWallet(store, transaction.customerId);
+  const wallet = await requireWallet(repos, transaction.customerId);
   const reason = input.reason ?? "OPERATOR_INITIATED_REFUND";
-  const outcome = await initiateRefund(store, {
+  const outcome = await initiateRefund(repos, {
     walletId: wallet.id,
     transactionId: input.transactionId,
     amountMinor: payment.expectedAmountMinor,
@@ -254,6 +256,7 @@ export async function initiateTransactionRefund(
  */
 export async function completeTransactionRefund(
   store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly now?: string;
@@ -274,8 +277,8 @@ export async function completeTransactionRefund(
     );
   }
 
-  const wallet = await requireWallet(store, transaction.customerId);
-  const outcome = await completeRefund(store, {
+  const wallet = await requireWallet(repos, transaction.customerId);
+  const outcome = await completeRefund(repos, {
     walletId: wallet.id,
     transactionId: input.transactionId,
     amountMinor: refund.amountMinor,
@@ -336,6 +339,7 @@ export interface ReversalActionOutcome {
  */
 export async function reverseTransactionDebit(
   store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly reason?: string;
@@ -347,9 +351,9 @@ export async function reverseTransactionDebit(
   assertMoneyOpen(transaction.resolutionStatus, "reverse_debit");
 
   const payment = await requirePayment(store, transaction.orderId);
-  const wallet = await requireWallet(store, transaction.customerId);
+  const wallet = await requireWallet(repos, transaction.customerId);
   const reason = input.reason ?? "OPERATOR_INITIATED_REVERSAL";
-  const outcome = await reverseDebit(store, {
+  const outcome = await reverseDebit(repos, {
     walletId: wallet.id,
     transactionId: input.transactionId,
     amountMinor: payment.expectedAmountMinor,

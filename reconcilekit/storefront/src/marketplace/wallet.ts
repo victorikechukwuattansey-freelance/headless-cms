@@ -2,7 +2,7 @@ import type {
   CanonicalPaymentStatus,
   SourceAttributes,
 } from "../../../src/domain/model.ts";
-import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import type {
   FulfillmentStatus,
   GiftCardEvidenceFacet,
@@ -25,8 +25,11 @@ import type {
   ProviderResult,
 } from "./providers/contracts.ts";
 import { runWalletFunding } from "./providers/payment-provider.ts";
+import { stableToken as sharedStableToken } from "../ids.ts";
 
 export const WALLET_FIXED_TIMESTAMP = "2026-01-01T12:00:00.000Z";
+
+/* ── Unchanged: lifecycle tables, canonical mapping, describe ────── */
 
 export const PAYMENT_LIFECYCLE_STATES: readonly PaymentLifecycleState[] = [
   "INITIATED",
@@ -85,13 +88,9 @@ export const PAYMENT_LIFECYCLE_EDGES: Readonly<
     REVERSAL_INITIATED: "REVERSED",
     REFUND_INITIATED: "REFUND_PENDING",
   },
-  FAILED: {
-    REFUND_INITIATED: "REFUND_PENDING",
-  },
+  FAILED: { REFUND_INITIATED: "REFUND_PENDING" },
   REVERSED: {},
-  REFUND_PENDING: {
-    REFUND_COMPLETED: "REFUNDED",
-  },
+  REFUND_PENDING: { REFUND_COMPLETED: "REFUNDED" },
   REFUNDED: {},
 };
 
@@ -107,9 +106,8 @@ export function advancePaymentLifecycle(
   event: PaymentLifecycleEvent,
 ): PaymentLifecycleState {
   const next = PAYMENT_LIFECYCLE_EDGES[current][event];
-  if (next === undefined) {
+  if (next === undefined)
     throw new InvalidPaymentTransitionError(current, event);
-  }
   return next;
 }
 
@@ -156,6 +154,8 @@ export function describePaymentLifecycle(state: PaymentLifecycleState): {
   }
 }
 
+/* ── Pure: balance derivation, consistency ──────────────────────── */
+
 export interface WalletBalance {
   readonly currency: string;
   readonly availableMinor: number;
@@ -170,9 +170,7 @@ export function deriveWalletBalance(
   let availableMinor = 0;
   let pendingMinor = 0;
   for (const entry of entries) {
-    if (entry.walletId !== walletId) {
-      continue;
-    }
+    if (entry.walletId !== walletId) continue;
     switch (entry.type) {
       case "OPENING_BALANCE":
       case "FUNDING_SUCCESS":
@@ -210,42 +208,33 @@ export function checkLedgerConsistency(
   entries: readonly WalletLedgerEntry[],
 ): LedgerConsistencyReport {
   const violations: string[] = [];
-  const walletEntries = entries.filter((entry) => entry.walletId === walletId);
+  const walletEntries = entries.filter((e) => e.walletId === walletId);
   const seenReferences = new Map<string, WalletLedgerType>();
   let duplicateDebitDetected = false;
-
   for (const entry of walletEntries) {
-    if (entry.amountMinor < 0) {
+    if (entry.amountMinor < 0)
       violations.push(`negative amount on ${entry.id}`);
-    }
     const prior = seenReferences.get(entry.reference);
-    if (prior !== undefined && prior !== entry.type) {
+    if (prior !== undefined && prior !== entry.type)
       violations.push(
         `reference collision ${entry.reference} (${prior} vs ${entry.type})`,
       );
-    }
     seenReferences.set(entry.reference, entry.type);
     if (
       (entry.type === "DEBIT_SUCCESS" || entry.type === "DUPLICATE_DEBIT") &&
       entry.transactionId !== null
     ) {
-      const debitForTransaction = walletEntries.filter(
-        (candidate) =>
-          candidate.transactionId === entry.transactionId &&
-          (candidate.type === "DEBIT_SUCCESS" ||
-            candidate.type === "DUPLICATE_DEBIT"),
+      const debits = walletEntries.filter(
+        (c) =>
+          c.transactionId === entry.transactionId &&
+          (c.type === "DEBIT_SUCCESS" || c.type === "DUPLICATE_DEBIT"),
       );
-      if (debitForTransaction.length > 1) {
-        duplicateDebitDetected = true;
-      }
+      if (debits.length > 1) duplicateDebitDetected = true;
     }
   }
-
   const balance = deriveWalletBalance(walletId, currency, walletEntries);
-  if (balance.availableMinor < 0) {
+  if (balance.availableMinor < 0)
     violations.push(`negative available balance ${balance.availableMinor}`);
-  }
-
   return {
     consistent: violations.length === 0,
     violations,
@@ -254,6 +243,8 @@ export function checkLedgerConsistency(
     duplicateDebitDetected,
   };
 }
+
+/* ── Evidence + outcome types (unchanged) ───────────────────────── */
 
 export interface WalletPaymentEvidence {
   readonly internalTransactionId: string;
@@ -288,13 +279,11 @@ export interface CreateWalletInput {
   readonly now?: string;
   readonly status?: WalletStatus;
 }
-
 export interface CreateWalletOutcome {
   readonly wallet: MarketplaceWallet;
   readonly openingEntry: WalletLedgerEntry;
   readonly balance: WalletBalance;
 }
-
 export interface FundWalletInput {
   readonly walletId: string;
   readonly customerId: string;
@@ -304,7 +293,6 @@ export interface FundWalletInput {
   readonly now?: string;
   readonly relatedTransactionId?: string;
 }
-
 export interface FundWalletOutcome {
   readonly walletId: string;
   readonly transactionId: string;
@@ -315,7 +303,6 @@ export interface FundWalletOutcome {
   readonly evidence: WalletPaymentEvidence;
   readonly balance: WalletBalance;
 }
-
 export interface DebitWalletInput {
   readonly walletId: string;
   readonly transactionId: string;
@@ -327,7 +314,6 @@ export interface DebitWalletInput {
   readonly now?: string;
   readonly duplicate?: boolean;
 }
-
 export interface DebitWalletOutcome {
   readonly walletId: string;
   readonly transactionId: string;
@@ -337,7 +323,6 @@ export interface DebitWalletOutcome {
   readonly evidence: WalletPaymentEvidence;
   readonly balance: WalletBalance;
 }
-
 export interface ReversalOutcome {
   readonly walletId: string;
   readonly transactionId: string;
@@ -346,7 +331,6 @@ export interface ReversalOutcome {
   readonly evidence: WalletPaymentEvidence;
   readonly balance: WalletBalance;
 }
-
 export interface RefundOutcome {
   readonly walletId: string;
   readonly transactionId: string;
@@ -355,7 +339,6 @@ export interface RefundOutcome {
   readonly evidence: WalletPaymentEvidence;
   readonly balance: WalletBalance;
 }
-
 export interface SettlementOutcome {
   readonly walletId: string;
   readonly transactionId: string;
@@ -365,14 +348,15 @@ export interface SettlementOutcome {
   readonly balance: WalletBalance;
 }
 
-function stableToken(value: string): string {
-  const cleaned = value
+/* ── Internal helpers (unchanged) ───────────────────────────────── */
+
+function stableToken(v: string): string {
+  const c = v
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
-  return cleaned === "" ? "ref" : cleaned.slice(0, 40);
+  return c === "" ? "ref" : c.slice(0, 40);
 }
-
 function walletLedgerReference(
   prefix: string,
   walletId: string,
@@ -381,7 +365,6 @@ function walletLedgerReference(
 ): string {
   return `${prefix}_${stableToken(walletId)}_${stableToken(transactionId ?? "wallet")}_${seq}`;
 }
-
 function buildLedgerEntry(input: {
   readonly walletId: string;
   readonly transactionId: string | null;
@@ -395,7 +378,7 @@ function buildLedgerEntry(input: {
   readonly seq: number;
 }): WalletLedgerEntry {
   return {
-    id: `wl_${stableToken(input.walletId)}_${stableToken(input.type)}_${stableToken(input.reference)}_${input.seq}`,
+    id: `wl_${sharedStableToken(JSON.stringify([input.walletId, input.type, input.reference, input.seq]))}`,
     walletId: input.walletId,
     transactionId: input.transactionId,
     type: input.type,
@@ -408,24 +391,17 @@ function buildLedgerEntry(input: {
     simulated: true,
   };
 }
-
 function baseMetadata(input: {
   readonly scenario: MockProviderScenario;
   readonly extra?: Readonly<Record<string, string | null | undefined>>;
 }): SourceAttributes {
   const clean = Object.fromEntries(
     Object.entries(input.extra ?? {}).filter(
-      (entry): entry is [string, string] =>
-        entry[1] !== null && entry[1] !== undefined,
+      (e): e is [string, string] => e[1] !== null && e[1] !== undefined,
     ),
   );
-  return {
-    simulated: "true",
-    scenario: input.scenario,
-    ...clean,
-  };
+  return { simulated: "true", scenario: input.scenario, ...clean };
 }
-
 export function createLedgerEntry(input: {
   readonly walletId: string;
   readonly transactionId?: string | null;
@@ -444,8 +420,10 @@ export function createLedgerEntry(input: {
   });
 }
 
+/* ── MIGRATED: all wallet↔wallet operations take `repos` ─────────── */
+
 export async function createWallet(
-  store: JsonlStore,
+  repos: Repositories,
   input: CreateWalletInput,
 ): Promise<CreateWalletOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
@@ -474,10 +452,8 @@ export async function createWallet(
     }),
     seq: 1,
   });
-
-  await store.insert("wallets", wallet);
-  await store.insert("wallet_ledger", openingEntry);
-
+  await repos.wallets.insert(wallet);
+  await repos.walletLedger.insert(openingEntry);
   return {
     wallet,
     openingEntry,
@@ -486,32 +462,25 @@ export async function createWallet(
 }
 
 export async function readWalletById(
-  store: JsonlStore,
+  repos: Repositories,
   walletId: string,
 ): Promise<MarketplaceWallet | null> {
-  return store.readLatestById<MarketplaceWallet>("wallets", walletId);
+  return repos.wallets.readLatestById(walletId);
 }
 
 export async function findWalletByCustomer(
-  store: JsonlStore,
+  repos: Repositories,
   customerId: string,
 ): Promise<MarketplaceWallet | null> {
-  const wallets = await store.readAll<MarketplaceWallet>("wallets");
-  let latest: MarketplaceWallet | null = null;
-  for (const wallet of wallets) {
-    if (wallet.customerId === customerId) {
-      latest = wallet;
-    }
-  }
-  return latest;
+  return repos.wallets.findByCustomer(customerId);
 }
 
 export async function getWalletBalance(
-  store: JsonlStore,
+  repos: Repositories,
   walletId: string,
   currency: string,
 ): Promise<WalletBalance> {
-  const entries = await store.readAll<WalletLedgerEntry>("wallet_ledger");
+  const entries = await repos.walletLedger.listByWallet(walletId);
   return deriveWalletBalance(walletId, currency, entries);
 }
 
@@ -522,19 +491,16 @@ export interface WalletWithBalance {
 }
 
 export async function getWallet(
-  store: JsonlStore,
+  repos: Repositories,
   customerId: string,
 ): Promise<WalletWithBalance | null> {
-  const wallet = await findWalletByCustomer(store, customerId);
-  if (wallet === null) {
-    return null;
-  }
-  const entries = await store.readAll<WalletLedgerEntry>("wallet_ledger");
-  const walletEntries = entries.filter((entry) => entry.walletId === wallet.id);
+  const wallet = await findWalletByCustomer(repos, customerId);
+  if (wallet === null) return null;
+  const entries = await repos.walletLedger.listByWallet(wallet.id);
   return {
     wallet,
-    balance: deriveWalletBalance(wallet.id, wallet.currency, walletEntries),
-    entries: walletEntries,
+    balance: deriveWalletBalance(wallet.id, wallet.currency, entries),
+    entries,
   };
 }
 
@@ -569,7 +535,7 @@ export function buildProviderRequestContext(input: {
 }
 
 export async function fundWallet(
-  store: JsonlStore,
+  repos: Repositories,
   provider: PaymentProvider,
   input: FundWalletInput,
 ): Promise<FundWalletOutcome> {
@@ -577,11 +543,8 @@ export async function fundWallet(
   const transactionId =
     input.relatedTransactionId ??
     `fund_${stableToken(input.walletId)}_${stableToken(input.scenario)}_${stableToken(now)}`;
-
-  const wallet = await readWalletById(store, input.walletId);
-  if (wallet === null) {
-    throw new Error(`wallet not found: ${input.walletId}`);
-  }
+  const wallet = await readWalletById(repos, input.walletId);
+  if (wallet === null) throw new Error(`wallet not found: ${input.walletId}`);
 
   const context = buildProviderRequestContext({
     transactionId,
@@ -608,20 +571,11 @@ export async function fundWallet(
     currency: input.currency,
   });
   const result = decision.providerResult;
-
   const walletReference =
     result.sourceAttributes.payment_reference ??
     decision.providerResult.paymentReference;
   const paymentReference = decision.providerResult.paymentReference;
-  const entrySeq = 1;
   const entries: WalletLedgerEntry[] = [];
-
-  const initiationRef = walletLedgerReference(
-    "wlf",
-    input.walletId,
-    transactionId,
-    entrySeq,
-  );
   entries.push(
     buildLedgerEntry({
       walletId: input.walletId,
@@ -630,7 +584,7 @@ export async function fundWallet(
       amountMinor: input.amountMinor,
       currency: input.currency,
       status: "PENDING",
-      reference: initiationRef,
+      reference: walletLedgerReference("wlf", input.walletId, transactionId, 1),
       occurredAt: now,
       metadata: baseMetadata({
         scenario: input.scenario,
@@ -640,13 +594,12 @@ export async function fundWallet(
           provider_reference: result.providerReference,
         },
       }),
-      seq: entrySeq,
+      seq: 1,
     }),
   );
 
   let lifecycle: PaymentLifecycleState = "PENDING";
   let fundingEntry: WalletLedgerEntry | null = null;
-
   if (decision.funded) {
     lifecycle = "SETTLED";
     fundingEntry = buildLedgerEntry({
@@ -656,12 +609,7 @@ export async function fundWallet(
       amountMinor: input.amountMinor,
       currency: input.currency,
       status: "POSTED",
-      reference: walletLedgerReference(
-        "wlf",
-        input.walletId,
-        transactionId,
-        entrySeq + 1,
-      ),
+      reference: walletLedgerReference("wlf", input.walletId, transactionId, 2),
       occurredAt: now,
       metadata: baseMetadata({
         scenario: input.scenario,
@@ -673,7 +621,7 @@ export async function fundWallet(
           settlement: decision.mismatch ? "MISMATCH" : "MATCHED",
         },
       }),
-      seq: entrySeq + 1,
+      seq: 2,
     });
     if (decision.mismatch) {
       entries.push(
@@ -688,7 +636,7 @@ export async function fundWallet(
             "wls",
             input.walletId,
             transactionId,
-            entrySeq + 2,
+            3,
           ),
           occurredAt: now,
           metadata: baseMetadata({
@@ -700,7 +648,7 @@ export async function fundWallet(
               settlement: "MISMATCH",
             },
           }),
-          seq: entrySeq + 2,
+          seq: 3,
         }),
       );
     }
@@ -713,12 +661,7 @@ export async function fundWallet(
       amountMinor: input.amountMinor,
       currency: input.currency,
       status: "FAILED",
-      reference: walletLedgerReference(
-        "wlf",
-        input.walletId,
-        transactionId,
-        entrySeq + 1,
-      ),
+      reference: walletLedgerReference("wlf", input.walletId, transactionId, 2),
       occurredAt: now,
       metadata: baseMetadata({
         scenario: input.scenario,
@@ -730,10 +673,9 @@ export async function fundWallet(
           reason: "PAYMENT_PROVIDER_FAILED",
         },
       }),
-      seq: entrySeq + 1,
+      seq: 2,
     });
   }
-
   if (decision.pending && !decision.failed && !decision.funded) {
     lifecycle = "PENDING";
     fundingEntry = buildLedgerEntry({
@@ -743,12 +685,7 @@ export async function fundWallet(
       amountMinor: input.amountMinor,
       currency: input.currency,
       status: "PENDING",
-      reference: walletLedgerReference(
-        "wlf",
-        input.walletId,
-        transactionId,
-        entrySeq + 1,
-      ),
+      reference: walletLedgerReference("wlf", input.walletId, transactionId, 2),
       occurredAt: now,
       metadata: baseMetadata({
         scenario: input.scenario,
@@ -759,20 +696,13 @@ export async function fundWallet(
           provider_status: result.providerStatus,
         },
       }),
-      seq: entrySeq + 1,
+      seq: 2,
     });
   }
+  if (fundingEntry !== null) entries.push(fundingEntry);
+  for (const entry of entries) await repos.walletLedger.insert(entry);
 
-  if (fundingEntry !== null) {
-    entries.push(fundingEntry);
-  }
-
-  for (const entry of entries) {
-    await store.insert("wallet_ledger", entry);
-  }
-
-  const balance = await getWalletBalance(store, input.walletId, input.currency);
-  const ledgerEntryIds = entries.map((entry) => entry.id);
+  const balance = await getWalletBalance(repos, input.walletId, input.currency);
   const evidence: WalletPaymentEvidence = {
     internalTransactionId: transactionId,
     walletReference,
@@ -795,7 +725,7 @@ export async function fundWallet(
     scenario: input.scenario,
     relatedPaymentId: paymentReference,
     relatedTransactionId: transactionId,
-    ledgerEntryIds,
+    ledgerEntryIds: entries.map((e) => e.id),
     metadata: baseMetadata({
       scenario: input.scenario,
       extra: {
@@ -805,7 +735,6 @@ export async function fundWallet(
     }),
     simulated: true,
   };
-
   return {
     walletId: input.walletId,
     transactionId,
@@ -819,7 +748,7 @@ export async function fundWallet(
 }
 
 export async function authorizeDebit(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly walletId: string;
     readonly transactionId: string;
@@ -875,28 +804,25 @@ export async function authorizeDebit(
       seq: 2,
     }),
   ];
-  for (const entry of entries) {
-    await store.insert("wallet_ledger", entry);
-  }
+  for (const entry of entries) await repos.walletLedger.insert(entry);
   return {
     walletId: input.walletId,
     transactionId: input.transactionId,
     lifecycle: authorized ? "AUTHORIZED" : "FAILED",
     ledgerEntries: entries,
-    balance: await getWalletBalance(store, input.walletId, input.currency),
+    balance: await getWalletBalance(repos, input.walletId, input.currency),
   };
 }
 
 export async function debitWallet(
-  store: JsonlStore,
+  repos: Repositories,
   input: DebitWalletInput,
 ): Promise<DebitWalletOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
   const entries: WalletLedgerEntry[] = [];
-
   const insufficient =
     input.scenario !== "FAILED" &&
-    (await getWalletBalance(store, input.walletId, input.currency))
+    (await getWalletBalance(repos, input.walletId, input.currency))
       .availableMinor < input.amountMinor;
 
   if (input.scenario === "PENDING" || input.scenario === "TIMEOUT") {
@@ -927,9 +853,7 @@ export async function debitWallet(
         seq: 1,
       }),
     );
-    for (const entry of entries) {
-      await store.insert("wallet_ledger", entry);
-    }
+    for (const entry of entries) await repos.walletLedger.insert(entry);
     return {
       walletId: input.walletId,
       transactionId: input.transactionId,
@@ -942,13 +866,12 @@ export async function debitWallet(
         paymentState: "PENDING",
         providerStatus: null,
         attemptStatus: input.scenario === "TIMEOUT" ? "TIMEOUT" : "PENDING",
-        ledgerEntryIds: entries.map((entry) => entry.id),
+        ledgerEntryIds: entries.map((e) => e.id),
         extra: { reason: "DEBIT_PENDING" },
       }),
-      balance: await getWalletBalance(store, input.walletId, input.currency),
+      balance: await getWalletBalance(repos, input.walletId, input.currency),
     };
   }
-
   if (input.scenario === "FAILED" || insufficient) {
     entries.push(
       buildLedgerEntry({
@@ -974,9 +897,7 @@ export async function debitWallet(
         seq: 1,
       }),
     );
-    for (const entry of entries) {
-      await store.insert("wallet_ledger", entry);
-    }
+    for (const entry of entries) await repos.walletLedger.insert(entry);
     return {
       walletId: input.walletId,
       transactionId: input.transactionId,
@@ -989,15 +910,14 @@ export async function debitWallet(
         paymentState: "FAILED",
         providerStatus: "FAILED",
         attemptStatus: "FAILED",
-        ledgerEntryIds: entries.map((entry) => entry.id),
+        ledgerEntryIds: entries.map((e) => e.id),
         extra: {
           reason: insufficient ? "INSUFFICIENT_BALANCE" : "DEBIT_FAILED",
         },
       }),
-      balance: await getWalletBalance(store, input.walletId, input.currency),
+      balance: await getWalletBalance(repos, input.walletId, input.currency),
     };
   }
-
   const primary = buildLedgerEntry({
     walletId: input.walletId,
     transactionId: input.transactionId,
@@ -1050,9 +970,7 @@ export async function debitWallet(
       }),
     );
   }
-  for (const entry of entries) {
-    await store.insert("wallet_ledger", entry);
-  }
+  for (const entry of entries) await repos.walletLedger.insert(entry);
   return {
     walletId: input.walletId,
     transactionId: input.transactionId,
@@ -1065,15 +983,15 @@ export async function debitWallet(
       paymentState: "SETTLED",
       providerStatus: "SUCCESS",
       attemptStatus: "SUCCESS",
-      ledgerEntryIds: entries.map((entry) => entry.id),
+      ledgerEntryIds: entries.map((e) => e.id),
       extra: { payment_reference: primary.reference },
     }),
-    balance: await getWalletBalance(store, input.walletId, input.currency),
+    balance: await getWalletBalance(repos, input.walletId, input.currency),
   };
 }
 
 export async function reverseDebit(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly walletId: string;
     readonly transactionId: string;
@@ -1128,9 +1046,7 @@ export async function reverseDebit(
       seq: 2,
     }),
   ];
-  for (const entry of entries) {
-    await store.insert("wallet_ledger", entry);
-  }
+  for (const entry of entries) await repos.walletLedger.insert(entry);
   return {
     walletId: input.walletId,
     transactionId: input.transactionId,
@@ -1142,15 +1058,15 @@ export async function reverseDebit(
       paymentState: "REVERSED",
       providerStatus: "CANCELLED",
       attemptStatus: "SUCCESS",
-      ledgerEntryIds: entries.map((entry) => entry.id),
+      ledgerEntryIds: entries.map((e) => e.id),
       extra: { reason: input.reason ?? "REVERSAL_COMPLETED" },
     }),
-    balance: await getWalletBalance(store, input.walletId, input.currency),
+    balance: await getWalletBalance(repos, input.walletId, input.currency),
   };
 }
 
 export async function initiateRefund(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly walletId: string;
     readonly transactionId: string;
@@ -1205,9 +1121,7 @@ export async function initiateRefund(
       seq: 2,
     }),
   ];
-  for (const entry of entries) {
-    await store.insert("wallet_ledger", entry);
-  }
+  for (const entry of entries) await repos.walletLedger.insert(entry);
   return {
     walletId: input.walletId,
     transactionId: input.transactionId,
@@ -1219,15 +1133,15 @@ export async function initiateRefund(
       paymentState: "REFUND_PENDING",
       providerStatus: "PENDING",
       attemptStatus: "PENDING",
-      ledgerEntryIds: entries.map((entry) => entry.id),
+      ledgerEntryIds: entries.map((e) => e.id),
       extra: { reason: input.reason ?? "REFUND_INITIATED" },
     }),
-    balance: await getWalletBalance(store, input.walletId, input.currency),
+    balance: await getWalletBalance(repos, input.walletId, input.currency),
   };
 }
 
 export async function completeRefund(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly walletId: string;
     readonly transactionId: string;
@@ -1260,9 +1174,7 @@ export async function completeRefund(
       seq: 3,
     }),
   ];
-  for (const entry of entries) {
-    await store.insert("wallet_ledger", entry);
-  }
+  for (const entry of entries) await repos.walletLedger.insert(entry);
   return {
     walletId: input.walletId,
     transactionId: input.transactionId,
@@ -1274,15 +1186,15 @@ export async function completeRefund(
       paymentState: "REFUNDED",
       providerStatus: "SUCCESS",
       attemptStatus: "SUCCESS",
-      ledgerEntryIds: entries.map((entry) => entry.id),
+      ledgerEntryIds: entries.map((e) => e.id),
       extra: { reason: input.reason ?? "REFUND_COMPLETED" },
     }),
-    balance: await getWalletBalance(store, input.walletId, input.currency),
+    balance: await getWalletBalance(repos, input.walletId, input.currency),
   };
 }
 
 export async function settlePayment(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly walletId: string;
     readonly transactionId: string;
@@ -1313,8 +1225,6 @@ export async function settlePayment(
       metadata: baseMetadata({ scenario }),
       seq: 1,
     }),
-  ];
-  entries.push(
     buildLedgerEntry({
       walletId: input.walletId,
       transactionId: input.transactionId,
@@ -1335,10 +1245,8 @@ export async function settlePayment(
       }),
       seq: 2,
     }),
-  );
-  for (const entry of entries) {
-    await store.insert("wallet_ledger", entry);
-  }
+  ];
+  for (const entry of entries) await repos.walletLedger.insert(entry);
   return {
     walletId: input.walletId,
     transactionId: input.transactionId,
@@ -1350,10 +1258,10 @@ export async function settlePayment(
       paymentState: "SETTLED",
       providerStatus: input.match ? "SUCCESS" : "UNKNOWN",
       attemptStatus: input.match ? "SUCCESS" : "MISMATCH",
-      ledgerEntryIds: entries.map((entry) => entry.id),
+      ledgerEntryIds: entries.map((e) => e.id),
       extra: { settlement: input.match ? "MATCHED" : "MISMATCH" },
     }),
-    balance: await getWalletBalance(store, input.walletId, input.currency),
+    balance: await getWalletBalance(repos, input.walletId, input.currency),
   };
 }
 
