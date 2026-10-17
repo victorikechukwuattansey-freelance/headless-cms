@@ -1,8 +1,10 @@
-import { test } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
@@ -25,7 +27,20 @@ import {
 } from "../../src/marketplace/timeline.ts";
 import { buildTransactionTruth } from "../../src/marketplace/truth.ts";
 import { demoDeps } from "./demo-deps.ts";
+import { seedDemoCustomer } from "../db/fixtures.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
 import type { MarketplaceTransaction } from "../../src/marketplace/types.ts";
+
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
+
+before(async () => {
+  await seedDemoCustomer(prisma);
+});
+
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 const NOW = WALLET_FIXED_TIMESTAMP;
 
@@ -44,7 +59,7 @@ async function runSuccess(
   },
 ): Promise<{ store: JsonlStore; result: ExecuteTransactionResult }> {
   const store = tempStore(t);
-  const result = await executeMarketplaceTransaction(demoDeps(store), {
+  const result = await executeMarketplaceTransaction(demoDeps(store, repos), {
     customerId: "cus_demo",
     serviceId: "svc_airtime_mtn",
     scenario: "SUCCESS",
@@ -78,7 +93,7 @@ test("a reversal is a distinct money movement from a refund", async (t) => {
   const { store, result } = await runSuccess(t);
   const transactionId = result.transaction.id;
 
-  const outcome = await reverseTransactionDebit(store, {
+  const outcome = await reverseTransactionDebit(store, repos, {
     transactionId,
     reason: "DOUBLE_CHARGE",
   });
@@ -105,7 +120,7 @@ test("refund pending and refunded are two distinct resolution states", async (t)
   const { store, result } = await runSuccess(t);
   const transactionId = result.transaction.id;
 
-  const initiated = await initiateTransactionRefund(store, {
+  const initiated = await initiateTransactionRefund(store, repos, {
     transactionId,
     reason: "BAD_DELIVERY",
   });
@@ -117,7 +132,9 @@ test("refund pending and refunded are two distinct resolution states", async (t)
     "REFUND_PENDING",
   );
 
-  const completed = await completeTransactionRefund(store, { transactionId });
+  const completed = await completeTransactionRefund(store, repos, {
+    transactionId,
+  });
   assert.equal(completed.resolutionStatus, "REFUNDED");
   assert.equal(completed.refund.status, "COMPLETED");
   assert.ok(completed.refund.completedAt !== null);
@@ -135,7 +152,9 @@ test("refund pending and refunded are two distinct resolution states", async (t)
 test("a refund cannot complete before it was initiated", async (t) => {
   const { store, result } = await runSuccess(t);
   await assert.rejects(
-    completeTransactionRefund(store, { transactionId: result.transaction.id }),
+    completeTransactionRefund(store, repos, {
+      transactionId: result.transaction.id,
+    }),
     (error: unknown) =>
       error instanceof ResolutionError && error.code === "REFUND_NOT_PENDING",
   );
@@ -144,9 +163,15 @@ test("a refund cannot complete before it was initiated", async (t) => {
 test("a refund cannot be initiated twice", async (t) => {
   const { store, result } = await runSuccess(t);
   const transactionId = result.transaction.id;
-  await initiateTransactionRefund(store, { transactionId, reason: "FIRST" });
+  await initiateTransactionRefund(store, repos, {
+    transactionId,
+    reason: "FIRST",
+  });
   await assert.rejects(
-    initiateTransactionRefund(store, { transactionId, reason: "SECOND" }),
+    initiateTransactionRefund(store, repos, {
+      transactionId,
+      reason: "SECOND",
+    }),
     (error: unknown) =>
       error instanceof ResolutionError &&
       error.code === "REFUND_ALREADY_IN_FLIGHT",
@@ -156,9 +181,12 @@ test("a refund cannot be initiated twice", async (t) => {
 test("a reversal cannot follow an in-flight refund", async (t) => {
   const { store, result } = await runSuccess(t);
   const transactionId = result.transaction.id;
-  await initiateTransactionRefund(store, { transactionId, reason: "TEST" });
+  await initiateTransactionRefund(store, repos, {
+    transactionId,
+    reason: "TEST",
+  });
   await assert.rejects(
-    reverseTransactionDebit(store, { transactionId }),
+    reverseTransactionDebit(store, repos, { transactionId }),
     (error: unknown) =>
       error instanceof ResolutionError &&
       error.code === "INVALID_RESOLUTION_TRANSITION",
@@ -239,8 +267,11 @@ test("manual review opens and resolves, appending review events", async (t) => {
 test("a dispute cannot be opened on a refunded transaction", async (t) => {
   const { store, result } = await runSuccess(t);
   const transactionId = result.transaction.id;
-  await initiateTransactionRefund(store, { transactionId, reason: "TEST" });
-  await completeTransactionRefund(store, { transactionId });
+  await initiateTransactionRefund(store, repos, {
+    transactionId,
+    reason: "TEST",
+  });
+  await completeTransactionRefund(store, repos, { transactionId });
   await assert.rejects(
     openDispute(store, { transactionId, reason: "LATE" }),
     (error: unknown) =>

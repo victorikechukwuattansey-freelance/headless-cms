@@ -4,7 +4,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
-import { buildRepositories } from "../../src/db/repositories/index.ts";
+import {
+  buildRepositories,
+  type Repositories,
+} from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   DEMO_ORDER_SCENARIOS,
@@ -61,12 +64,10 @@ async function eventsFor(
 }
 
 async function ledgerFor(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<readonly WalletLedgerEntry[]> {
-  return (await store.readAll<WalletLedgerEntry>("wallet_ledger")).filter(
-    (entry) => entry.transactionId === transactionId,
-  );
+  return repos.walletLedger.listByTransaction(transactionId);
 }
 
 async function artifactsFor(
@@ -135,7 +136,7 @@ test("successful_airtime reconciles to MATCH with fulfilled top-up", async (t) =
   const events = await eventsFor(store, transactionId);
   assert.ok(events.some((event) => event.type === "TRANSACTION_FULFILLED"));
   assert.ok(
-    (await ledgerFor(store, transactionId)).some(
+    (await ledgerFor(repos, transactionId)).some(
       (e) => e.type === "DEBIT_SUCCESS",
     ),
   );
@@ -203,7 +204,7 @@ test("duplicate_debit completes cleanly and fires the duplicate marker", async (
   );
   assert.equal(entry.truth.reconcileOutcome, "MATCH");
   assert.equal(entry.truth.moneyAtRisk, false);
-  const ledger = await ledgerFor(store, entry.transactionId);
+  const ledger = await ledgerFor(repos, entry.transactionId);
   assert.ok(ledger.some((entry) => entry.type === "DEBIT_SUCCESS"));
   assert.equal(
     ledger.some((entry) => entry.type === "DUPLICATE_DEBIT"),
@@ -295,7 +296,7 @@ test("bus_ticket_refund completes a wallet refund", async (t) => {
   assert.equal(entry.transaction.resolutionStatus, "REFUNDED");
   assert.equal(entry.transaction.customerStatus, "REFUNDED");
   assert.equal(entry.transaction.adminStatus, "HEALTHY");
-  const ledger = await ledgerFor(store, entry.transactionId);
+  const ledger = await ledgerFor(repos, entry.transactionId);
   assert.ok(
     ledger.some((entry) => entry.type === "REFUND_COMPLETED"),
     "completed refund ledger entry expected",
@@ -334,7 +335,7 @@ test("payment_success_service_failure splits payment truth from fulfillment fail
   assert.equal(entry.truth.reconcileOutcome, "DISCREPANCY");
   assert.equal(entry.truth.moneyAtRisk, true);
   assert.ok(
-    (await ledgerFor(store, entry.transactionId)).some(
+    (await ledgerFor(repos, entry.transactionId)).some(
       (entry) => entry.type === "DEBIT_SUCCESS",
     ),
   );
@@ -355,7 +356,7 @@ test("payment_reversal reverses the wallet debit", async (t) => {
   assert.equal(entry.transaction.resolutionStatus, "REVERSED");
   assert.equal(entry.transaction.customerStatus, "REVERSED");
   assert.equal(entry.transaction.adminStatus, "HEALTHY");
-  const ledger = await ledgerFor(store, entry.transactionId);
+  const ledger = await ledgerFor(repos, entry.transactionId);
   assert.ok(ledger.some((entry) => entry.type === "REVERSAL_COMPLETED"));
   const events = await eventsFor(store, entry.transactionId);
   assert.ok(events.some((event) => event.type === "REVERSAL_COMPLETED"));
@@ -371,7 +372,7 @@ test("refund_pending waits for the refund provider", async (t) => {
   assert.equal(entry.transaction.resolutionStatus, "REFUND_PENDING");
   assert.equal(entry.transaction.customerStatus, "REFUND_PENDING");
   assert.equal(entry.transaction.adminStatus, "REFUND_QUEUE");
-  const ledger = await ledgerFor(store, entry.transactionId);
+  const ledger = await ledgerFor(repos, entry.transactionId);
   assert.ok(ledger.some((entry) => entry.type === "REFUND_PENDING"));
   const events = await eventsFor(store, entry.transactionId);
   assert.ok(events.some((event) => event.type === "REFUND_PENDING"));

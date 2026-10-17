@@ -1,8 +1,13 @@
-import { test } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import {
+  buildRepositories,
+  type Repositories,
+} from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
@@ -11,11 +16,21 @@ import {
   ServiceInputValidationError,
 } from "../../src/marketplace/transactions.ts";
 import { demoDeps } from "./demo-deps.ts";
+import { seedDemoCustomer } from "../db/fixtures.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
 import type { ExecuteTransactionInput } from "../../src/marketplace/transactions.ts";
-import type {
-  ServiceInputDescriptor,
-  WalletLedgerEntry,
-} from "../../src/marketplace/types.ts";
+import type { ServiceInputDescriptor } from "../../src/marketplace/types.ts";
+
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
+
+before(async () => {
+  await seedDemoCustomer(prisma);
+});
+
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 const NOW = WALLET_FIXED_TIMESTAMP;
 
@@ -54,8 +69,10 @@ async function giftArtifacts(store: JsonlStore): Promise<number> {
   return (await store.readAll("gift_card_artifacts")).length;
 }
 
-async function ledgerEntries(store: JsonlStore): Promise<number> {
-  return (await store.readAll<WalletLedgerEntry>("wallet_ledger")).length;
+async function ledgerEntries(repos: Repositories): Promise<number> {
+  const wallet = await repos.wallets.findByCustomer("cus_demo");
+  if (wallet === null) return 0;
+  return (await repos.walletLedger.listByWallet(wallet.id)).length;
 }
 
 async function expectValidationError(
@@ -65,7 +82,7 @@ async function expectValidationError(
   code: string,
 ): Promise<void> {
   await assert.rejects(
-    executeMarketplaceTransaction(demoDeps(store), execInput),
+    executeMarketplaceTransaction(demoDeps(store, repos), execInput),
     (error: unknown) => {
       assert.ok(
         error instanceof ServiceInputValidationError,
@@ -107,7 +124,7 @@ test("validation boundary: unknown service throws TransactionInputError, betting
   const store = tempStore(t);
   await assert.rejects(
     executeMarketplaceTransaction(
-      demoDeps(store),
+      demoDeps(store, repos),
       txn({ serviceId: "svc_does_not_exist" }),
     ),
     (error: unknown) =>
@@ -117,7 +134,7 @@ test("validation boundary: unknown service throws TransactionInputError, betting
   );
   await assert.rejects(
     executeMarketplaceTransaction(
-      demoDeps(store),
+      demoDeps(store, repos),
       txn({ serviceId: "svc_betting_examplebet" }),
     ),
     (error: unknown) =>
@@ -130,7 +147,7 @@ test("validation boundary: unknown service throws TransactionInputError, betting
 test("valid airtime input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({ scenario: "SUCCESS" }),
   );
   assert.equal(result.replayed, false);
@@ -140,6 +157,7 @@ test("valid airtime input executes successfully", async (t) => {
 
 test("missing airtime recipient is rejected before any write", async (t) => {
   const store = tempStore(t);
+  const ledgerBefore = await ledgerEntries(repos);
   await expectValidationError(
     store,
     txn({
@@ -150,7 +168,7 @@ test("missing airtime recipient is rejected before any write", async (t) => {
   );
   assert.equal(await providerAttempts(store), 0);
   assert.equal(await orders(store), 0);
-  assert.equal(await ledgerEntries(store), 0);
+  assert.equal(await ledgerEntries(repos), ledgerBefore);
 });
 
 test("invalid airtime network SELECT is rejected", async (t) => {
@@ -204,7 +222,7 @@ test("missing field reports the first schema-order error deterministically", asy
 test("valid data input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_data_mtn",
       inputs: { network: "MTN", recipient: "08030000000", plan: "2GB" },
@@ -229,7 +247,7 @@ test("missing data plan is rejected", async (t) => {
 test("valid electricity input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_electricity_aedc",
       inputs: {
@@ -259,7 +277,7 @@ test("missing electricity meter number is rejected", async (t) => {
 test("valid cable input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_cable_dstv",
       inputs: {
@@ -288,7 +306,7 @@ test("missing cable subscriber number is rejected", async (t) => {
 test("valid internet input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_internet_spectranet",
       inputs: {
@@ -304,7 +322,7 @@ test("valid internet input executes successfully", async (t) => {
 test("valid education input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_education_jamb",
       inputs: {
@@ -320,7 +338,7 @@ test("valid education input executes successfully", async (t) => {
 test("valid gift card input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_giftcard_amazon",
       inputs: {
@@ -373,7 +391,7 @@ test("invalid gift card denomination is rejected", async (t) => {
 test("valid digital voucher input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_voucher_digital",
       inputs: {
@@ -390,7 +408,7 @@ test("valid digital voucher input executes successfully", async (t) => {
 test("valid cinema booking input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_cinema_filmhouse",
       inputs: {
@@ -459,7 +477,7 @@ test("invalid cinema screening DATE is rejected", async (t) => {
 test("valid event booking input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_event_lagos tech fest",
       inputs: {
@@ -476,7 +494,7 @@ test("valid event booking input executes successfully", async (t) => {
 test("valid bus booking input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_bus_lagos_abuja",
       inputs: {
@@ -530,7 +548,7 @@ test("missing bus route (origin) is rejected", async (t) => {
 test("valid airline booking input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     txn({
       serviceId: "svc_airline_los_abv",
       inputs: {
@@ -583,6 +601,7 @@ test("missing airline flight is rejected", async (t) => {
 
 test("invalid input never debits the wallet", async (t) => {
   const store = tempStore(t);
+  const ledgerBefore = await ledgerEntries(repos);
   await expectValidationError(
     store,
     txn({
@@ -591,7 +610,7 @@ test("invalid input never debits the wallet", async (t) => {
     "recipient",
     "MISSING_REQUIRED",
   );
-  assert.equal(await ledgerEntries(store), 0);
+  assert.equal(await ledgerEntries(repos), ledgerBefore);
 });
 
 test("invalid input never calls the provider", async (t) => {

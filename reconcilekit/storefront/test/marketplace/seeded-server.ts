@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../../src/config.ts";
 import { getPrismaClient } from "../../src/db/client.ts";
-import { buildRepositories } from "../../src/db/repositories/index.ts";
+import {
+  buildRepositories,
+  type Repositories,
+} from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { createStorefrontServer } from "../../src/server.ts";
 import { demoDeps } from "./demo-deps.ts";
@@ -27,8 +30,9 @@ export interface SeededServerContext {
 
 async function createSeededTransaction(
   store: JsonlStore,
+  repos: Repositories,
 ): Promise<MarketplaceTransaction> {
-  const deps = demoDeps(store);
+  const deps = demoDeps(store, repos);
   const NOW = WALLET_FIXED_TIMESTAMP;
 
   const result = await executeMarketplaceTransaction(deps, {
@@ -57,7 +61,7 @@ export async function startSeededServer(): Promise<SeededServerContext> {
   // scenarios into JSONL.
   await seedDemoData(store, repos);
 
-  const transaction = await createSeededTransaction(store);
+  const transaction = await createSeededTransaction(store, repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
@@ -72,7 +76,7 @@ export async function startSeededServer(): Promise<SeededServerContext> {
           throw new Error("Paystack not used in marketplace tests");
         },
       },
-      marketplace: demoDeps(store),
+      marketplace: demoDeps(store, repos),
     },
   );
 

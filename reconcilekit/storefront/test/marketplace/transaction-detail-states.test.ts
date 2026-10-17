@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { loadConfig } from "../../src/config.ts";
 import { createStorefrontServer } from "../../src/server.ts";
@@ -21,10 +22,15 @@ import {
   DEMO_SCENARIO_NAMES,
   WALLET_FUNDING_SCENARIO_NAME,
 } from "../../src/marketplace/demo-scenarios.ts";
-import type { WalletLedgerEntry } from "../../src/marketplace/types.ts";
 
 const prisma = getPrismaClient();
 const repos = buildRepositories(prisma);
+
+// (existing lines)
+
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 interface WalkthroughServer {
   readonly baseUrl: string;
@@ -55,7 +61,7 @@ async function startFullySeededServer(t: {
           throw new Error("Paystack not used in marketplace tests");
         },
       },
-      marketplace: demoDeps(store),
+      marketplace: demoDeps(store, repos),
     },
   );
 
@@ -191,9 +197,9 @@ test("ledger truth surfaces the real wallet ledger entries for the transaction",
   const app = await startFullySeededServer(t);
   try {
     const { entry, html } = await fetchDetail(app, "successful_airtime");
-    const ledger = (
-      await app.store.readAll<WalletLedgerEntry>("wallet_ledger")
-    ).filter((row) => row.transactionId === entry.transactionId);
+    const ledger = await repos.walletLedger.listByTransaction(
+      entry.transactionId,
+    );
     assert.ok(ledger.length >= 1, "transaction must have ledger movement");
     for (const row of ledger) {
       assert.ok(

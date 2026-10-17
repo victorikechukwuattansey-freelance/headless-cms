@@ -1,8 +1,10 @@
-import { test } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
@@ -23,10 +25,23 @@ import { buildDemoCatalog } from "../../src/marketplace/catalog.ts";
 import { reconcileMarketplaceTransaction } from "../../src/marketplace/reconcile.ts";
 import { issueReceipt } from "../../src/marketplace/receipts.ts";
 import { demoDeps } from "./demo-deps.ts";
+import { seedDemoCustomer } from "../db/fixtures.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
 import type {
   MarketplaceTransaction,
   TicketArtifact,
 } from "../../src/marketplace/types.ts";
+
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
+
+before(async () => {
+  await seedDemoCustomer(prisma);
+});
+
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 const NOW = WALLET_FIXED_TIMESTAMP;
 
@@ -91,7 +106,7 @@ async function attemptCount(
 test("cinema SUCCESS reserves and issues a ticket with a deterministic evidence facet", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     cinemaInput({ scenario: "SUCCESS" }),
   );
 
@@ -138,7 +153,7 @@ test("cinema SUCCESS reserves and issues a ticket with a deterministic evidence 
 test("cinema PENDING holds a reservation but never issues the ticket", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     cinemaInput({ scenario: "PENDING" }),
   );
 
@@ -169,7 +184,7 @@ test("cinema PENDING holds a reservation but never issues the ticket", async (t)
 test("cinema TIMEOUT produces no reservation and stays in manual review", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     cinemaInput({ scenario: "TIMEOUT" }),
   );
 
@@ -194,14 +209,17 @@ test("cinema TIMEOUT produces no reservation and stays in manual review", async 
 
 test("searchTicketAvailability enumerates read-only options pre-checkout", async (t) => {
   const store = tempStore(t);
-  const availabilities = await searchTicketAvailability(demoDeps(store), {
-    serviceId: "svc_cinema_filmhouse",
-    inputs: {
-      venue: "Filmhouse IMAX",
-      movie: "Oppenheimer",
-      screening: "2026-02-01",
+  const availabilities = await searchTicketAvailability(
+    demoDeps(store, repos),
+    {
+      serviceId: "svc_cinema_filmhouse",
+      inputs: {
+        venue: "Filmhouse IMAX",
+        movie: "Oppenheimer",
+        screening: "2026-02-01",
+      },
     },
-  });
+  );
 
   assert.equal(availabilities.length, 2);
   assert.match(availabilities[0].id, /^avail_.*_1$/);
@@ -222,7 +240,7 @@ test("searchTicketAvailability enumerates read-only options pre-checkout", async
 test("searchTicketAvailability rejects non-ticketing and unknown services", async (t) => {
   const store = tempStore(t);
   await assert.rejects(
-    searchTicketAvailability(demoDeps(store), {
+    searchTicketAvailability(demoDeps(store, repos), {
       serviceId: "svc_giftcard_amazon",
       inputs: {
         brand: "Amazon",
@@ -236,7 +254,7 @@ test("searchTicketAvailability rejects non-ticketing and unknown services", asyn
       error.code === "NOT_TICKETING_SERVICE",
   );
   await assert.rejects(
-    searchTicketAvailability(demoDeps(store), {
+    searchTicketAvailability(demoDeps(store, repos), {
       serviceId: "svc_none",
       inputs: {},
     }),
@@ -248,7 +266,7 @@ test("searchTicketAvailability rejects non-ticketing and unknown services", asyn
 test("cancel invalidates the ticket without touching money or resolution state", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     cinemaInput({ scenario: "SUCCESS" }),
   );
   const eventsBefore = await listTransactionEvents(
@@ -258,7 +276,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
   const attemptsBefore = await attemptCount(store, result.transaction.id);
   assert.equal(attemptsBefore, 2);
 
-  const outcome = await cancelTicketTransaction(store, demoDeps(store), {
+  const outcome = await cancelTicketTransaction(store, demoDeps(store, repos), {
     transactionId: result.transaction.id,
     reason: "Duplicate booking",
     now: NOW,
@@ -323,10 +341,10 @@ test("cancel invalidates the ticket without touching money or resolution state",
 test("replaying a cancellation is idempotent and writes nothing new", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     cinemaInput({ scenario: "SUCCESS" }),
   );
-  const first = await cancelTicketTransaction(store, demoDeps(store), {
+  const first = await cancelTicketTransaction(store, demoDeps(store, repos), {
     transactionId: result.transaction.id,
     reason: "Duplicate booking",
     now: NOW,
@@ -336,7 +354,7 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
     result.transaction.id,
   );
 
-  const replay = await cancelTicketTransaction(store, demoDeps(store), {
+  const replay = await cancelTicketTransaction(store, demoDeps(store, repos), {
     transactionId: result.transaction.id,
     reason: "Duplicate booking",
     now: NOW,
@@ -362,12 +380,12 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
 test("a refunded or reversed transaction is not cancellable", async (t) => {
   const store = tempStore(t);
   const refunded = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     cinemaInput({ scenario: "REFUND_COMPLETED" }),
   );
   assert.equal(refunded.transaction.resolutionStatus, "REFUNDED");
   await assert.rejects(
-    cancelTicketTransaction(store, demoDeps(store), {
+    cancelTicketTransaction(store, demoDeps(store, repos), {
       transactionId: refunded.transaction.id,
       now: NOW,
     }),
@@ -378,12 +396,12 @@ test("a refunded or reversed transaction is not cancellable", async (t) => {
 
   const store2 = tempStore(t);
   const reversed = await executeMarketplaceTransaction(
-    demoDeps(store2),
+    demoDeps(store2, repos),
     cinemaInput({ scenario: "REVERSED" }),
   );
   assert.equal(reversed.transaction.resolutionStatus, "REVERSED");
   await assert.rejects(
-    cancelTicketTransaction(store2, demoDeps(store2), {
+    cancelTicketTransaction(store2, demoDeps(store2, repos), {
       transactionId: reversed.transaction.id,
       now: NOW,
     }),
@@ -396,7 +414,7 @@ test("a refunded or reversed transaction is not cancellable", async (t) => {
 test("cancellation guards reject unknown transactions and non-ticket transactions", async (t) => {
   const store = tempStore(t);
   await assert.rejects(
-    cancelTicketTransaction(store, demoDeps(store), {
+    cancelTicketTransaction(store, demoDeps(store, repos), {
       transactionId: "missing_txn",
       now: NOW,
     }),
@@ -406,11 +424,11 @@ test("cancellation guards reject unknown transactions and non-ticket transaction
   );
 
   const airtime = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     airtimeInput({ scenario: "SUCCESS" }),
   );
   await assert.rejects(
-    cancelTicketTransaction(store, demoDeps(store), {
+    cancelTicketTransaction(store, demoDeps(store, repos), {
       transactionId: airtime.transaction.id,
       now: NOW,
     }),
@@ -423,7 +441,7 @@ test("cancellation guards reject unknown transactions and non-ticket transaction
 test("cinema SUCCESS reconciles clean and issues an evidence-linked receipt", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     cinemaInput({ scenario: "SUCCESS" }),
   );
 
@@ -455,7 +473,7 @@ test("cinema SUCCESS reconciles clean and issues an evidence-linked receipt", as
 test("ticket code material is never written in full", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     cinemaInput({ scenario: "SUCCESS" }),
   );
   const events = await listTransactionEvents(store, result.transaction.id);

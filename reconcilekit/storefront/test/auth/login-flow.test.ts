@@ -31,7 +31,7 @@ async function startServer(t: {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   await seedDemoUser(repos);
-  await seedDemoTenancy(store, repos);
+  await seedDemoTenancy(repos);
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
@@ -45,7 +45,7 @@ async function startServer(t: {
           throw new Error("not used");
         },
       },
-      marketplace: demoDeps(store),
+      marketplace: demoDeps(store, repos),
     },
   );
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -165,7 +165,7 @@ test("login flow: sessions persist across a server restart", async (t) => {
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
   await seedDemoUser(repos);
-  await seedDemoTenancy(store, repos);
+  await seedDemoTenancy(repos);
 
   const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
   const deps = {
@@ -179,7 +179,7 @@ test("login flow: sessions persist across a server restart", async (t) => {
         throw new Error("not used");
       },
     },
-    marketplace: demoDeps(store),
+    marketplace: demoDeps(store, repos),
   };
 
   const server1 = createStorefrontServer(config, deps);

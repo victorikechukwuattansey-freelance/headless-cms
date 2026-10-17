@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { loadConfig } from "../../src/config.ts";
 import { createStorefrontServer } from "../../src/server.ts";
@@ -24,6 +25,10 @@ import type {
 
 const prisma = getPrismaClient();
 const repos = buildRepositories(prisma);
+
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 interface FindingsServer {
   readonly baseUrl: string;
@@ -54,7 +59,7 @@ async function startServer(t: {
           throw new Error("Paystack not used in findings tests");
         },
       },
-      marketplace: demoDeps(store),
+      marketplace: demoDeps(store, repos),
     },
   );
 

@@ -1,7 +1,17 @@
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { startSeededServer } from "./seeded-server.ts";
 import { withCookie } from "../auth/helpers.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
+
+// (existing lines)
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 test("transaction detail page explains money provider and ReconcileKit result", async () => {
   const app = await startSeededServer();

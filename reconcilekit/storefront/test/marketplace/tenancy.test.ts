@@ -20,7 +20,6 @@ import {
 } from "../../src/marketplace/tenancy.ts";
 import { DEMO_USER_ID } from "../../src/auth/identity.ts";
 import { customerProfile, DEMO_CUSTOMER_ID } from "../../src/ui/client.ts";
-import type { MarketplaceCustomer } from "../../src/marketplace/types.ts";
 
 const prisma = getPrismaClient();
 
@@ -58,15 +57,13 @@ test("tenancy: seed creates a membership tying the demo user to the demo org", a
   });
 });
 
-test("tenancy: seed creates the demo customer with org_id set (JSONL)", async (t) => {
+test("tenancy: seed creates the demo customer with org_id set", async (t) => {
   const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     await seedDemoData(store, repos);
-    const customer = await store.readLatestById<MarketplaceCustomer>(
-      "marketplace_customers",
-      DEMO_CUSTOMER_ID,
-    );
+    const customer =
+      await repos.marketplaceCustomers.readLatestById(DEMO_CUSTOMER_ID);
     assert.ok(customer !== null);
     assert.equal(customer.org_id, DEMO_ORG_ID);
   });
@@ -77,7 +74,7 @@ test("tenancy: customerProfile returns the org_id from the stored record", async
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     await seedDemoData(store, repos);
-    const profile = await customerProfile(store, DEMO_CUSTOMER_ID);
+    const profile = await customerProfile(repos, DEMO_CUSTOMER_ID);
     assert.equal(profile.org_id, DEMO_ORG_ID);
   });
 });
@@ -88,7 +85,7 @@ test("tenancy: customerBelongsToOrg is true for the demo org", async (t) => {
     const repos = buildRepositories(tx);
     await seedDemoData(store, repos);
     assert.equal(
-      await customerBelongsToOrg(store, DEMO_CUSTOMER_ID, DEMO_ORG_ID),
+      await customerBelongsToOrg(repos, DEMO_CUSTOMER_ID, DEMO_ORG_ID),
       true,
     );
   });
@@ -100,7 +97,7 @@ test("tenancy: customerBelongsToOrg is false for an unrelated org", async (t) =>
     const repos = buildRepositories(tx);
     await seedDemoData(store, repos);
     assert.equal(
-      await customerBelongsToOrg(store, DEMO_CUSTOMER_ID, "org_other"),
+      await customerBelongsToOrg(repos, DEMO_CUSTOMER_ID, "org_other"),
       false,
     );
   });
@@ -112,7 +109,7 @@ test("tenancy: customerBelongsToOrg is false for an unknown customer", async (t)
     const repos = buildRepositories(tx);
     await seedDemoData(store, repos);
     assert.equal(
-      await customerBelongsToOrg(store, "cus_does_not_exist", DEMO_ORG_ID),
+      await customerBelongsToOrg(repos, "cus_does_not_exist", DEMO_ORG_ID),
       false,
     );
   });
@@ -123,12 +120,12 @@ test("tenancy: listCustomersInOrg scopes correctly", async (t) => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     await seedDemoData(store, repos);
-    const inDemo = await listCustomersInOrg(store, DEMO_ORG_ID);
+    const inDemo = await listCustomersInOrg(repos, DEMO_ORG_ID);
     assert.ok(inDemo.length >= 1);
     for (const customer of inDemo) {
       assert.equal(customer.org_id, DEMO_ORG_ID);
     }
-    const inOther = await listCustomersInOrg(store, "org_other");
+    const inOther = await listCustomersInOrg(repos, "org_other");
     assert.equal(inOther.length, 0);
   });
 });
@@ -138,6 +135,9 @@ test("tenancy: seed is idempotent — no duplicate org, membership, or customers
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     await seedDemoData(store, repos);
+    const customersAfterFirst =
+      await repos.marketplaceCustomers.listByOrg(DEMO_ORG_ID);
+
     await seedDemoData(store, repos);
 
     const orgs = await repos.organizations.list();
@@ -146,11 +146,13 @@ test("tenancy: seed is idempotent — no duplicate org, membership, or customers
     const mems = await repos.memberships.listByUser(DEMO_USER_ID);
     assert.equal(mems.length, 1);
 
-    const customers = await store.readAll<MarketplaceCustomer>(
-      "marketplace_customers",
+    const customersAfterSecond =
+      await repos.marketplaceCustomers.listByOrg(DEMO_ORG_ID);
+    assert.equal(
+      customersAfterSecond.length,
+      customersAfterFirst.length,
+      "second seed run must not add customers",
     );
-    const unique = new Set(customers.map((c) => c.id));
-    assert.equal(unique.size, 2);
   });
 });
 

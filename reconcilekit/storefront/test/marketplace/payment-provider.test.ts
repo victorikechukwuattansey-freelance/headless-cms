@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
+import { withRollback } from "../db/helpers.ts";
+import { seedDemoCustomer } from "../db/fixtures.ts";
 import { createMockProviderRegistry } from "../../src/marketplace/providers/registry.ts";
 import type {
   PaymentProvider,
@@ -23,13 +23,8 @@ import {
 } from "../../src/marketplace/wallet.ts";
 import type { MockProviderScenario } from "../../src/marketplace/types.ts";
 
+const prisma = getPrismaClient();
 const NOW = WALLET_FIXED_TIMESTAMP;
-
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-payment-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
 
 function context(
   scenario: MockProviderScenario,
@@ -217,74 +212,78 @@ test("mock payment provider is deterministic for identical context and request",
   assert.deepEqual(second, first);
 });
 
-test("wallet layer depends on the PaymentProvider interface, not the concrete mock", async (t) => {
-  const store = tempStore(t);
-  await createWallet(store, {
-    customerId: "cus_demo",
-    currency: "NGN",
-    openingBalanceMinor: 500_000,
-    now: NOW,
-  });
-
-  const fakeProvider: PaymentProvider = {
-    mode: "MOCK",
-    id: "fake_payment_adapter",
-    providerId: "fake_payment_provider",
-    providerName: "Fake Payment Provider",
-    serviceKinds: ["WALLET_FUNDING"],
-    async execute(ctx, request): Promise<PaymentProviderResult> {
-      return {
-        providerId: this.providerId,
-        providerName: this.providerName,
-        serviceKind: "WALLET_FUNDING",
-        scenario: "SUCCESS",
-        providerReference: "pay_fake_001",
-        requestId: ctx.requestId,
-        correlationId: ctx.correlationId,
-        attemptNumber: 1,
-        requestTimestamp: ctx.requestedAt,
-        responseTimestamp: NOW,
-        providerStatus: "PROVIDER_SUCCESS",
-        providerStatusCode: "MOCK_SUCCESS",
-        providerMessage: "Fake provider funded the wallet.",
-        attemptStatus: "SUCCESS",
-        canonicalPaymentStatus: "SUCCESS",
-        amountMinor: request.amountMinor,
-        currency: request.currency,
-        latencyMs: 1,
-        sourceAttributes: { simulated: "true", scenario: "SUCCESS" },
-        reconciliationFacts: {
+test("wallet layer depends on the PaymentProvider interface, not the concrete mock", async () => {
+  await withRollback(prisma, async (tx) => {
+    await seedDemoCustomer(tx);
+    const repos = buildRepositories(tx);
+    const fakeProvider: PaymentProvider = {
+      mode: "MOCK",
+      id: "fake_payment_adapter",
+      providerId: "fake_payment_provider",
+      providerName: "Fake Payment Provider",
+      serviceKinds: ["WALLET_FUNDING"],
+      async execute(ctx, request): Promise<PaymentProviderResult> {
+        return {
           providerId: this.providerId,
+          providerName: this.providerName,
+          serviceKind: "WALLET_FUNDING",
+          scenario: "SUCCESS",
           providerReference: "pay_fake_001",
+          requestId: ctx.requestId,
+          correlationId: ctx.correlationId,
+          attemptNumber: 1,
+          requestTimestamp: ctx.requestedAt,
+          responseTimestamp: NOW,
+          providerStatus: "PROVIDER_SUCCESS",
+          providerStatusCode: "MOCK_SUCCESS",
+          providerMessage: "Fake provider funded the wallet.",
+          attemptStatus: "SUCCESS",
+          canonicalPaymentStatus: "SUCCESS",
           amountMinor: request.amountMinor,
           currency: request.currency,
-          canonicalStatus: "SUCCESS",
-          occurredAt: NOW,
-          sourceAttributes: {},
-        },
-        safeMetadata: { simulated: "true" },
-        duplicateResults: [],
-        simulated: true,
-        paymentReference: request.paymentReference,
-        authorizationState: "AUTHORIZED",
-        settlementState: "SETTLED",
-      };
-    },
-  };
+          latencyMs: 1,
+          sourceAttributes: { simulated: "true", scenario: "SUCCESS" },
+          reconciliationFacts: {
+            providerId: this.providerId,
+            providerReference: "pay_fake_001",
+            amountMinor: request.amountMinor,
+            currency: request.currency,
+            canonicalStatus: "SUCCESS",
+            occurredAt: NOW,
+            sourceAttributes: {},
+          },
+          safeMetadata: { simulated: "true" },
+          duplicateResults: [],
+          simulated: true,
+          paymentReference: request.paymentReference,
+          authorizationState: "AUTHORIZED",
+          settlementState: "SETTLED",
+        };
+      },
+    };
 
-  const outcome = await fundWallet(store, fakeProvider, {
-    walletId: "wl_cus_demo",
-    customerId: "cus_demo",
-    amountMinor: 100_000,
-    currency: "NGN",
-    scenario: "SUCCESS",
-    now: NOW,
-    relatedTransactionId: "txn_fake_provider",
+    await createWallet(repos, {
+      id: "wl_fake_provider_test",
+      customerId: "cus_demo",
+      currency: "NGN",
+      openingBalanceMinor: 500_000,
+      now: NOW,
+    });
+
+    const outcome = await fundWallet(repos, fakeProvider, {
+      walletId: "wl_fake_provider_test",
+      customerId: "cus_demo",
+      amountMinor: 100_000,
+      currency: "NGN",
+      scenario: "SUCCESS",
+      now: NOW,
+      relatedTransactionId: "txn_fake_provider",
+    });
+
+    assert.equal(outcome.lifecycle, "SETTLED");
+    assert.equal(outcome.balance.availableMinor, 600_000);
+    assert.equal(outcome.providerResult.providerName, "Fake Payment Provider");
   });
-
-  assert.equal(outcome.lifecycle, "SETTLED");
-  assert.equal(outcome.balance.availableMinor, 600_000);
-  assert.equal(outcome.providerResult.providerName, "Fake Payment Provider");
 });
 
 test("registry payment adapter satisfies the PaymentProvider contract used by the wallet", () => {

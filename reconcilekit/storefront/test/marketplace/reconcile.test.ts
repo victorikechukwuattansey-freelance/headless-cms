@@ -1,8 +1,10 @@
-import { test } from "node:test";
+import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import { executeMarketplaceTransaction } from "../../src/marketplace/transactions.ts";
@@ -16,12 +18,26 @@ import {
   TransactionEventType,
 } from "../../src/marketplace/timeline.ts";
 import { demoDeps } from "./demo-deps.ts";
+import { seedDemoCustomer } from "../db/fixtures.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
 import { buildDemoCatalog } from "../../src/marketplace/catalog.ts";
 import type { ExecuteTransactionInput } from "../../src/marketplace/transactions.ts";
 import type {
   EvidencePack,
   MarketplaceTransaction,
 } from "../../src/marketplace/types.ts";
+
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
+
+beforeEach(async () => {
+  await truncateCommittedState(prisma);
+  await seedDemoCustomer(prisma);
+});
+
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 const NOW = WALLET_FIXED_TIMESTAMP;
 
@@ -75,7 +91,7 @@ async function packFor(
 test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     input({ scenario: "SUCCESS" }),
   );
   const rows = await snapshotRows(store);
@@ -115,7 +131,7 @@ test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
 test("reconcile: FAILED exposes a provider-side discrepancy and money at risk", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     input({ scenario: "FAILED" }),
   );
 
@@ -138,7 +154,7 @@ test("reconcile: FAILED exposes a provider-side discrepancy and money at risk", 
 test("reconcile: TIMEOUT has no provider evidence — held, never fabricated", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     input({ scenario: "TIMEOUT" }),
   );
 
@@ -159,7 +175,7 @@ test("reconcile: TIMEOUT has no provider evidence — held, never fabricated", a
 test("reconcile: UNKNOWN stays unresolved, never convinced either way", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     input({ scenario: "UNKNOWN" }),
   );
 
@@ -177,7 +193,7 @@ test("reconcile: UNKNOWN stays unresolved, never convinced either way", async (t
 test("reconcile: REVERSAL outcome is resolved — no money at risk", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     input({ scenario: "REVERSED" }),
   );
 
@@ -195,7 +211,7 @@ test("reconcile: REVERSAL outcome is resolved — no money at risk", async (t) =
 test("reconcile: declined wallet debit is a clean failure, not a mystery", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     input({ scenario: "SUCCESS", openingBalanceMinor: 0 }),
   );
 
@@ -215,7 +231,7 @@ test("reconcile: declined wallet debit is a clean failure, not a mystery", async
 test("reconcile: evidence pack carries the service snapshot and provider facts", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     input({ scenario: "SUCCESS" }),
   );
 
@@ -240,7 +256,7 @@ test("reconcile: evidence pack carries the service snapshot and provider facts",
 test("reconcile: replay is store-only — no engine re-run, no new rows", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     input({ scenario: "FAILED" }),
   );
 

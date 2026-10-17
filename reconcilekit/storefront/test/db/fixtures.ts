@@ -161,3 +161,11 @@ export async function seedUser(
     update: {},
   });
 }
+
+export async function seedDemoCustomer(
+  tx: Prisma.TransactionClient,
+  customerId: string = "cus_demo",
+): Promise<void> {
+  await seedOrg(tx, "org_test");
+  await seedCustomer(tx, { id: customerId, orgId: "org_test" });
+}

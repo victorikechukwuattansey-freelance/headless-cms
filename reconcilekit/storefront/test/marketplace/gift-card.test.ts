@@ -1,8 +1,10 @@
-import { test } from "node:test";
+import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
@@ -23,11 +25,24 @@ import { notificationsForTruth } from "../../src/marketplace/notifications.ts";
 import { giftCardArtifactId } from "../../src/marketplace/artifacts.ts";
 import { buildDemoCatalog } from "../../src/marketplace/catalog.ts";
 import { demoDeps } from "./demo-deps.ts";
+import { seedDemoCustomer } from "../db/fixtures.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
 import type {
   GiftCardArtifact,
   MarketplaceTransaction,
   ReceiptRecord,
 } from "../../src/marketplace/types.ts";
+
+const prisma = getPrismaClient();
+const repos = buildRepositories(prisma);
+
+before(async () => {
+  await seedDemoCustomer(prisma);
+});
+
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 const NOW = WALLET_FIXED_TIMESTAMP;
 
@@ -73,7 +88,7 @@ async function artifactsFor(
 test("gift card SUCCESS delivers a masked code and snapshots an evidence facet", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     giftInput({ scenario: "SUCCESS" }),
   );
 
@@ -115,7 +130,7 @@ test("gift card SUCCESS delivers a masked code and snapshots an evidence facet",
 test("gift card delivered code material is never written in full", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     giftInput({ scenario: "SUCCESS" }),
   );
   const events = await listTransactionEvents(store, result.transaction.id);
@@ -143,7 +158,7 @@ test("gift card delivered code material is never written in full", async (t) => 
 test("gift card FAILED keeps money moved, flags a provider discrepancy, and notifies the customer", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     giftInput({ scenario: "FAILED" }),
   );
 
@@ -193,7 +208,7 @@ test("gift card FAILED keeps money moved, flags a provider discrepancy, and noti
 test("gift card SUCCESS reconciles clean and issues an evidence-linked receipt", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     giftInput({ scenario: "SUCCESS" }),
   );
 
@@ -240,7 +255,7 @@ test("gift card SUCCESS reconciles clean and issues an evidence-linked receipt",
 test("gift card REFUND_COMPLETED moves the resolution state and notifies refunded", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store),
+    demoDeps(store, repos),
     giftInput({ scenario: "REFUND_COMPLETED" }),
   );
   assert.equal(result.transaction.resolutionStatus, "REFUNDED");
@@ -268,10 +283,16 @@ test("gift card REFUND_COMPLETED moves the resolution state and notifies refunde
 test("gift card replay is idempotent and never duplicates rows or events", async (t) => {
   const store = tempStore(t);
   const input = giftInput({ scenario: "SUCCESS" });
-  const first = await executeMarketplaceTransaction(demoDeps(store), input);
+  const first = await executeMarketplaceTransaction(
+    demoDeps(store, repos),
+    input,
+  );
   const eventsBefore = await listTransactionEvents(store, first.transaction.id);
 
-  const replay = await executeMarketplaceTransaction(demoDeps(store), input);
+  const replay = await executeMarketplaceTransaction(
+    demoDeps(store, repos),
+    input,
+  );
   assert.equal(replay.replayed, true);
   assert.equal(replay.evidence, null);
 
@@ -306,11 +327,7 @@ test("gift card replay is idempotent and never duplicates rows or events", async
     1,
   );
   assert.equal(
-    (await store.readAll("wallet_ledger")).filter(
-      (row) =>
-        (row as { transactionId: string }).transactionId ===
-        first.transaction.id,
-    ).length,
+    (await repos.walletLedger.listByTransaction(first.transaction.id)).length,
     1,
   );
 

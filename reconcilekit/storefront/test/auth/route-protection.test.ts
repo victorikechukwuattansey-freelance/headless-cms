@@ -45,7 +45,7 @@ async function startServer(t: {
           throw new Error("not used");
         },
       },
-      marketplace: demoDeps(store),
+      marketplace: demoDeps(store, repos),
     },
   );
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
