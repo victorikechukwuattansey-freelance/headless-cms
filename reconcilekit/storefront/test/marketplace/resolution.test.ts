@@ -52,7 +52,7 @@ async function runSuccess(
   },
 ): Promise<{ store: JsonlStore; result: ExecuteTransactionResult }> {
   const store = tempStore(t);
-  const result = await executeMarketplaceTransaction(demoDeps(store, repos), {
+  const result = await executeMarketplaceTransaction(demoDeps(repos), {
     customerId: "cus_demo",
     serviceId: "svc_airtime_mtn",
     scenario: "SUCCESS",

@@ -4,7 +4,6 @@ import type {
   SourceAttributes,
 } from "../../../src/domain/model.ts";
 import { reconcileRecords } from "../../../src/application/reconcile-records.ts";
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import type { Repositories } from "../db/repositories/index.ts";
 import { findServiceById } from "./catalog.ts";
 import {
@@ -32,7 +31,6 @@ import type {
 } from "./types.ts";
 
 export interface MarketplaceReconcileDeps {
-  readonly store: JsonlStore;
   readonly repos: Repositories;
   readonly catalog: MarketplaceCatalog;
 }
@@ -132,7 +130,6 @@ export async function reconcileMarketplaceTransaction(
   deps: MarketplaceReconcileDeps,
   input: ReconcileTransactionInput,
 ): Promise<ReconcileTransactionResult> {
-  const store = deps.store;
   const now = input.now ?? new Date().toISOString();
   const transaction = await deps.repos.marketplaceTransactions.readLatestById(
     input.transactionId,

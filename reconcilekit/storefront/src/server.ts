@@ -169,6 +169,7 @@ async function handleRequest(
         req,
         res,
         url,
+        deps.store,
         deps.marketplace,
         deps.repos,
         config,
@@ -625,6 +626,7 @@ async function tryHandleMarketplace(
   req: import("node:http").IncomingMessage,
   res: import("node:http").ServerResponse,
   url: URL,
+  store: JsonlStore,
   deps: MarketplaceTransactionDeps,
   repos: Repositories,
   config: StorefrontConfig,
@@ -632,7 +634,7 @@ async function tryHandleMarketplace(
   const path = url.pathname;
   const method = req.method ?? "GET";
   try {
-    await routeMarketplace(req, res, url, deps, repos, method, config);
+    await routeMarketplace(req, res, url, store, deps, repos, method, config);
     return true;
   } catch (error) {
     writeMarketplaceHtmlError(res, error, path);
@@ -672,6 +674,7 @@ async function routeMarketplace(
   req: import("node:http").IncomingMessage,
   res: import("node:http").ServerResponse,
   url: URL,
+  store: JsonlStore,
   deps: MarketplaceTransactionDeps,
   repos: Repositories,
   method: string,
@@ -740,7 +743,7 @@ async function routeMarketplace(
   // Customer GET pages
   if (method === "GET") {
     if (path === "/" || path === "/dashboard") {
-      const vm = await dashboardViewModel(deps, DEMO_CUSTOMER_ID);
+      const vm = await dashboardViewModel(store, deps, DEMO_CUSTOMER_ID);
       sendHtml(res, renderDashboardPage(vm));
       return;
     }
@@ -804,7 +807,7 @@ async function routeMarketplace(
     const txnMatch = path.match(/^\/transactions\/([^/]+)$/);
     if (txnMatch) {
       const identifier = decodeURIComponent(txnMatch[1]);
-      const vm = await transactionDetailViewModel(deps, identifier);
+      const vm = await transactionDetailViewModel(store, deps, identifier);
       if (vm === null) {
         throw new HttpError(
           404,
@@ -874,7 +877,7 @@ async function routeMarketplace(
       return;
     }
     if (path === "/notifications") {
-      const vm = await notificationsViewModel(deps, DEMO_CUSTOMER_ID);
+      const vm = await notificationsViewModel(store, deps, DEMO_CUSTOMER_ID);
       sendHtml(res, renderNotificationsPage(vm));
       return;
     }
@@ -909,7 +912,7 @@ async function routeMarketplace(
     const adminTxnMatch = path.match(/^\/admin\/transactions\/([^/]+)$/);
     if (adminTxnMatch) {
       const identifier = decodeURIComponent(adminTxnMatch[1]);
-      const vm = await transactionDetailViewModel(deps, identifier);
+      const vm = await transactionDetailViewModel(store, deps, identifier);
       if (vm === null) {
         throw new HttpError(
           404,

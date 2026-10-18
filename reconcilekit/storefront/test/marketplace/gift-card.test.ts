@@ -42,11 +42,8 @@ function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
   return new JsonlStore(dir);
 }
 
-function reconcileDeps(
-  store: JsonlStore,
-  repos: Repositories,
-): MarketplaceReconcileDeps {
-  return { store, repos, catalog: buildDemoCatalog() };
+function reconcileDeps(repos: Repositories): MarketplaceReconcileDeps {
+  return { repos, catalog: buildDemoCatalog() };
 }
 
 function giftInput(
@@ -80,7 +77,7 @@ test("gift card SUCCESS delivers a masked code and snapshots an evidence facet",
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       giftInput({ scenario: "SUCCESS" }),
     );
 
@@ -127,12 +124,12 @@ test("gift card delivered code material is never written in full", async (t) => 
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       giftInput({ scenario: "SUCCESS" }),
     );
     const events = await listTransactionEvents(repos, result.transaction.id);
     const packResult = await reconcileMarketplaceTransaction(
-      reconcileDeps(store, repos),
+      reconcileDeps(repos),
       { transactionId: result.transaction.id, now: NOW },
     );
 
@@ -159,7 +156,7 @@ test("gift card FAILED keeps money moved, flags a provider discrepancy, and noti
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       giftInput({ scenario: "FAILED" }),
     );
 
@@ -190,7 +187,7 @@ test("gift card FAILED keeps money moved, flags a provider discrepancy, and noti
     );
 
     const reconcile = await reconcileMarketplaceTransaction(
-      reconcileDeps(store, repos),
+      reconcileDeps(repos),
       { transactionId: result.transaction.id, now: NOW },
     );
     assert.equal(reconcile.truth.reconcileOutcome, "DISCREPANCY");
@@ -214,12 +211,12 @@ test("gift card SUCCESS reconciles clean and issues an evidence-linked receipt",
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       giftInput({ scenario: "SUCCESS" }),
     );
 
     const reconcile = await reconcileMarketplaceTransaction(
-      reconcileDeps(store, repos),
+      reconcileDeps(repos),
       { transactionId: result.transaction.id, now: NOW },
     );
     assert.equal(reconcile.truth.reconcileOutcome, "MATCH");
@@ -262,7 +259,7 @@ test("gift card REFUND_COMPLETED moves the resolution state and notifies refunde
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       giftInput({ scenario: "REFUND_COMPLETED" }),
     );
     assert.equal(result.transaction.resolutionStatus, "REFUNDED");
@@ -294,19 +291,13 @@ test("gift card replay is idempotent and never duplicates rows or events", async
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const input = giftInput({ scenario: "SUCCESS" });
-    const first = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
-      input,
-    );
+    const first = await executeMarketplaceTransaction(demoDeps(repos), input);
     const eventsBefore = await listTransactionEvents(
       repos,
       first.transaction.id,
     );
 
-    const replay = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
-      input,
-    );
+    const replay = await executeMarketplaceTransaction(demoDeps(repos), input);
     assert.equal(replay.replayed, true);
     assert.equal(replay.evidence, null);
 

@@ -59,7 +59,7 @@ async function startServer(t: {
           throw new Error("Paystack not used in findings tests");
         },
       },
-      marketplace: demoDeps(store, repos),
+      marketplace: demoDeps(repos),
     },
   );
 

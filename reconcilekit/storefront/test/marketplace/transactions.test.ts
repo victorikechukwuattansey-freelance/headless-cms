@@ -98,7 +98,7 @@ test("airtime SUCCESS: quote, debit, provider response, and fulfillment share on
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(deps, input());
 
     assert.equal(result.replayed, false);
@@ -150,7 +150,7 @@ test("airtime FAILED: payment settles, provider declines, fulfillment is failed 
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "FAILED" }),
@@ -183,7 +183,7 @@ test("electricity PENDING: funds are held while the provider is pending", async 
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -228,7 +228,7 @@ test("electricity TIMEOUT: pending hold, no provider facts, escalated for review
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -270,7 +270,7 @@ test("airtime DUPLICATE: a single debit and single fulfillment are preserved", a
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "DUPLICATE" }),
@@ -308,7 +308,7 @@ test("airtime MISMATCH: provider amount differs from the quote and is flagged", 
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "MISMATCH" }),
@@ -337,7 +337,7 @@ test("airtime PARTIAL_SUCCESS: partial fulfillment is flagged, not silently acce
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "PARTIAL_SUCCESS" }),
@@ -364,7 +364,7 @@ test("airtime REVERSED: the reversal restores the wallet balance", async (t) => 
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "REVERSED" }),
@@ -401,7 +401,7 @@ test("airtime REFUND_PENDING: refund is queued and funds remain held", async (t)
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "REFUND_PENDING" }),
@@ -437,7 +437,7 @@ test("airtime REFUND_COMPLETED: refund restores the balance and closes the trans
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "REFUND_COMPLETED" }),
@@ -470,7 +470,7 @@ test("airtime UNKNOWN: unmapped provider status goes to manual review with facts
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "UNKNOWN" }),
@@ -501,7 +501,7 @@ test("gift card SUCCESS: only a masked code preview is delivered with the artifa
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -547,7 +547,7 @@ test("gift card FAILED: no code is exposed and fulfillment fails", async (t) => 
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -583,7 +583,7 @@ test("gift card TIMEOUT: funds held and the gift card is escalated for review", 
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -618,7 +618,7 @@ test("gift card MISMATCH: the artifact carries a risk flag and the amount is fla
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -646,7 +646,7 @@ test("cinema SUCCESS: search, reservation, and issuance leave a two-attempt trai
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -698,7 +698,7 @@ test("cinema PENDING: reservation is held but issuance has not completed", async
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -743,7 +743,7 @@ test("bus SUCCESS: route metadata is captured on the issued artifact", async (t)
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -777,7 +777,7 @@ test("airline PENDING: a large booking holds funds without issuing", async (t) =
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -816,7 +816,7 @@ test("wallet funding then purchase: a pre-funded wallet is reused across transac
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     await createWallet(repos, {
       id: "wl_cus_demo_ngn",
       customerId: "cus_demo",
@@ -861,7 +861,7 @@ test("replay is idempotent: no second debit, no new events, no new writes", asyn
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const first = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "SUCCESS" }),
@@ -900,7 +900,7 @@ test("failed payment guard: an underfunded wallet never reaches the provider", a
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({
@@ -937,7 +937,7 @@ test("unknown service throws TransactionInputError and betting is checkout-block
   const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     await assert.rejects(
       executeMarketplaceTransaction(
         deps,
@@ -955,12 +955,12 @@ test("unknown service throws TransactionInputError and betting is checkout-block
   });
 });
 
-test("marketplaceTransactionFacts resolves the canonical trail from the store", async (t) => {
+test("marketplaceTransactionFacts resolves the canonical trail from repositories", async (t) => {
   const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const deps = demoDeps(store, repos);
+    const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(
       deps,
       input({ scenario: "SUCCESS" }),

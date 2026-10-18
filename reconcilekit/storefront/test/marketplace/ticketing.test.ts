@@ -97,7 +97,7 @@ test("cinema SUCCESS reserves and issues a ticket with a deterministic evidence 
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       cinemaInput({ scenario: "SUCCESS" }),
     );
 
@@ -150,7 +150,7 @@ test("cinema PENDING holds a reservation but never issues the ticket", async (t)
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       cinemaInput({ scenario: "PENDING" }),
     );
 
@@ -187,7 +187,7 @@ test("cinema TIMEOUT produces no reservation and stays in manual review", async 
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       cinemaInput({ scenario: "TIMEOUT" }),
     );
 
@@ -219,17 +219,14 @@ test("searchTicketAvailability enumerates read-only options pre-checkout", async
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const before = await repos.marketplaceTransactions.list();
-    const availabilities = await searchTicketAvailability(
-      demoDeps(store, repos),
-      {
-        serviceId: "svc_cinema_filmhouse",
-        inputs: {
-          venue: "Filmhouse IMAX",
-          movie: "Oppenheimer",
-          screening: "2026-02-01",
-        },
+    const availabilities = await searchTicketAvailability(demoDeps(repos), {
+      serviceId: "svc_cinema_filmhouse",
+      inputs: {
+        venue: "Filmhouse IMAX",
+        movie: "Oppenheimer",
+        screening: "2026-02-01",
       },
-    );
+    });
 
     assert.equal(availabilities.length, 2);
     assert.match(availabilities[0].id, /^avail_.*_1$/);
@@ -258,7 +255,7 @@ test("searchTicketAvailability rejects non-ticketing and unknown services", asyn
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     await assert.rejects(
-      searchTicketAvailability(demoDeps(store, repos), {
+      searchTicketAvailability(demoDeps(repos), {
         serviceId: "svc_giftcard_amazon",
         inputs: {
           brand: "Amazon",
@@ -272,7 +269,7 @@ test("searchTicketAvailability rejects non-ticketing and unknown services", asyn
         error.code === "NOT_TICKETING_SERVICE",
     );
     await assert.rejects(
-      searchTicketAvailability(demoDeps(store, repos), {
+      searchTicketAvailability(demoDeps(repos), {
         serviceId: "svc_none",
         inputs: {},
       }),
@@ -288,7 +285,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       cinemaInput({ scenario: "SUCCESS" }),
     );
     const eventsBefore = await listTransactionEvents(
@@ -298,7 +295,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
     const attemptsBefore = await attemptCount(repos, result.transaction.id);
     assert.equal(attemptsBefore, 2);
 
-    const outcome = await cancelTicketTransaction(demoDeps(store, repos), {
+    const outcome = await cancelTicketTransaction(demoDeps(repos), {
       transactionId: result.transaction.id,
       reason: "Duplicate booking",
       now: NOW,
@@ -366,10 +363,10 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       cinemaInput({ scenario: "SUCCESS" }),
     );
-    const first = await cancelTicketTransaction(demoDeps(store, repos), {
+    const first = await cancelTicketTransaction(demoDeps(repos), {
       transactionId: result.transaction.id,
       reason: "Duplicate booking",
       now: NOW,
@@ -379,7 +376,7 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
       result.transaction.id,
     );
 
-    const replay = await cancelTicketTransaction(demoDeps(store, repos), {
+    const replay = await cancelTicketTransaction(demoDeps(repos), {
       transactionId: result.transaction.id,
       reason: "Duplicate booking",
       now: NOW,
@@ -412,12 +409,12 @@ test("a refunded or reversed transaction is not cancellable", async (t) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const refunded = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       cinemaInput({ scenario: "REFUND_COMPLETED" }),
     );
     assert.equal(refunded.transaction.resolutionStatus, "REFUNDED");
     await assert.rejects(
-      cancelTicketTransaction(demoDeps(store, repos), {
+      cancelTicketTransaction(demoDeps(repos), {
         transactionId: refunded.transaction.id,
         now: NOW,
       }),
@@ -428,12 +425,12 @@ test("a refunded or reversed transaction is not cancellable", async (t) => {
 
     const store2 = tempStore(t);
     const reversed = await executeMarketplaceTransaction(
-      demoDeps(store2, repos),
+      demoDeps(repos),
       cinemaInput({ scenario: "REVERSED" }),
     );
     assert.equal(reversed.transaction.resolutionStatus, "REVERSED");
     await assert.rejects(
-      cancelTicketTransaction(demoDeps(store2, repos), {
+      cancelTicketTransaction(demoDeps(repos), {
         transactionId: reversed.transaction.id,
         now: NOW,
       }),
@@ -450,7 +447,7 @@ test("cancellation guards reject unknown transactions and non-ticket transaction
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     await assert.rejects(
-      cancelTicketTransaction(demoDeps(store, repos), {
+      cancelTicketTransaction(demoDeps(repos), {
         transactionId: "missing_txn",
         now: NOW,
       }),
@@ -460,11 +457,11 @@ test("cancellation guards reject unknown transactions and non-ticket transaction
     );
 
     const airtime = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       airtimeInput({ scenario: "SUCCESS" }),
     );
     await assert.rejects(
-      cancelTicketTransaction(demoDeps(store, repos), {
+      cancelTicketTransaction(demoDeps(repos), {
         transactionId: airtime.transaction.id,
         now: NOW,
       }),
@@ -476,17 +473,16 @@ test("cancellation guards reject unknown transactions and non-ticket transaction
 });
 
 test("cinema SUCCESS reconciles clean and issues an evidence-linked receipt", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       cinemaInput({ scenario: "SUCCESS" }),
     );
 
     const reconcile = await reconcileMarketplaceTransaction(
-      { store, repos, catalog: buildDemoCatalog() },
+      { repos, catalog: buildDemoCatalog() },
       { transactionId: result.transaction.id, now: NOW },
     );
     assert.equal(reconcile.truth.reconcileOutcome, "MATCH");
@@ -517,7 +513,7 @@ test("ticket code material is never written in full", async (t) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     const result = await executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       cinemaInput({ scenario: "SUCCESS" }),
     );
     const events = await listTransactionEvents(repos, result.transaction.id);

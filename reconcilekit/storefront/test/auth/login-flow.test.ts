@@ -45,7 +45,7 @@ async function startServer(t: {
           throw new Error("not used");
         },
       },
-      marketplace: demoDeps(store, repos),
+      marketplace: demoDeps(repos),
     },
   );
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -179,7 +179,7 @@ test("login flow: sessions persist across a server restart", async (t) => {
         throw new Error("not used");
       },
     },
-    marketplace: demoDeps(store, repos),
+    marketplace: demoDeps(repos),
   };
 
   const server1 = createStorefrontServer(config, deps);

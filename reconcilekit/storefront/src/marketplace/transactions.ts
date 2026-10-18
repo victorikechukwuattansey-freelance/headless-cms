@@ -4,7 +4,6 @@ import type {
   SourceAttributes,
 } from "../../../src/domain/model.ts";
 import type { Repositories } from "../db/repositories/index.ts";
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import {
   buildCorrelationId,
   buildCustomerReference,
@@ -79,7 +78,6 @@ import type {
 } from "./types.ts";
 
 export interface MarketplaceTransactionDeps {
-  readonly store: JsonlStore;
   readonly repos: Repositories;
   readonly registry: MarketplaceProviderRegistry;
   readonly catalog: MarketplaceCatalog;
@@ -435,7 +433,6 @@ export async function executeMarketplaceTransaction(
   deps: MarketplaceTransactionDeps,
   input: ExecuteTransactionInput,
 ): Promise<ExecuteTransactionResult> {
-  const store = deps.store;
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
   const service = findServiceById(deps.catalog, input.serviceId);
   if (!service) {
@@ -543,7 +540,6 @@ export async function executeMarketplaceTransaction(
   });
 
   return runPaymentAndFulfillment({
-    store,
     deps,
     service,
     sourceInput: input,
@@ -591,7 +587,6 @@ export function quoteService(
 }
 
 async function runPaymentAndFulfillment(input: {
-  readonly store: JsonlStore;
   readonly deps: MarketplaceTransactionDeps;
   readonly service: MarketplaceService;
   readonly sourceInput: ExecuteTransactionInput;
@@ -606,7 +601,6 @@ async function runPaymentAndFulfillment(input: {
   readonly walletId: string;
 }): Promise<ExecuteTransactionResult> {
   const {
-    store,
     deps,
     service,
     sourceInput,
@@ -773,7 +767,6 @@ async function runPaymentAndFulfillment(input: {
   );
 
   const providerRun = await runProvider({
-    store,
     deps,
     service,
     sourceInput,
@@ -794,7 +787,6 @@ async function runPaymentAndFulfillment(input: {
 }
 
 async function runProvider(run: {
-  readonly store: JsonlStore;
   readonly deps: MarketplaceTransactionDeps;
   readonly service: MarketplaceService;
   readonly sourceInput: ExecuteTransactionInput;
@@ -812,7 +804,6 @@ async function runProvider(run: {
   readonly paymentRecord: MarketplacePaymentRecord;
 }): Promise<ExecuteTransactionResult> {
   const {
-    store,
     service,
     sourceInput,
     quote,
@@ -939,7 +930,6 @@ async function runProvider(run: {
 }
 
 async function runGiftCardFlow(run: {
-  readonly store: JsonlStore;
   readonly deps: MarketplaceTransactionDeps;
   readonly service: MarketplaceService;
   readonly sourceInput: ExecuteTransactionInput;
@@ -957,7 +947,6 @@ async function runGiftCardFlow(run: {
   readonly paymentRecord: MarketplacePaymentRecord;
 }): Promise<ExecuteTransactionResult> {
   const {
-    store,
     service,
     sourceInput,
     quote,
@@ -1147,7 +1136,6 @@ export interface GiftCardRequest {
 }
 
 async function runTicketingFlow(run: {
-  readonly store: JsonlStore;
   readonly deps: MarketplaceTransactionDeps;
   readonly service: MarketplaceService;
   readonly sourceInput: ExecuteTransactionInput;
@@ -1165,7 +1153,6 @@ async function runTicketingFlow(run: {
   readonly paymentRecord: MarketplacePaymentRecord;
 }): Promise<ExecuteTransactionResult> {
   const {
-    store,
     service,
     sourceInput,
     quote,

@@ -266,7 +266,7 @@ test("ensureReceipt reconciles when the evidence pack is missing", async (t) => 
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const result = await executeMarketplaceTransaction(demoDeps(store, repos), {
+    const result = await executeMarketplaceTransaction(demoDeps(repos), {
       customerId: "cus_demo",
       serviceId: "svc_airtime_mtn",
       scenario: "SUCCESS",
@@ -276,10 +276,7 @@ test("ensureReceipt reconciles when the evidence pack is missing", async (t) => 
     const packId = `evp_${result.transaction.id}`;
     assert.equal(await repos.evidencePacks.readLatestById(packId), null);
 
-    const view = await ensureReceipt(
-      demoDeps(store, repos),
-      result.transaction.id,
-    );
+    const view = await ensureReceipt(demoDeps(repos), result.transaction.id);
 
     assert.ok(view !== null);
     assert.equal(view.receipt.transactionId, result.transaction.id);

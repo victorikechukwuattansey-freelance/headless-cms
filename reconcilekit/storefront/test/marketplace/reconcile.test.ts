@@ -45,11 +45,8 @@ function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
   return new JsonlStore(dir);
 }
 
-function reconcileDeps(
-  store: JsonlStore,
-  repos: Repositories,
-): MarketplaceReconcileDeps {
-  return { store, repos, catalog: buildDemoCatalog() };
+function reconcileDeps(repos: Repositories): MarketplaceReconcileDeps {
+  return { repos, catalog: buildDemoCatalog() };
 }
 
 function input(
@@ -89,18 +86,15 @@ async function packFor(
 test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     input({ scenario: "SUCCESS" }),
   );
   const rows = await snapshotRows(store, repos);
 
-  const result = await reconcileMarketplaceTransaction(
-    reconcileDeps(store, repos),
-    {
-      transactionId: executed.transaction.id,
-      now: NOW,
-    },
-  );
+  const result = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    now: NOW,
+  });
 
   assert.equal(result.replayed, false);
   assert.equal(result.truth.reconcileOutcome, "MATCH");
@@ -131,17 +125,14 @@ test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
 test("reconcile: FAILED exposes a provider-side discrepancy and money at risk", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     input({ scenario: "FAILED" }),
   );
 
-  const result = await reconcileMarketplaceTransaction(
-    reconcileDeps(store, repos),
-    {
-      transactionId: executed.transaction.id,
-      now: NOW,
-    },
-  );
+  const result = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    now: NOW,
+  });
 
   assert.equal(result.truth.reconcileOutcome, "DISCREPANCY");
   assert.equal(result.truth.customerStatus, "NEEDS_ATTENTION");
@@ -157,17 +148,14 @@ test("reconcile: FAILED exposes a provider-side discrepancy and money at risk", 
 test("reconcile: TIMEOUT has no provider evidence — held, never fabricated", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     input({ scenario: "TIMEOUT" }),
   );
 
-  const result = await reconcileMarketplaceTransaction(
-    reconcileDeps(store, repos),
-    {
-      transactionId: executed.transaction.id,
-      now: NOW,
-    },
-  );
+  const result = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    now: NOW,
+  });
 
   assert.equal(result.truth.reconcileOutcome, "MISSING_PROVIDER_RECORD");
   assert.equal(result.truth.customerStatus, "PENDING");
@@ -181,17 +169,14 @@ test("reconcile: TIMEOUT has no provider evidence — held, never fabricated", a
 test("reconcile: UNKNOWN stays unresolved, never convinced either way", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     input({ scenario: "UNKNOWN" }),
   );
 
-  const result = await reconcileMarketplaceTransaction(
-    reconcileDeps(store, repos),
-    {
-      transactionId: executed.transaction.id,
-      now: NOW,
-    },
-  );
+  const result = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    now: NOW,
+  });
 
   assert.equal(result.truth.reconcileOutcome, "UNRESOLVED");
   assert.equal(result.truth.customerStatus, "NEEDS_ATTENTION");
@@ -202,17 +187,14 @@ test("reconcile: UNKNOWN stays unresolved, never convinced either way", async (t
 test("reconcile: REVERSAL outcome is resolved — no money at risk", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     input({ scenario: "REVERSED" }),
   );
 
-  const result = await reconcileMarketplaceTransaction(
-    reconcileDeps(store, repos),
-    {
-      transactionId: executed.transaction.id,
-      now: NOW,
-    },
-  );
+  const result = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    now: NOW,
+  });
 
   assert.equal(result.truth.reconcileOutcome, "MATCH");
   assert.equal(result.truth.customerStatus, "REVERSED");
@@ -223,17 +205,14 @@ test("reconcile: REVERSAL outcome is resolved — no money at risk", async (t) =
 test("reconcile: declined wallet debit is a clean failure, not a mystery", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     input({ scenario: "SUCCESS", openingBalanceMinor: 0 }),
   );
 
-  const result = await reconcileMarketplaceTransaction(
-    reconcileDeps(store, repos),
-    {
-      transactionId: executed.transaction.id,
-      now: NOW,
-    },
-  );
+  const result = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    now: NOW,
+  });
 
   assert.equal(result.truth.reconcileOutcome, "MISSING_PROVIDER_RECORD");
   assert.equal(result.truth.customerStatus, "FAILED");
@@ -246,11 +225,11 @@ test("reconcile: declined wallet debit is a clean failure, not a mystery", async
 test("reconcile: evidence pack carries the service snapshot and provider facts", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     input({ scenario: "SUCCESS" }),
   );
 
-  await reconcileMarketplaceTransaction(reconcileDeps(store, repos), {
+  await reconcileMarketplaceTransaction(reconcileDeps(repos), {
     transactionId: executed.transaction.id,
     now: NOW,
   });
@@ -271,30 +250,24 @@ test("reconcile: evidence pack carries the service snapshot and provider facts",
 test("reconcile: replay is store-only — no engine re-run, no new rows", async (t) => {
   const store = tempStore(t);
   const executed = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     input({ scenario: "FAILED" }),
   );
 
-  const first = await reconcileMarketplaceTransaction(
-    reconcileDeps(store, repos),
-    {
-      transactionId: executed.transaction.id,
-      now: NOW,
-    },
-  );
+  const first = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    now: NOW,
+  });
   const eventsAfterFirst = await listTransactionEvents(
     repos,
     executed.transaction.id,
   );
   const rowsAfterFirst = await snapshotRows(store, repos);
 
-  const replay = await reconcileMarketplaceTransaction(
-    reconcileDeps(store, repos),
-    {
-      transactionId: executed.transaction.id,
-      now: NOW,
-    },
-  );
+  const replay = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    now: NOW,
+  });
 
   assert.equal(replay.replayed, true);
   assert.equal(replay.report, null);
@@ -314,7 +287,7 @@ test("reconcile: unknown transaction is a typed error", async (t) => {
   const store = tempStore(t);
   await assert.rejects(
     () =>
-      reconcileMarketplaceTransaction(reconcileDeps(store, repos), {
+      reconcileMarketplaceTransaction(reconcileDeps(repos), {
         transactionId: "mk_txn_missing",
         now: NOW,
       }),

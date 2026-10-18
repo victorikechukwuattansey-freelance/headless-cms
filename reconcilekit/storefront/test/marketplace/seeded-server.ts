@@ -32,7 +32,7 @@ async function createSeededTransaction(
   store: JsonlStore,
   repos: Repositories,
 ): Promise<MarketplaceTransaction> {
-  const deps = demoDeps(store, repos);
+  const deps = demoDeps(repos);
   const NOW = WALLET_FIXED_TIMESTAMP;
 
   const result = await executeMarketplaceTransaction(deps, {
@@ -76,7 +76,7 @@ export async function startSeededServer(): Promise<SeededServerContext> {
           throw new Error("Paystack not used in marketplace tests");
         },
       },
-      marketplace: demoDeps(store, repos),
+      marketplace: demoDeps(repos),
     },
   );
 

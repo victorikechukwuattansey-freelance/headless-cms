@@ -70,7 +70,7 @@ async function startFullySeededServer(t: {
           throw new Error("Paystack not used in marketplace tests");
         },
       },
-      marketplace: demoDeps(store, repos),
+      marketplace: demoDeps(repos),
     },
   );
 

@@ -82,7 +82,7 @@ async function expectValidationError(
   code: string,
 ): Promise<void> {
   await assert.rejects(
-    executeMarketplaceTransaction(demoDeps(store, repos), execInput),
+    executeMarketplaceTransaction(demoDeps(repos), execInput),
     (error: unknown) => {
       assert.ok(
         error instanceof ServiceInputValidationError,
@@ -126,7 +126,7 @@ test("validation boundary: unknown service throws TransactionInputError, betting
   const attemptsBefore = await providerAttempts(repos);
   await assert.rejects(
     executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       txn({ serviceId: "svc_does_not_exist" }),
     ),
     (error: unknown) =>
@@ -136,7 +136,7 @@ test("validation boundary: unknown service throws TransactionInputError, betting
   );
   await assert.rejects(
     executeMarketplaceTransaction(
-      demoDeps(store, repos),
+      demoDeps(repos),
       txn({ serviceId: "svc_betting_examplebet" }),
     ),
     (error: unknown) =>
@@ -149,7 +149,7 @@ test("validation boundary: unknown service throws TransactionInputError, betting
 test("valid airtime input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({ scenario: "SUCCESS" }),
   );
   assert.equal(result.replayed, false);
@@ -226,7 +226,7 @@ test("missing field reports the first schema-order error deterministically", asy
 test("valid data input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_data_mtn",
       inputs: { network: "MTN", recipient: "08030000000", plan: "2GB" },
@@ -251,7 +251,7 @@ test("missing data plan is rejected", async (t) => {
 test("valid electricity input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_electricity_aedc",
       inputs: {
@@ -281,7 +281,7 @@ test("missing electricity meter number is rejected", async (t) => {
 test("valid cable input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_cable_dstv",
       inputs: {
@@ -310,7 +310,7 @@ test("missing cable subscriber number is rejected", async (t) => {
 test("valid internet input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_internet_spectranet",
       inputs: {
@@ -326,7 +326,7 @@ test("valid internet input executes successfully", async (t) => {
 test("valid education input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_education_jamb",
       inputs: {
@@ -342,7 +342,7 @@ test("valid education input executes successfully", async (t) => {
 test("valid gift card input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_giftcard_amazon",
       inputs: {
@@ -395,7 +395,7 @@ test("invalid gift card denomination is rejected", async (t) => {
 test("valid digital voucher input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_voucher_digital",
       inputs: {
@@ -412,7 +412,7 @@ test("valid digital voucher input executes successfully", async (t) => {
 test("valid cinema booking input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_cinema_filmhouse",
       inputs: {
@@ -481,7 +481,7 @@ test("invalid cinema screening DATE is rejected", async (t) => {
 test("valid event booking input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_event_lagos tech fest",
       inputs: {
@@ -498,7 +498,7 @@ test("valid event booking input executes successfully", async (t) => {
 test("valid bus booking input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_bus_lagos_abuja",
       inputs: {
@@ -552,7 +552,7 @@ test("missing bus route (origin) is rejected", async (t) => {
 test("valid airline booking input executes successfully", async (t) => {
   const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
-    demoDeps(store, repos),
+    demoDeps(repos),
     txn({
       serviceId: "svc_airline_los_abv",
       inputs: {

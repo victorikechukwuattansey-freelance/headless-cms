@@ -309,8 +309,8 @@ export async function seedDemoData(
 
   const catalog = buildDemoCatalog();
   const registry = createMockProviderRegistry();
-  const deps: MarketplaceTransactionDeps = { store, repos, registry, catalog };
-  const reconcileDeps: MarketplaceReconcileDeps = { store, catalog, repos };
+  const deps: MarketplaceTransactionDeps = { repos, registry, catalog };
+  const reconcileDeps: MarketplaceReconcileDeps = { catalog, repos };
 
   const entries: SeededDemoEntry[] = [];
   const byName: Record<string, SeededDemoEntry> = {};
