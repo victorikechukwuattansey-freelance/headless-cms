@@ -18,7 +18,6 @@ import {
   type SeededOrderEntry,
 } from "../../src/marketplace/seed.ts";
 import { loginAndGetCookie, withCookie } from "../auth/helpers.ts";
-import type { EvidencePack } from "../../src/marketplace/types.ts";
 
 const prisma = getPrismaClient();
 const repos = buildRepositories(prisma);
@@ -263,7 +262,7 @@ test("3D workflow: read-only — no store mutations across the three pages", asy
   const app = await startServer(t);
   try {
     const before = {
-      packs: await app.store.readAll<EvidencePack>("evidence_packs"),
+      packs: await repos.evidencePacks.list(),
       txns: await repos.marketplaceTransactions.list(),
     };
 
@@ -279,7 +278,7 @@ test("3D workflow: read-only — no store mutations across the three pages", asy
     );
 
     const after = {
-      packs: await app.store.readAll<EvidencePack>("evidence_packs"),
+      packs: await repos.evidencePacks.list(),
       txns: await repos.marketplaceTransactions.list(),
     };
 
@@ -292,7 +291,7 @@ test("3D workflow: read-only — no store mutations across the three pages", asy
 test("3D workflow: does not touch the frozen engine — no new discrepancy codes appear", async (t) => {
   const app = await startServer(t);
   try {
-    const packs = await app.store.readAll<EvidencePack>("evidence_packs");
+    const packs = await repos.evidencePacks.list();
     const codes = new Set<string>();
     for (const pack of packs) {
       for (const code of pack.reconciliation?.codes ?? []) codes.add(code);

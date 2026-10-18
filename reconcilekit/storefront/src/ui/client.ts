@@ -375,8 +375,7 @@ async function truthFor(
   repos: Repositories,
   transaction: MarketplaceTransaction,
 ): Promise<TransactionTruth> {
-  const pack = await store.readLatestById<EvidencePack>(
-    "evidence_packs",
+  const pack = await repos.evidencePacks.readLatestById(
     `evp_${transaction.id}`,
   );
   const facts = await marketplaceTransactionFacts(store, repos, transaction.id);
@@ -637,8 +636,7 @@ export async function transactionDetailViewModel(
   );
   const service = findServiceById(deps.catalog, transaction.serviceId) ?? null;
   const truth = await truthFor(deps.store, deps.repos, transaction);
-  const pack = await deps.store.readLatestById<EvidencePack>(
-    "evidence_packs",
+  const pack = await deps.repos.evidencePacks.readLatestById(
     `evp_${transaction.id}`,
   );
   const evidence = pack === null ? null : redactEvidencePack(pack);
@@ -749,8 +747,7 @@ export async function evidenceViewModel(
     return null;
   }
   const customer = await customerProfile(deps.repos, transaction.customerId);
-  const pack = await deps.store.readLatestById<EvidencePack>(
-    "evidence_packs",
+  const pack = await deps.repos.evidencePacks.readLatestById(
     `evp_${transaction.id}`,
   );
   return {
@@ -773,8 +770,7 @@ export async function ensureReceipt(
     transaction.orderId,
   );
   const service = findServiceById(deps.catalog, transaction.serviceId);
-  const pack = await deps.store.readLatestById<EvidencePack>(
-    "evidence_packs",
+  const pack = await deps.repos.evidencePacks.readLatestById(
     `evp_${transaction.id}`,
   );
   const reconciliationOutcome: Outcome | null =
@@ -1033,9 +1029,7 @@ export async function findingsSummaryViewModel(
   const transactions = latestTransactionMap(
     await deps.repos.marketplaceTransactions.list(),
   );
-  const packs = latestPackMap(
-    await deps.store.readAll<EvidencePack>("evidence_packs"),
-  );
+  const packs = latestPackMap(await deps.repos.evidencePacks.list());
 
   const rows: FindingSummaryRow[] = [];
   for (const pack of packs.values()) {
@@ -1119,8 +1113,7 @@ export async function findingDeterminationViewModel(
   if (transaction === null) {
     return null;
   }
-  const pack = await deps.store.readLatestById<EvidencePack>(
-    "evidence_packs",
+  const pack = await deps.repos.evidencePacks.readLatestById(
     `evp_${transaction.id}`,
   );
   if (pack === null) {
@@ -1169,8 +1162,7 @@ export async function findingEvidenceViewModel(
   if (transaction === null) {
     return null;
   }
-  const pack = await deps.store.readLatestById<EvidencePack>(
-    "evidence_packs",
+  const pack = await deps.repos.evidencePacks.readLatestById(
     `evp_${transaction.id}`,
   );
   if (pack === null) {

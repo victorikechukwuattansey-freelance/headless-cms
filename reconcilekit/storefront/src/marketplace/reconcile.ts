@@ -149,8 +149,7 @@ export async function reconcileMarketplaceTransaction(
     );
   }
 
-  const existingPack = await store.readLatestById<EvidencePack>(
-    "evidence_packs",
+  const existingPack = await deps.repos.evidencePacks.readLatestById(
     evidencePackId(input.transactionId),
   );
   if (existingPack !== null) {
@@ -256,7 +255,7 @@ export async function reconcileMarketplaceTransaction(
     createdAt: now,
     simulated: true,
   };
-  await store.insert("evidence_packs", pack);
+  await deps.repos.evidencePacks.insert(pack);
   await deps.repos.marketplaceTransactions.insert({
     ...transaction,
     reconcileOutcome: truth.reconcileOutcome,

@@ -80,13 +80,10 @@ async function snapshotRows(
 }
 
 async function packFor(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<EvidencePack | null> {
-  return store.readLatestById<EvidencePack>(
-    "evidence_packs",
-    `evp_${transactionId}`,
-  );
+  return repos.evidencePacks.readLatestById(`evp_${transactionId}`);
 }
 
 test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
@@ -258,7 +255,7 @@ test("reconcile: evidence pack carries the service snapshot and provider facts",
     now: NOW,
   });
 
-  const pack = await packFor(store, executed.transaction.id);
+  const pack = await packFor(repos, executed.transaction.id);
   assert.ok(pack !== null);
   assert.equal(pack.id, `evp_${executed.transaction.id}`);
   assert.equal(pack.serviceSnapshot.id, "svc_airtime_mtn");
@@ -309,7 +306,7 @@ test("reconcile: replay is store-only — no engine re-run, no new rows", async 
   );
   assert.deepEqual(await snapshotRows(store, repos), rowsAfterFirst);
 
-  const packs = await store.readAll<EvidencePack>("evidence_packs");
+  const packs = await repos.evidencePacks.list();
   assert.equal(packs.length, 1);
 });
 

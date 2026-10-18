@@ -53,6 +53,13 @@ export class EvidencePackRepository {
     });
     return row === null ? null : fromPrismaPack(row);
   }
+
+  async list(): Promise<EvidencePack[]> {
+    const rows = await this.client.evidencePack.findMany({
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    return rows.map(fromPrismaPack);
+  }
 }
 
 interface EvidencePackRow {
