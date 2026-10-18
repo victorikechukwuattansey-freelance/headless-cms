@@ -504,7 +504,7 @@ test("cinema SUCCESS reconciles clean and issues an evidence-linked receipt", as
     assert.deepEqual(reconcile.pack.mismatchFlags, []);
 
     const issuedAt = result.providerResult?.responseTimestamp ?? null;
-    const receipt = await issueReceipt(store, {
+    const receipt = await issueReceipt(repos, {
       transactionId: result.transaction.id,
       customerReference: result.order.customerReference,
       providerReference: result.providerResult?.providerReference ?? null,

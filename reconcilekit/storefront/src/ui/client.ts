@@ -14,7 +14,7 @@ import type {
   TruthDeterminationInput,
 } from "../marketplace/truth.ts";
 import { redactEvidencePack } from "../marketplace/evidence.ts";
-import { issueReceipt } from "../marketplace/receipts.ts";
+import { issueReceipt, ReceiptError } from "../marketplace/receipts.ts";
 import { listNotificationsByCustomer } from "../marketplace/notifications.ts";
 import { listTransactionEvents } from "../marketplace/timeline.ts";
 import {
@@ -643,8 +643,7 @@ export async function transactionDetailViewModel(
   const providerAttempt = await latestAttempt(deps.repos, transaction.id);
   const events = await listTransactionEvents(deps.repos, transaction.id);
   const artifacts = await artifactsFor(deps.store, transaction.id);
-  const receipt = await deps.store.readLatestById<ReceiptRecord>(
-    "receipts",
+  const receipt = await deps.repos.receipts.readLatestById(
     `rcpt_${transaction.id}`,
   );
   const refund = await deps.store.readLatestById<RefundRecord>(
@@ -770,17 +769,32 @@ export async function ensureReceipt(
     transaction.orderId,
   );
   const service = findServiceById(deps.catalog, transaction.serviceId);
-  const pack = await deps.repos.evidencePacks.readLatestById(
+  let pack = await deps.repos.evidencePacks.readLatestById(
     `evp_${transaction.id}`,
   );
+  if (pack === null) {
+    await reconcileMarketplaceTransaction(
+      { store: deps.store, repos: deps.repos, catalog: deps.catalog },
+      { transactionId: transaction.id },
+    );
+    pack = await deps.repos.evidencePacks.readLatestById(
+      `evp_${transaction.id}`,
+    );
+    if (pack === null) {
+      throw new ReceiptError(
+        "EVIDENCE_PACK_MISSING",
+        `Reconciliation produced no evidence pack for ${transaction.id}`,
+      );
+    }
+  }
   const reconciliationOutcome: Outcome | null =
-    pack?.reconciliation?.outcome ?? transaction.reconcileOutcome ?? null;
-  const receipt = await issueReceipt(deps.store, {
+    pack.reconciliation?.outcome ?? transaction.reconcileOutcome ?? null;
+  const receipt = await issueReceipt(deps.repos, {
     transactionId: transaction.id,
     customerReference: order?.customerReference ?? "",
     providerReference: pack?.providerReference ?? null,
-    amountMinor: order?.quotedAmountMinor ?? pack?.amountMinor ?? 0,
-    currency: order?.currency ?? pack?.currency ?? "NGN",
+    amountMinor: order?.quotedAmountMinor ?? pack.amountMinor,
+    currency: order?.currency ?? pack.currency,
     label: service?.name ?? transaction.serviceId,
     reconciliationOutcome,
   });

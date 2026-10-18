@@ -1,5 +1,5 @@
 import type { Outcome } from "../../../src/domain/model.ts";
-import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import { WALLET_FIXED_TIMESTAMP } from "./wallet.ts";
 import type { ReceiptRecord } from "./types.ts";
 
@@ -13,6 +13,21 @@ import type { ReceiptRecord } from "./types.ts";
  * (`rcpt_<transactionId>` / `evp_<transactionId>`), so no account or
  * reconciliation detail is recomputed here.
  */
+
+/**
+ * Raised when a receipt cannot be issued because a fact it depends on is
+ * missing — e.g. the transaction's evidence pack was never produced. Mirrors
+ * `ResolutionError` / `TicketFlowError`: a typed domain failure, not a bug.
+ */
+export class ReceiptError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "ReceiptError";
+    this.code = code;
+  }
+}
 
 export interface BuildReceiptInput {
   readonly transactionId: string;
@@ -53,12 +68,12 @@ export interface IssueReceiptInput {
  * for the same transaction updates the same record rather than duplicating it.
  */
 export async function issueReceipt(
-  store: JsonlStore,
+  repos: Repositories,
   input: IssueReceiptInput,
 ): Promise<ReceiptRecord> {
   const issuedAt = input.issuedAt ?? WALLET_FIXED_TIMESTAMP;
   const record = buildReceipt({ ...input, issuedAt });
-  await store.insert("receipts", record);
+  await repos.receipts.insert(record);
   return record;
 }
 

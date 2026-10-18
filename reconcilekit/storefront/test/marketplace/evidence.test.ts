@@ -19,9 +19,24 @@ import {
 import type {
   EvidencePack,
   MarketplaceService,
-  ReceiptRecord,
   ReconciliationSnapshot,
 } from "../../src/marketplace/types.ts";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
+import { withRollback } from "../db/helpers.ts";
+import { executeMarketplaceTransaction } from "../../src/marketplace/transactions.ts";
+import { ensureReceipt } from "../../src/ui/client.ts";
+import {
+  seedCustomer,
+  seedDemoCustomer,
+  seedEvidencePack,
+  seedOrder,
+  seedOrg,
+  seedTransaction,
+} from "../db/fixtures.ts";
+import { demoDeps } from "./demo-deps.ts";
+
+const prisma = getPrismaClient();
 
 const NOW = WALLET_FIXED_TIMESTAMP;
 
@@ -200,32 +215,76 @@ test("receipt render is a presentation-safe plain text block", () => {
   assert.equal(text.includes("FULL-MOCK-CODE"), false);
 });
 
-test("issueReceipt persists and is idempotent per transaction", async (t) => {
+test("issueReceipt persists and is idempotent per transaction", async () => {
+  await withRollback(prisma, async (tx) => {
+    await seedOrg(tx, "org_receipt");
+    await seedCustomer(tx, { id: "cus_receipt", orgId: "org_receipt" });
+    await seedOrder(tx, { id: "ord_receipt", customerId: "cus_receipt" });
+    await seedTransaction(tx, {
+      id: "mk_txn_rct_1",
+      orderId: "ord_receipt",
+      customerId: "cus_receipt",
+      reference: "ref_mk_txn_rct_1",
+    });
+    await seedEvidencePack(tx, {
+      id: "evp_mk_txn_rct_1",
+      transactionId: "mk_txn_rct_1",
+      customerReference: "cust_demo",
+      amountMinor: 1000,
+      currency: "NGN",
+    });
+    const repos = buildRepositories(tx);
+
+    const first = await issueReceipt(repos, {
+      transactionId: "mk_txn_rct_1",
+      customerReference: "cust_demo",
+      providerReference: "air_1000",
+      amountMinor: 1000,
+      currency: "NGN",
+      label: "successful_airtime",
+      reconciliationOutcome: "MATCH",
+      issuedAt: NOW,
+    });
+    const second = await issueReceipt(repos, {
+      transactionId: "mk_txn_rct_1",
+      customerReference: "cust_demo",
+      providerReference: "air_1000",
+      amountMinor: 1000,
+      currency: "NGN",
+      label: "successful_airtime",
+      reconciliationOutcome: "MATCH",
+      issuedAt: "2026-01-01T13:00:00.000Z",
+    });
+    assert.equal(first.id, second.id);
+    const latest = await repos.receipts.readLatestById(first.id);
+    assert.equal(latest?.issuedAt, "2026-01-01T13:00:00.000Z");
+  });
+});
+
+test("ensureReceipt reconciles when the evidence pack is missing", async (t) => {
   const store = tempStore(t);
-  const first = await issueReceipt(store, {
-    transactionId: "mk_txn_rct_1",
-    customerReference: "cust_demo",
-    providerReference: "air_1000",
-    amountMinor: 1000,
-    currency: "NGN",
-    label: "successful_airtime",
-    reconciliationOutcome: "MATCH",
-    issuedAt: NOW,
+  await withRollback(prisma, async (tx) => {
+    await seedDemoCustomer(tx);
+    const repos = buildRepositories(tx);
+    const result = await executeMarketplaceTransaction(demoDeps(store, repos), {
+      customerId: "cus_demo",
+      serviceId: "svc_airtime_mtn",
+      scenario: "SUCCESS",
+      inputs: { network: "MTN", recipient: "08030000000", amount: "1000" },
+      now: NOW,
+    });
+    const packId = `evp_${result.transaction.id}`;
+    assert.equal(await repos.evidencePacks.readLatestById(packId), null);
+
+    const view = await ensureReceipt(
+      demoDeps(store, repos),
+      result.transaction.id,
+    );
+
+    assert.ok(view !== null);
+    assert.equal(view.receipt.transactionId, result.transaction.id);
+    assert.equal(view.receipt.evidencePackId, packId);
+    assert.ok((await repos.evidencePacks.readLatestById(packId)) !== null);
+    assert.equal(view.reconciliationOutcome, "MATCH");
   });
-  const second = await issueReceipt(store, {
-    transactionId: "mk_txn_rct_1",
-    customerReference: "cust_demo",
-    providerReference: "air_1000",
-    amountMinor: 1000,
-    currency: "NGN",
-    label: "successful_airtime",
-    reconciliationOutcome: "MATCH",
-    issuedAt: "2026-01-01T13:00:00.000Z",
-  });
-  assert.equal(first.id, second.id);
-  const latest = await store.readLatestById<ReceiptRecord>(
-    "receipts",
-    first.id,
-  );
-  assert.equal(latest?.issuedAt, "2026-01-01T13:00:00.000Z");
 });

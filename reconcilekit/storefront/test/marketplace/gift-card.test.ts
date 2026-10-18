@@ -26,12 +26,9 @@ import { notificationsForTruth } from "../../src/marketplace/notifications.ts";
 import { giftCardArtifactId } from "../../src/marketplace/artifacts.ts";
 import { buildDemoCatalog } from "../../src/marketplace/catalog.ts";
 import { demoDeps } from "./demo-deps.ts";
-import { seedDemoCustomer } from "../db/fixtures.ts";
+import { seedDemoCustomer, seedEvidencePack } from "../db/fixtures.ts";
 import type { Repositories } from "../../src/db/repositories/index.ts";
-import type {
-  GiftCardArtifact,
-  ReceiptRecord,
-} from "../../src/marketplace/types.ts";
+import type { GiftCardArtifact } from "../../src/marketplace/types.ts";
 
 const prisma = getPrismaClient();
 
@@ -246,14 +243,11 @@ test("gift card SUCCESS reconciles clean and issues an evidence-linked receipt",
       reconciliationOutcome: reconcile.truth.reconcileOutcome,
       issuedAt: NOW,
     };
-    const receipt = await issueReceipt(store, receiptInput);
+    const receipt = await issueReceipt(repos, receiptInput);
     assert.equal(receipt.id, `rcpt_${result.transaction.id}`);
     assert.equal(receipt.evidencePackId, `evp_${result.transaction.id}`);
 
-    const stored = await store.readLatestById<ReceiptRecord>(
-      "receipts",
-      receipt.id,
-    );
+    const stored = await repos.receipts.readLatestById(receipt.id);
     assert.ok(stored !== null);
     assert.equal(stored.evidencePackId, receipt.evidencePackId);
 
@@ -357,7 +351,14 @@ test("gift card replay is idempotent and never duplicates rows or events", async
     );
     assert.equal(eventsAfter.length, eventsBefore.length);
 
-    await issueReceipt(store, {
+    await seedEvidencePack(tx, {
+      id: `evp_${first.transaction.id}`,
+      transactionId: first.transaction.id,
+      customerReference: "cus_demo",
+      amountMinor: 2500,
+      currency: "USD",
+    });
+    await issueReceipt(repos, {
       transactionId: first.transaction.id,
       customerReference: "cus_demo",
       providerReference: null,
@@ -366,7 +367,7 @@ test("gift card replay is idempotent and never duplicates rows or events", async
       label: "gift_card_delivery",
       reconciliationOutcome: "MATCH",
     });
-    await issueReceipt(store, {
+    await issueReceipt(repos, {
       transactionId: first.transaction.id,
       customerReference: "cus_demo",
       providerReference: null,
@@ -375,12 +376,10 @@ test("gift card replay is idempotent and never duplicates rows or events", async
       label: "gift_card_delivery",
       reconciliationOutcome: "MATCH",
     });
-    const receiptFirst = await store.readLatestById<ReceiptRecord>(
-      "receipts",
+    const receiptFirst = await repos.receipts.readLatestById(
       `rcpt_${first.transaction.id}`,
     );
-    const receiptReplay = await store.readLatestById<ReceiptRecord>(
-      "receipts",
+    const receiptReplay = await repos.receipts.readLatestById(
       `rcpt_${first.transaction.id}`,
     );
     assert.ok(receiptFirst !== null);
