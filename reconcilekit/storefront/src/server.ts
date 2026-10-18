@@ -1051,7 +1051,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
       const form = await readFormBody(req);
       const reason = stringForm(form, "reason");
       const message = form.get("message") ?? "";
-      await openDispute(deps.store, repos, {
+      await openDispute(repos, {
         transactionId: txn.id,
         reason,
         message,
@@ -1110,7 +1110,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         }
         case "review": {
           const reason = stringForm(form, "reason");
-          await markManualReview(deps.store, repos, {
+          await markManualReview(repos, {
             transactionId: txn.id,
             reason,
           });
@@ -1119,7 +1119,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         }
         case "dispute/resolve": {
           const resolutionNote = stringForm(form, "resolutionNote");
-          await resolveDispute(deps.store, repos, {
+          await resolveDispute(repos, {
             transactionId: txn.id,
             resolutionNote,
           });
@@ -1128,7 +1128,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         }
         case "review/resolve": {
           const operatorNote = stringForm(form, "operatorNote");
-          await resolveManualReview(deps.store, repos, {
+          await resolveManualReview(repos, {
             transactionId: txn.id,
             operatorNote,
           });

@@ -652,12 +652,10 @@ export async function transactionDetailViewModel(
   const reversal = await deps.repos.reversals.readLatestById(
     `rev_${transaction.id}`,
   );
-  const dispute = await deps.store.readLatestById<DisputeRecord>(
-    "disputes",
+  const dispute = await deps.repos.disputes.readLatestById(
     `dsp_${transaction.id}`,
   );
-  const review = await deps.store.readLatestById<ManualReviewRecord>(
-    "manual_reviews",
+  const review = await deps.repos.manualReviews.readLatestById(
     `mr_${transaction.id}`,
   );
   const notifications = (
@@ -826,7 +824,7 @@ export async function disputesViewModel(
   customerId: string,
 ): Promise<DisputesViewModel> {
   const customer = await customerProfile(deps.repos, customerId);
-  const allDisputes = await deps.store.readAll<DisputeRecord>("disputes");
+  const allDisputes = await deps.repos.disputes.list();
   const disputes = allDisputes
     .filter((record) => record.customerId === customerId)
     .slice()

@@ -31,6 +31,13 @@ export class DisputeRepository {
     const row = await this.client.dispute.findUnique({ where: { id } });
     return row === null ? null : fromPrismaDispute(row);
   }
+
+  async list(): Promise<DisputeRecord[]> {
+    const rows = await this.client.dispute.findMany({
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    return rows.map(fromPrismaDispute);
+  }
 }
 
 interface DisputeRow {

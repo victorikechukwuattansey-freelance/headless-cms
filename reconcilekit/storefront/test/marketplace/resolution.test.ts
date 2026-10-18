@@ -208,10 +208,10 @@ test("dispute open moves the transaction to DISPUTED and resolve restores NONE",
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const { store, result } = await runSuccess(t, repos);
+    const { result } = await runSuccess(t, repos);
     const transactionId = result.transaction.id;
 
-    const opened = await openDispute(store, repos, {
+    const opened = await openDispute(repos, {
       transactionId,
       reason: "NOT_RECEIVED",
       message: "Customer never received the airtime.",
@@ -224,7 +224,7 @@ test("dispute open moves the transaction to DISPUTED and resolve restores NONE",
     );
     assert.equal(opened.event.type, TransactionEventType.DisputeOpened);
 
-    const resolved = await resolveDispute(store, repos, {
+    const resolved = await resolveDispute(repos, {
       transactionId,
       resolutionNote: "Airtime confirmed delivered by provider.",
     });
@@ -241,11 +241,11 @@ test("a duplicate open dispute is rejected", async (t) => {
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const { store, result } = await runSuccess(t, repos);
+    const { result } = await runSuccess(t, repos);
     const transactionId = result.transaction.id;
-    await openDispute(store, repos, { transactionId, reason: "FIRST" });
+    await openDispute(repos, { transactionId, reason: "FIRST" });
     await assert.rejects(
-      openDispute(store, repos, { transactionId, reason: "SECOND" }),
+      openDispute(repos, { transactionId, reason: "SECOND" }),
       (error: unknown) =>
         error instanceof ResolutionError && error.code === "DUPLICATE_DISPUTE",
     );
@@ -256,10 +256,10 @@ test("manual review opens and resolves, appending review events", async (t) => {
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const { store, result } = await runSuccess(t, repos);
+    const { result } = await runSuccess(t, repos);
     const transactionId = result.transaction.id;
 
-    const opened = await markManualReview(store, repos, {
+    const opened = await markManualReview(repos, {
       transactionId,
       reason: "UNRESOLVED_RECONCILIATION",
       assignedTo: "ops_demo",
@@ -273,7 +273,7 @@ test("manual review opens and resolves, appending review events", async (t) => {
     );
     assert.equal(opened.event.type, TransactionEventType.ManualReviewRequested);
 
-    const resolved = await resolveManualReview(store, repos, {
+    const resolved = await resolveManualReview(repos, {
       transactionId,
       operatorNote: "Marked refunded after provider confirmation.",
     });
@@ -294,7 +294,7 @@ test("a dispute cannot be opened on a refunded transaction", async (t) => {
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const { store, result } = await runSuccess(t, repos);
+    const { result } = await runSuccess(t, repos);
     const transactionId = result.transaction.id;
     await initiateTransactionRefund(repos, {
       transactionId,
@@ -302,7 +302,7 @@ test("a dispute cannot be opened on a refunded transaction", async (t) => {
     });
     await completeTransactionRefund(repos, { transactionId });
     await assert.rejects(
-      openDispute(store, repos, { transactionId, reason: "LATE" }),
+      openDispute(repos, { transactionId, reason: "LATE" }),
       (error: unknown) =>
         error instanceof ResolutionError &&
         error.code === "INVALID_RESOLUTION_TRANSITION",

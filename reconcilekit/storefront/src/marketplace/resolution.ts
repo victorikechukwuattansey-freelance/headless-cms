@@ -1,4 +1,3 @@
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import type { Repositories } from "../db/repositories/index.ts";
 import { WALLET_FIXED_TIMESTAMP } from "./wallet.ts";
 import {
@@ -424,7 +423,6 @@ export interface DisputeActionOutcome {
  * for the same transaction is rejected.
  */
 export async function openDispute(
-  store: JsonlStore,
   repos: Repositories,
   input: {
     readonly transactionId: string;
@@ -441,8 +439,7 @@ export async function openDispute(
       `cannot open a dispute from resolution state ${transaction.resolutionStatus}`,
     );
   }
-  const existing = await store.readLatestById<DisputeRecord>(
-    "disputes",
+  const existing = await repos.disputes.readLatestById(
     `dsp_${input.transactionId}`,
   );
   if (
@@ -467,7 +464,7 @@ export async function openDispute(
     resolutionNote: null,
     simulated: true,
   };
-  await store.insert("disputes", dispute);
+  await repos.disputes.insert(dispute);
   await updateResolutionStatus(repos, transaction, "DISPUTED", now);
 
   const event = await appendTransactionEvent(repos, {
@@ -498,7 +495,6 @@ export async function openDispute(
  * refund/reversal already changed it (material state is never erased).
  */
 export async function resolveDispute(
-  store: JsonlStore,
   repos: Repositories,
   input: {
     readonly transactionId: string;
@@ -508,8 +504,7 @@ export async function resolveDispute(
 ): Promise<DisputeActionOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
   const transaction = await requireTransaction(repos, input.transactionId);
-  const dispute = await store.readLatestById<DisputeRecord>(
-    "disputes",
+  const dispute = await repos.disputes.readLatestById(
     `dsp_${input.transactionId}`,
   );
   if (
@@ -528,7 +523,7 @@ export async function resolveDispute(
     updatedAt: now,
     resolutionNote: input.resolutionNote,
   };
-  await store.insert("disputes", resolved);
+  await repos.disputes.insert(resolved);
   const nextState: ResolutionStatus =
     transaction.resolutionStatus === "DISPUTED"
       ? "NONE"
@@ -574,7 +569,6 @@ export interface ManualReviewActionOutcome {
  * Rejects closed and in-flight money states. Assigning a reviewer is optional.
  */
 export async function markManualReview(
-  store: JsonlStore,
   repos: Repositories,
   input: {
     readonly transactionId: string;
@@ -591,8 +585,7 @@ export async function markManualReview(
       `cannot flag for manual review from resolution state ${transaction.resolutionStatus}`,
     );
   }
-  const existing = await store.readLatestById<ManualReviewRecord>(
-    "manual_reviews",
+  const existing = await repos.manualReviews.readLatestById(
     `mr_${input.transactionId}`,
   );
   const review: ManualReviewRecord = {
@@ -606,7 +599,7 @@ export async function markManualReview(
     operatorNote: null,
     simulated: true,
   };
-  await store.insert("manual_reviews", review);
+  await repos.manualReviews.insert(review);
   await updateResolutionStatus(repos, transaction, "MANUAL_REVIEW", now);
 
   const event = await appendTransactionEvent(repos, {
@@ -637,7 +630,6 @@ export async function markManualReview(
  * refund/reversal already changed it.
  */
 export async function resolveManualReview(
-  store: JsonlStore,
   repos: Repositories,
   input: {
     readonly transactionId: string;
@@ -647,8 +639,7 @@ export async function resolveManualReview(
 ): Promise<ManualReviewActionOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
   const transaction = await requireTransaction(repos, input.transactionId);
-  const review = await store.readLatestById<ManualReviewRecord>(
-    "manual_reviews",
+  const review = await repos.manualReviews.readLatestById(
     `mr_${input.transactionId}`,
   );
   if (
@@ -666,7 +657,7 @@ export async function resolveManualReview(
     resolvedAt: now,
     operatorNote: input.operatorNote,
   };
-  await store.insert("manual_reviews", resolved);
+  await repos.manualReviews.insert(resolved);
   const nextState: ResolutionStatus =
     transaction.resolutionStatus === "MANUAL_REVIEW"
       ? "NONE"
