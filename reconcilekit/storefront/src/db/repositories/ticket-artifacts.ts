@@ -16,6 +16,8 @@ import type {
  * `listByTransaction` replaces the readAll+filter in client.ts:425,
  * reconcile.ts:100, and transactions.ts:2458 — the id is per-transaction,
  * so the array has at most one element. Ordered by id asc for determinism.
+ * `list()` backs the global committed-row counts; it also orders by id asc,
+ * since neither issued_at nor cancelled_at is guaranteed non-null.
  *
  * No `simulated` column on this table: reconstructed as literal `true` in
  * fromPrisma (schema convention).
@@ -49,6 +51,16 @@ export class TicketArtifactRepository {
     const rows = await this.client.ticketArtifact.findMany({
       where: { transactionId },
       orderBy: { id: "asc" },
+    });
+    return rows.map(fromPrismaTicket);
+  }
+
+  async list(): Promise<TicketArtifact[]> {
+    // No usable non-nullable timestamp on ticket_artifacts (issued_at and
+    // cancelled_at are both nullable), so enumerate by id for a
+    // deterministic order.
+    const rows = await this.client.ticketArtifact.findMany({
+      orderBy: [{ id: "asc" }],
     });
     return rows.map(fromPrismaTicket);
   }

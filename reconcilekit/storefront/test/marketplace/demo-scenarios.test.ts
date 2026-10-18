@@ -76,18 +76,15 @@ async function ledgerFor(
 }
 
 async function artifactsFor(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<{
   readonly tickets: readonly TicketArtifact[];
   readonly giftCards: readonly GiftCardArtifact[];
 }> {
-  const tickets = (
-    await store.readAll<TicketArtifact>("ticket_artifacts")
-  ).filter((artifact) => artifact.transactionId === transactionId);
-  const giftCards = (
-    await store.readAll<GiftCardArtifact>("gift_card_artifacts")
-  ).filter((artifact) => artifact.transactionId === transactionId);
+  const tickets = await repos.ticketArtifacts.listByTransaction(transactionId);
+  const giftCards =
+    await repos.giftCardArtifacts.listByTransaction(transactionId);
   return { tickets, giftCards };
 }
 
@@ -238,7 +235,7 @@ test("provider_mismatch surfaces an amount mismatch", async (t) => {
 });
 
 test("successful_gift_card delivers a masked code", async (t) => {
-  const { store, seeded } = await seededStore(t);
+  const { seeded } = await seededStore(t);
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "successful_gift_card",
   )!;
@@ -247,7 +244,7 @@ test("successful_gift_card delivers a masked code", async (t) => {
   assert.equal(entry.transaction.fulfillmentStatus, "FULFILLED");
   assert.equal(entry.transaction.adminStatus, "HEALTHY");
   assert.equal(outcomeOf(entry.pack), "MATCH");
-  const { giftCards } = await artifactsFor(store, entry.transactionId);
+  const { giftCards } = await artifactsFor(repos, entry.transactionId);
   assert.equal(giftCards.length, 1);
   assert.equal(giftCards[0]?.deliveryStatus, "DELIVERED");
   assert.ok(giftCards[0]?.maskedCodePreview);
@@ -255,7 +252,7 @@ test("successful_gift_card delivers a masked code", async (t) => {
 });
 
 test("gift_card_fulfillment_failure keeps the code masked and records failure", async (t) => {
-  const { store, seeded } = await seededStore(t);
+  const { seeded } = await seededStore(t);
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "gift_card_fulfillment_failure",
   )!;
@@ -264,7 +261,7 @@ test("gift_card_fulfillment_failure keeps the code masked and records failure", 
   assert.equal(entry.transaction.fulfillmentStatus, "FAILED");
   assert.equal(entry.transaction.customerStatus, "NEEDS_ATTENTION");
   assert.equal(entry.transaction.adminStatus, "PROVIDER_FAILED");
-  const { giftCards } = await artifactsFor(store, entry.transactionId);
+  const { giftCards } = await artifactsFor(repos, entry.transactionId);
   assert.equal(giftCards.length, 1);
   assert.equal(giftCards[0]?.deliveryStatus, "FAILED");
   assert.equal(giftCards[0]?.maskedCodePreview, null);
@@ -275,7 +272,7 @@ test("gift_card_fulfillment_failure keeps the code masked and records failure", 
 });
 
 test("cinema_ticket_success issues a masked ticket artifact", async (t) => {
-  const { store, seeded } = await seededStore(t);
+  const { seeded } = await seededStore(t);
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "cinema_ticket_success",
   )!;
@@ -284,7 +281,7 @@ test("cinema_ticket_success issues a masked ticket artifact", async (t) => {
   assert.equal(entry.transaction.adminStatus, "HEALTHY");
   assert.equal(entry.transaction.customerStatus, "CONFIRMED");
   assert.equal(outcomeOf(entry.pack), "MATCH");
-  const { tickets } = await artifactsFor(store, entry.transactionId);
+  const { tickets } = await artifactsFor(repos, entry.transactionId);
   assert.equal(tickets.length, 1);
   assert.equal(tickets[0]?.status, "ISSUED");
   assert.ok(tickets[0]?.maskedCode);
@@ -312,14 +309,14 @@ test("bus_ticket_refund completes a wallet refund", async (t) => {
 });
 
 test("airline_booking_pending is reserved but not issued", async (t) => {
-  const { store, seeded } = await seededStore(t);
+  const { seeded } = await seededStore(t);
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "airline_booking_pending",
   )!;
   const entry = orderEntry(seeded, seeded.byName[spec.name].transactionId);
   assert.equal(entry.transaction.fulfillmentStatus, "PENDING");
   assert.equal(entry.transaction.resolutionStatus, "NONE");
-  const { tickets } = await artifactsFor(store, entry.transactionId);
+  const { tickets } = await artifactsFor(repos, entry.transactionId);
   assert.equal(tickets.length, 1);
   assert.equal(tickets[0]?.status, "PENDING");
   assert.equal(tickets[0]?.maskedCode, null);

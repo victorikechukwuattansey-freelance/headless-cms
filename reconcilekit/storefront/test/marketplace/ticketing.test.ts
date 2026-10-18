@@ -76,13 +76,10 @@ function airtimeInput(
 }
 
 async function ticketLatest(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<TicketArtifact | null> {
-  return store.readLatestById<TicketArtifact>(
-    "ticket_artifacts",
-    ticketArtifactId(transactionId),
-  );
+  return repos.ticketArtifacts.getById(ticketArtifactId(transactionId));
 }
 
 async function attemptCount(
@@ -123,7 +120,7 @@ test("cinema SUCCESS reserves and issues a ticket with a deterministic evidence 
     assert.ok(facet.issuedAt !== null);
     assert.match(facet.maskedCode ?? "", /^TKT-[a-z0-9_]{4}-\*{4}$/);
 
-    const artifact = await ticketLatest(store, result.transaction.id);
+    const artifact = await ticketLatest(repos, result.transaction.id);
     assert.ok(artifact !== null);
     assert.equal(artifact.status, "ISSUED");
     assert.equal(artifact.issueReference, facet.issueReference);
@@ -166,7 +163,7 @@ test("cinema PENDING holds a reservation but never issues the ticket", async (t)
     assert.equal(result.evidence.ticket.status, "PENDING");
     assert.equal(result.evidence.ticket.maskedCode, null);
 
-    const artifact = await ticketLatest(store, result.transaction.id);
+    const artifact = await ticketLatest(repos, result.transaction.id);
     assert.ok(artifact !== null);
     assert.equal(artifact.status, "PENDING");
     assert.ok(artifact.reservationReference !== null);
@@ -198,7 +195,7 @@ test("cinema TIMEOUT produces no reservation and stays in manual review", async 
     assert.equal(result.transaction.adminStatus, "UNRESOLVED");
     assert.equal(result.order.status, "MANUAL_REVIEW");
 
-    const artifact = await ticketLatest(store, result.transaction.id);
+    const artifact = await ticketLatest(repos, result.transaction.id);
     assert.ok(artifact !== null);
     assert.equal(artifact.status, "PENDING");
     assert.equal(artifact.reservationReference, null);
@@ -323,7 +320,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
     assert.equal(outcome.event.type, TransactionEventType.TicketCancelled);
     assert.equal(outcome.event.source, "MARKETPLACE");
 
-    const artifact = await ticketLatest(store, result.transaction.id);
+    const artifact = await ticketLatest(repos, result.transaction.id);
     assert.ok(artifact !== null);
     assert.equal(artifact.status, "CANCELLED");
     assert.equal(artifact.cancelledAt, NOW);
@@ -403,13 +400,16 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
       (await listTransactionEvents(repos, result.transaction.id)).length,
       eventsAfterFirst.length,
     );
-    assert.equal(
-      (await store.readAll("ticket_artifacts")).filter(
-        (row) =>
-          (row as { transactionId: string }).transactionId ===
-          result.transaction.id,
-      ).length,
-      2,
+    const cancelledTickets = await repos.ticketArtifacts.listByTransaction(
+      result.transaction.id,
+    );
+    assert.equal(cancelledTickets.length, 1);
+    assert.equal(cancelledTickets[0]?.status, "CANCELLED");
+    assert.ok(
+      eventsAfterFirst.some(
+        (event) => event.type === TransactionEventType.TicketCancelled,
+      ),
+      "cancellation must be recorded on the timeline",
     );
   });
 });
@@ -531,7 +531,7 @@ test("ticket code material is never written in full", async (t) => {
     const events = await listTransactionEvents(repos, result.transaction.id);
     const serialized = [
       result,
-      await store.readAll("ticket_artifacts"),
+      await repos.ticketArtifacts.listByTransaction(result.transaction.id),
       await repos.marketplaceProviderAttempts.list(),
       events,
     ].map((value) => JSON.stringify(value));

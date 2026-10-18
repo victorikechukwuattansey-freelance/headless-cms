@@ -406,17 +406,15 @@ async function latestAttempt(
 
 async function artifactsFor(
   store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<{
   readonly tickets: readonly TicketArtifact[];
   readonly giftCards: readonly GiftCardArtifact[];
 }> {
-  const tickets = (
-    await store.readAll<TicketArtifact>("ticket_artifacts")
-  ).filter((artifact) => artifact.transactionId === transactionId);
-  const giftCards = (
-    await store.readAll<GiftCardArtifact>("gift_card_artifacts")
-  ).filter((artifact) => artifact.transactionId === transactionId);
+  const tickets = await repos.ticketArtifacts.listByTransaction(transactionId);
+  const giftCards =
+    await repos.giftCardArtifacts.listByTransaction(transactionId);
   return { tickets, giftCards };
 }
 
@@ -642,7 +640,7 @@ export async function transactionDetailViewModel(
   const evidence = pack === null ? null : redactEvidencePack(pack);
   const providerAttempt = await latestAttempt(deps.repos, transaction.id);
   const events = await listTransactionEvents(deps.repos, transaction.id);
-  const artifacts = await artifactsFor(deps.store, transaction.id);
+  const artifacts = await artifactsFor(deps.store, deps.repos, transaction.id);
   const receipt = await deps.repos.receipts.readLatestById(
     `rcpt_${transaction.id}`,
   );

@@ -30,11 +30,9 @@ import type {
   ExecuteTransactionResult,
 } from "../../src/marketplace/transactions.ts";
 import type {
-  GiftCardArtifact,
   MarketplaceOrder,
   MarketplacePaymentRecord,
   ProviderAttempt,
-  TicketArtifact,
   WalletLedgerEntry,
 } from "../../src/marketplace/types.ts";
 
@@ -524,9 +522,9 @@ test("gift card SUCCESS: only a masked code preview is delivered with the artifa
       "COMPLETED",
     );
 
-    const artifacts = (
-      await store.readAll<GiftCardArtifact>("gift_card_artifacts")
-    ).filter((artifact) => artifact.transactionId === result.transaction.id);
+    const artifacts = await repos.giftCardArtifacts.listByTransaction(
+      result.transaction.id,
+    );
     assert.equal(artifacts.length, 1);
     const artifact = artifacts[0];
     assert.equal(artifact.brand, "Amazon");
@@ -567,9 +565,9 @@ test("gift card FAILED: no code is exposed and fulfillment fails", async (t) => 
     assert.equal(result.transaction.fulfillmentStatus, "FAILED");
     assert.equal(result.transaction.adminStatus, "PROVIDER_FAILED");
 
-    const artifacts = (
-      await store.readAll<GiftCardArtifact>("gift_card_artifacts")
-    ).filter((artifact) => artifact.transactionId === result.transaction.id);
+    const artifacts = await repos.giftCardArtifacts.listByTransaction(
+      result.transaction.id,
+    );
     assert.equal(artifacts[0]?.deliveryStatus, "FAILED");
     assert.equal(artifacts[0]?.maskedCodePreview, null);
 
@@ -635,9 +633,9 @@ test("gift card MISMATCH: the artifact carries a risk flag and the amount is fla
       }),
     );
 
-    const artifacts = (
-      await store.readAll<GiftCardArtifact>("gift_card_artifacts")
-    ).filter((artifact) => artifact.transactionId === result.transaction.id);
+    const artifacts = await repos.giftCardArtifacts.listByTransaction(
+      result.transaction.id,
+    );
     assert.deepEqual(artifacts[0]?.riskFlags, ["AMOUNT_DISCREPANCY"]);
     assert.deepEqual(result.facts?.flags, ["AMOUNT_MISMATCH"]);
   });
@@ -672,9 +670,9 @@ test("cinema SUCCESS: search, reservation, and issuance leave a two-attempt trai
     const attemptList = await attemptsFor(repos, result.transaction.id);
     assert.equal(attemptList.length, 2);
 
-    const tickets = (
-      await store.readAll<TicketArtifact>("ticket_artifacts")
-    ).filter((artifact) => artifact.transactionId === result.transaction.id);
+    const tickets = await repos.ticketArtifacts.listByTransaction(
+      result.transaction.id,
+    );
     assert.equal(tickets.length, 1);
     const ticket = tickets[0];
     assert.equal(ticket.ticketKind, "CINEMA");
@@ -722,9 +720,9 @@ test("cinema PENDING: reservation is held but issuance has not completed", async
       "PROVIDER_PENDING",
     );
 
-    const tickets = (
-      await store.readAll<TicketArtifact>("ticket_artifacts")
-    ).filter((artifact) => artifact.transactionId === result.transaction.id);
+    const tickets = await repos.ticketArtifacts.listByTransaction(
+      result.transaction.id,
+    );
     assert.equal(tickets[0]?.status, "PENDING");
     assert.equal(tickets[0]?.issueReference, null);
 
@@ -763,9 +761,9 @@ test("bus SUCCESS: route metadata is captured on the issued artifact", async (t)
 
     assert.equal(result.transaction.fulfillmentStatus, "FULFILLED");
 
-    const tickets = (
-      await store.readAll<TicketArtifact>("ticket_artifacts")
-    ).filter((artifact) => artifact.transactionId === result.transaction.id);
+    const tickets = await repos.ticketArtifacts.listByTransaction(
+      result.transaction.id,
+    );
     assert.equal(tickets[0]?.ticketKind, "BUS");
     assert.equal(tickets[0]?.status, "ISSUED");
     assert.equal(tickets[0]?.routeOrVenue, "Lagos to Abuja");
@@ -801,9 +799,9 @@ test("airline PENDING: a large booking holds funds without issuing", async (t) =
       "PROVIDER_PENDING",
     );
 
-    const tickets = (
-      await store.readAll<TicketArtifact>("ticket_artifacts")
-    ).filter((artifact) => artifact.transactionId === result.transaction.id);
+    const tickets = await repos.ticketArtifacts.listByTransaction(
+      result.transaction.id,
+    );
     assert.equal(tickets[0]?.ticketKind, "AIRLINE");
     assert.equal(tickets[0]?.status, "PENDING");
 

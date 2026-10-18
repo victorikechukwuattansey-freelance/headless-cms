@@ -68,12 +68,10 @@ function giftInput(
 }
 
 async function artifactsFor(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<readonly GiftCardArtifact[]> {
-  return (await store.readAll<GiftCardArtifact>("gift_card_artifacts")).filter(
-    (artifact) => artifact.transactionId === transactionId,
-  );
+  return repos.giftCardArtifacts.listByTransaction(transactionId);
 }
 
 test("gift card SUCCESS delivers a masked code and snapshots an evidence facet", async (t) => {
@@ -91,7 +89,7 @@ test("gift card SUCCESS delivers a masked code and snapshots an evidence facet",
     assert.equal(result.transaction.fulfillmentStatus, "FULFILLED");
     assert.equal(result.transaction.resolutionStatus, "NONE");
 
-    const artists = await artifactsFor(store, result.transaction.id);
+    const artists = await artifactsFor(repos, result.transaction.id);
     assert.equal(artists.length, 1);
     const artifact = artists[0];
     assert.equal(artifact.id, giftCardArtifactId(result.transaction.id));
@@ -140,7 +138,7 @@ test("gift card delivered code material is never written in full", async (t) => 
 
     const serialized = [
       result,
-      await store.readAll("gift_card_artifacts"),
+      await repos.giftCardArtifacts.listByTransaction(result.transaction.id),
       await repos.marketplaceProviderAttempts.list(),
       events,
       packResult.pack,
@@ -171,7 +169,7 @@ test("gift card FAILED keeps money moved, flags a provider discrepancy, and noti
     assert.equal(result.transaction.adminStatus, "PROVIDER_FAILED");
     assert.equal(result.order.status, "FAILED");
 
-    const artifact = (await artifactsFor(store, result.transaction.id))[0];
+    const artifact = (await artifactsFor(repos, result.transaction.id))[0];
     assert.equal(artifact.deliveryStatus, "FAILED");
     assert.equal(artifact.maskedCodePreview, null);
     assert.ok(result.evidence !== null);
@@ -313,11 +311,8 @@ test("gift card replay is idempotent and never duplicates rows or events", async
     assert.equal(replay.evidence, null);
 
     assert.equal(
-      (await store.readAll("gift_card_artifacts")).filter(
-        (row) =>
-          (row as { transactionId: string }).transactionId ===
-          first.transaction.id,
-      ).length,
+      (await repos.giftCardArtifacts.listByTransaction(first.transaction.id))
+        .length,
       1,
     );
     assert.equal(

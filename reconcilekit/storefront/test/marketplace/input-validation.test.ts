@@ -61,12 +61,12 @@ async function orders(repos: Repositories): Promise<number> {
   return (await repos.marketplaceOrders.listByCustomer("cus_demo")).length;
 }
 
-async function ticketArtifacts(store: JsonlStore): Promise<number> {
-  return (await store.readAll("ticket_artifacts")).length;
+async function ticketArtifacts(repos: Repositories): Promise<number> {
+  return (await repos.ticketArtifacts.list()).length;
 }
 
-async function giftArtifacts(store: JsonlStore): Promise<number> {
-  return (await store.readAll("gift_card_artifacts")).length;
+async function giftArtifacts(repos: Repositories): Promise<number> {
+  return (await repos.giftCardArtifacts.list()).length;
 }
 
 async function ledgerEntries(repos: Repositories): Promise<number> {
@@ -640,6 +640,8 @@ test("invalid input never calls the provider", async (t) => {
 test("invalid input never creates fulfillment artifacts or orders", async (t) => {
   const store = tempStore(t);
   const ordersBefore = await orders(repos);
+  const giftArtifactsBefore = await giftArtifacts(repos);
+  const ticketArtifactsBefore = await ticketArtifacts(repos);
   await expectValidationError(
     store,
     txn({
@@ -649,7 +651,7 @@ test("invalid input never creates fulfillment artifacts or orders", async (t) =>
     "denomination",
     "MISSING_REQUIRED",
   );
-  assert.equal(await giftArtifacts(store), 0);
-  assert.equal(await ticketArtifacts(store), 0);
+  assert.equal(await giftArtifacts(repos), giftArtifactsBefore);
+  assert.equal(await ticketArtifacts(repos), ticketArtifactsBefore);
   assert.equal(await orders(repos), ordersBefore);
 });

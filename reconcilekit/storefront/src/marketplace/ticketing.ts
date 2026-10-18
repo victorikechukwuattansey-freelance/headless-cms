@@ -160,8 +160,7 @@ export async function cancelTicketTransaction(
       `transaction ${input.transactionId} not found`,
     );
   }
-  const artifact = await store.readLatestById<TicketArtifact>(
-    "ticket_artifacts",
+  const artifact = await deps.repos.ticketArtifacts.getById(
     ticketArtifactId(input.transactionId),
   );
   if (artifact === null) {
@@ -234,7 +233,7 @@ export async function cancelTicketTransaction(
     cancelledAt: now,
     simulated: true,
   };
-  await store.insert("ticket_artifacts", cancelled);
+  await deps.repos.ticketArtifacts.insert(cancelled);
 
   const event = await appendTransactionEvent(deps.repos, {
     transactionId: transaction.id,

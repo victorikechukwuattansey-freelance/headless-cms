@@ -24,7 +24,6 @@ import {
   WALLET_FUNDING_SCENARIO_NAME,
   demoAliasFor,
 } from "../../src/marketplace/demo-scenarios.ts";
-import type { GiftCardArtifact } from "../../src/marketplace/types.ts";
 
 const prisma = getPrismaClient();
 const repos = buildRepositories(prisma);
@@ -164,9 +163,8 @@ test("gift card surfaces only masked code material", async (t) => {
     const successId = (
       app.seeded.byName["successful_gift_card"] as SeededOrderEntry
     ).transactionId;
-    const successCards = (
-      await app.store.readAll<GiftCardArtifact>("gift_card_artifacts")
-    ).filter((artifact) => artifact.transactionId === successId);
+    const successCards =
+      await repos.giftCardArtifacts.listByTransaction(successId);
     assert.equal(successCards.length, 1);
     const preview = successCards[0]?.maskedCodePreview;
     assert.ok(preview, "successful gift card must carry a masked preview");
@@ -202,9 +200,8 @@ test("gift card surfaces only masked code material", async (t) => {
     const failureId = (
       app.seeded.byName["gift_card_fulfillment_failure"] as SeededOrderEntry
     ).transactionId;
-    const failureCards = (
-      await app.store.readAll<GiftCardArtifact>("gift_card_artifacts")
-    ).filter((artifact) => artifact.transactionId === failureId);
+    const failureCards =
+      await repos.giftCardArtifacts.listByTransaction(failureId);
     assert.equal(failureCards.length, 1);
     assert.equal(
       failureCards[0]?.maskedCodePreview,

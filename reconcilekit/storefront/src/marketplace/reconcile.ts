@@ -94,14 +94,11 @@ async function readEvidenceFacts(
 
 async function readArtifacts(
   store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<readonly (TicketArtifact | GiftCardArtifact)[]> {
-  const ticket = (
-    await store.readAll<TicketArtifact>("ticket_artifacts")
-  ).filter((artifact) => artifact.transactionId === transactionId);
-  const gift = (
-    await store.readAll<GiftCardArtifact>("gift_card_artifacts")
-  ).filter((artifact) => artifact.transactionId === transactionId);
+  const ticket = await repos.ticketArtifacts.listByTransaction(transactionId);
+  const gift = await repos.giftCardArtifacts.listByTransaction(transactionId);
   return [...ticket, ...gift];
 }
 
@@ -186,7 +183,7 @@ export async function reconcileMarketplaceTransaction(
     transaction,
     deps.catalog,
   );
-  const artifacts = await readArtifacts(store, input.transactionId);
+  const artifacts = await readArtifacts(store, deps.repos, input.transactionId);
 
   const context: MarketplaceReconcileContext = {
     facts,

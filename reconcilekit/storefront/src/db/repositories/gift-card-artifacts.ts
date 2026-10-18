@@ -15,6 +15,8 @@ import type {
  *
  * `listByTransaction` replaces the readAll+filter in client.ts:428,
  * reconcile.ts:103, and transactions.ts:2461. Ordered by id asc.
+ * `list()` backs the global committed-row counts; it also orders by id asc,
+ * since this table carries no timestamp column.
  *
  * No `simulated` column: reconstructed as literal `true` in fromPrisma.
  * `riskFlags` is a `String[]` column; copied in on write so the caller's
@@ -42,6 +44,15 @@ export class GiftCardArtifactRepository {
     const rows = await this.client.giftCardArtifact.findMany({
       where: { transactionId },
       orderBy: { id: "asc" },
+    });
+    return rows.map(fromPrismaGiftCard);
+  }
+
+  async list(): Promise<GiftCardArtifact[]> {
+    // No usable timestamp column on gift_card_artifacts at all, so enumerate
+    // by id for a deterministic order.
+    const rows = await this.client.giftCardArtifact.findMany({
+      orderBy: [{ id: "asc" }],
     });
     return rows.map(fromPrismaGiftCard);
   }

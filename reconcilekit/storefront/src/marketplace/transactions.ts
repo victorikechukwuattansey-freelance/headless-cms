@@ -1024,7 +1024,7 @@ async function runGiftCardFlow(run: {
     maskedCodePreview: result.maskedCodePreview,
     riskFlags: result.riskFlags,
   });
-  await store.insert("gift_card_artifacts", artifact);
+  await run.deps.repos.giftCardArtifacts.insert(artifact);
 
   const allEvents = [
     ...events,
@@ -1350,7 +1350,7 @@ async function runTicketingFlow(run: {
     maskedCode: issuedResult?.maskedTicketCode ?? null,
     issuedAt: issuedResult?.responseTimestamp ?? null,
   });
-  await store.insert("ticket_artifacts", artifact);
+  await run.deps.repos.ticketArtifacts.insert(artifact);
 
   const extras = await appendScenarioEvents(run.deps.repos, {
     transactionId,
@@ -2448,12 +2448,10 @@ async function replayResult(
     await repos.marketplaceProviderAttempts.listByTransaction(transactionId);
   const payment = await repos.marketplacePayments.findByOrderId(orderId);
   const events = await listTransactionEvents(repos, transactionId);
-  const ticketArtifacts = (
-    await store.readAll<TicketArtifact>("ticket_artifacts")
-  ).filter((artifact) => artifact.transactionId === transactionId);
-  const giftArtifacts = (
-    await store.readAll<GiftCardArtifact>("gift_card_artifacts")
-  ).filter((artifact) => artifact.transactionId === transactionId);
+  const ticketArtifacts =
+    await repos.ticketArtifacts.listByTransaction(transactionId);
+  const giftArtifacts =
+    await repos.giftCardArtifacts.listByTransaction(transactionId);
   return {
     transaction,
     order: order!,
