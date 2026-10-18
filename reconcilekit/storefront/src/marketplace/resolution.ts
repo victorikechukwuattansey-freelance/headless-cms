@@ -80,12 +80,11 @@ async function requireTransaction(
 }
 
 async function requirePayment(
-  store: JsonlStore,
+  repos: Repositories,
   orderId: string,
 ): Promise<MarketplacePaymentRecord> {
-  const payments = await store.readAll<MarketplacePaymentRecord>("payments");
-  const payment = payments.find((candidate) => candidate.orderId === orderId);
-  if (payment === undefined) {
+  const payment = await repos.marketplacePayments.findByOrderId(orderId);
+  if (payment === null) {
     throw new ResolutionError(
       "PAYMENT_NOT_FOUND",
       `no payment record for order ${orderId}`,
@@ -178,7 +177,7 @@ export async function initiateTransactionRefund(
     );
   }
 
-  const payment = await requirePayment(store, transaction.orderId);
+  const payment = await requirePayment(repos, transaction.orderId);
   const wallet = await requireWallet(repos, transaction.customerId);
   const reason = input.reason ?? "OPERATOR_INITIATED_REFUND";
   const outcome = await initiateRefund(repos, {
@@ -348,7 +347,7 @@ export async function reverseTransactionDebit(
   const transaction = await requireTransaction(repos, input.transactionId);
   assertMoneyOpen(transaction.resolutionStatus, "reverse_debit");
 
-  const payment = await requirePayment(store, transaction.orderId);
+  const payment = await requirePayment(repos, transaction.orderId);
   const wallet = await requireWallet(repos, transaction.customerId);
   const reason = input.reason ?? "OPERATOR_INITIATED_REVERSAL";
   const outcome = await reverseDebit(repos, {

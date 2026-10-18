@@ -452,7 +452,7 @@ test("wallet lifecycle: reconciliation never causes provider side effects", asyn
     const before = {
       paymentEvents: (await store.readAll("payment_events")).length,
       ledger: (await ledgerForWallet(repos, wallet.id)).length,
-      payments: (await store.readAll("payments")).length,
+      payments: (await repos.marketplacePayments.list()).length,
       attempts: (await repos.marketplaceProviderAttempts.list()).length,
       tickets: (await store.readAll("ticket_artifacts")).length,
       gifts: (await store.readAll("gift_card_artifacts")).length,
@@ -467,7 +467,7 @@ test("wallet lifecycle: reconciliation never causes provider side effects", asyn
     const after = {
       paymentEvents: (await store.readAll("payment_events")).length,
       ledger: (await ledgerForWallet(repos, wallet.id)).length,
-      payments: (await store.readAll("payments")).length,
+      payments: (await repos.marketplacePayments.list()).length,
       attempts: (await repos.marketplaceProviderAttempts.list()).length,
       tickets: (await store.readAll("ticket_artifacts")).length,
       gifts: (await store.readAll("gift_card_artifacts")).length,

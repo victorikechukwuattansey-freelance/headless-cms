@@ -6,26 +6,25 @@ import type {
 import type { MarketplacePaymentRecord } from "../../marketplace/types.ts";
 
 /**
- * Marketplace payment repository (kind: marketplace_payments).
+ * Marketplace payment repository (table: marketplace_payments).
  *
- * NOTE — new kind, not yet in StoreKind. This repo targets the
- * `marketplace_payments` Prisma table (created by the addendum migration)
- * while the JSONL store still writes to the legacy `payments` kind. The
- * repoint of the five marketplace call sites (`resolution.ts:87`,
- * `transactions.ts:2400/2455`, `client.ts:654`, plus the write at
- * `transactions.ts:656`) is 5B.1c / 5B.1e. This repo can land now;
- * tests target its own table and the collision is invisible to them.
+ * As of 5B.1c / 1g.4 the marketplace payment path reads and writes here:
+ * `requirePayment` (resolution.ts), the write in `runPaymentAndFulfillment`
+ * and the reads in `marketplaceTransactionFacts` / `replayResult`
+ * (transactions.ts), and `transactionDetailViewModel` (ui/client.ts). The
+ * JSONL store no longer carries marketplace payment records.
  *
  * The legacy `Payment` model is a different shape and keeps the `payments`
- * table. Do not merge the two.
+ * table (and the JSONL `payments` kind) for the Paystack path. Do not merge
+ * the two.
  *
  * `findByOrderId` replaces the readAll + .find pattern used by
  * marketplaceTransactionFacts, replayResult, and requirePayment. It
  * orders by recordedAt desc so the "latest write wins" contract carries
  * over even though `order_id` is not unique in the schema — the write
- * path (`toWalletPaymentRecord` with `orderId ?? transactionId`) produces
- * one row per id, and the id is stable per transaction, so in practice
- * there is at most one row per orderId.
+ * path produces one row per id, and the id is stable per transaction, so
+ * in practice there is at most one row per orderId. Operational hardening
+ * (a uniqueness constraint) is deferred to 5B.1e.
  */
 export type RepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -62,6 +61,13 @@ export class MarketplacePaymentRepository {
       orderBy: { recordedAt: "desc" },
     });
     return row === null ? null : fromPrismaPayment(row);
+  }
+
+  async list(): Promise<MarketplacePaymentRecord[]> {
+    const rows = await this.client.marketplacePayment.findMany({
+      orderBy: [{ recordedAt: "asc" }, { id: "asc" }],
+    });
+    return rows.map(fromPrismaPayment);
   }
 }
 

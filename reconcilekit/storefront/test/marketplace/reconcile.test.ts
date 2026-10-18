@@ -69,7 +69,7 @@ async function snapshotRows(
   store: JsonlStore,
   repos: Repositories,
 ): Promise<readonly string[]> {
-  const payments = await store.readAll("payments");
+  const payments = await repos.marketplacePayments.list();
   const attempts = await repos.marketplaceProviderAttempts.list();
   const walletLedger = await store.readAll("wallet_ledger");
   return [

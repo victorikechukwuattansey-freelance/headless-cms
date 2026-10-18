@@ -82,11 +82,10 @@ async function orderLatest(
 }
 
 async function paymentForOrder(
-  store: JsonlStore,
+  repos: Repositories,
   orderId: string,
 ): Promise<MarketplacePaymentRecord | null> {
-  const payments = await store.readAll<MarketplacePaymentRecord>("payments");
-  return payments.find((payment) => payment.orderId === orderId) ?? null;
+  return repos.marketplacePayments.findByOrderId(orderId);
 }
 
 async function seedDemoCustomer(
@@ -121,7 +120,7 @@ test("airtime SUCCESS: quote, debit, provider response, and fulfillment share on
     assert.equal(result.facts?.providerState, "SUCCESS");
     assert.deepEqual(result.facts?.flags, []);
 
-    const payment = await paymentForOrder(store, result.order.id);
+    const payment = await paymentForOrder(repos, result.order.id);
     assert.equal(payment?.status, "SUCCESS");
     assert.equal(payment?.expectedAmountMinor, 1000);
     assert.equal(payment?.actualAmountMinor, 1000);
@@ -209,7 +208,7 @@ test("electricity PENDING: funds are held while the provider is pending", async 
       "PROVIDER_PENDING",
     );
 
-    const payment = await paymentForOrder(store, result.order.id);
+    const payment = await paymentForOrder(repos, result.order.id);
     assert.equal(payment?.status, "PENDING");
     assert.equal(payment?.actualAmountMinor, null);
 

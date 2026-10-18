@@ -632,11 +632,9 @@ export async function transactionDetailViewModel(
   const order = await deps.repos.marketplaceOrders.readLatestById(
     transaction.orderId,
   );
-  const payments =
-    await deps.store.readAll<MarketplacePaymentRecord>("payments");
-  const payment =
-    payments.find((candidate) => candidate.orderId === transaction.orderId) ??
-    null;
+  const payment = await deps.repos.marketplacePayments.findByOrderId(
+    transaction.orderId,
+  );
   const service = findServiceById(deps.catalog, transaction.serviceId) ?? null;
   const truth = await truthFor(deps.store, deps.repos, transaction);
   const pack = await deps.store.readLatestById<EvidencePack>(

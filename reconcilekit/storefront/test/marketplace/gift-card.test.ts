@@ -333,10 +333,8 @@ test("gift card replay is idempotent and never duplicates rows or events", async
       1,
     );
     assert.equal(
-      (await store.readAll("payments")).filter(
-        (row) =>
-          (row as { transactionId: string }).transactionId ===
-          first.transaction.id,
+      (await repos.marketplacePayments.list()).filter(
+        (row) => row.transactionId === first.transaction.id,
       ).length,
       1,
     );

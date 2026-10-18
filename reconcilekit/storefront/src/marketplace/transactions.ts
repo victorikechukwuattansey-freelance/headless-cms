@@ -652,8 +652,11 @@ async function runPaymentAndFulfillment(input: {
     now,
   });
 
-  const paymentRecord = toWalletPaymentRecord(debit.evidence, orderId);
-  await store.insert("payments", paymentRecord);
+  const paymentRecord = {
+    ...toWalletPaymentRecord(debit.evidence, orderId),
+    customerId: sourceInput.customerId,
+  };
+  await deps.repos.marketplacePayments.insert(paymentRecord);
 
   if (debit.lifecycle === "FAILED") {
     const state = paymentFailureState();
@@ -2391,9 +2394,9 @@ export async function marketplaceTransactionFacts(
   const attempts =
     await repos.marketplaceProviderAttempts.listByTransaction(transactionId);
   const lastAttempt = attempts.at(-1) ?? null;
-  const payments = await store.readAll<MarketplacePaymentRecord>("payments");
-  const payment =
-    payments.find((record) => record.orderId === transaction.orderId) ?? null;
+  const payment = await repos.marketplacePayments.findByOrderId(
+    transaction.orderId,
+  );
   return {
     transactionId: transaction.id,
     orderId: transaction.orderId,
@@ -2443,8 +2446,7 @@ async function replayResult(
   const order = await repos.marketplaceOrders.readLatestById(orderId);
   const attempts =
     await repos.marketplaceProviderAttempts.listByTransaction(transactionId);
-  const payments = await store.readAll<MarketplacePaymentRecord>("payments");
-  const payment = payments.find((record) => record.orderId === orderId) ?? null;
+  const payment = await repos.marketplacePayments.findByOrderId(orderId);
   const events = await listTransactionEvents(store, transactionId);
   const ticketArtifacts = (
     await store.readAll<TicketArtifact>("ticket_artifacts")
