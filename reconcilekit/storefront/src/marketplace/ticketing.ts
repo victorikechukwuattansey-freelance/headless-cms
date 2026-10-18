@@ -1,4 +1,3 @@
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import { buildInputsKey } from "../ids.ts";
 import { findServiceById } from "./catalog.ts";
 import {
@@ -142,7 +141,6 @@ export interface CancelTicketOutcome {
  *   new writes and `replayed: true`.
  */
 export async function cancelTicketTransaction(
-  store: JsonlStore,
   deps: MarketplaceTransactionDeps,
   input: {
     readonly transactionId: string;

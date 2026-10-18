@@ -298,15 +298,11 @@ test("cancel invalidates the ticket without touching money or resolution state",
     const attemptsBefore = await attemptCount(repos, result.transaction.id);
     assert.equal(attemptsBefore, 2);
 
-    const outcome = await cancelTicketTransaction(
-      store,
-      demoDeps(store, repos),
-      {
-        transactionId: result.transaction.id,
-        reason: "Duplicate booking",
-        now: NOW,
-      },
-    );
+    const outcome = await cancelTicketTransaction(demoDeps(store, repos), {
+      transactionId: result.transaction.id,
+      reason: "Duplicate booking",
+      now: NOW,
+    });
 
     assert.equal(outcome.replayed, false);
     assert.match(outcome.cancellationReference, /^cnx_/);
@@ -373,7 +369,7 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
       demoDeps(store, repos),
       cinemaInput({ scenario: "SUCCESS" }),
     );
-    const first = await cancelTicketTransaction(store, demoDeps(store, repos), {
+    const first = await cancelTicketTransaction(demoDeps(store, repos), {
       transactionId: result.transaction.id,
       reason: "Duplicate booking",
       now: NOW,
@@ -383,15 +379,11 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
       result.transaction.id,
     );
 
-    const replay = await cancelTicketTransaction(
-      store,
-      demoDeps(store, repos),
-      {
-        transactionId: result.transaction.id,
-        reason: "Duplicate booking",
-        now: NOW,
-      },
-    );
+    const replay = await cancelTicketTransaction(demoDeps(store, repos), {
+      transactionId: result.transaction.id,
+      reason: "Duplicate booking",
+      now: NOW,
+    });
 
     assert.equal(replay.replayed, true);
     assert.equal(replay.event, null);
@@ -425,7 +417,7 @@ test("a refunded or reversed transaction is not cancellable", async (t) => {
     );
     assert.equal(refunded.transaction.resolutionStatus, "REFUNDED");
     await assert.rejects(
-      cancelTicketTransaction(store, demoDeps(store, repos), {
+      cancelTicketTransaction(demoDeps(store, repos), {
         transactionId: refunded.transaction.id,
         now: NOW,
       }),
@@ -441,7 +433,7 @@ test("a refunded or reversed transaction is not cancellable", async (t) => {
     );
     assert.equal(reversed.transaction.resolutionStatus, "REVERSED");
     await assert.rejects(
-      cancelTicketTransaction(store2, demoDeps(store2, repos), {
+      cancelTicketTransaction(demoDeps(store2, repos), {
         transactionId: reversed.transaction.id,
         now: NOW,
       }),
@@ -458,7 +450,7 @@ test("cancellation guards reject unknown transactions and non-ticket transaction
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
     await assert.rejects(
-      cancelTicketTransaction(store, demoDeps(store, repos), {
+      cancelTicketTransaction(demoDeps(store, repos), {
         transactionId: "missing_txn",
         now: NOW,
       }),
@@ -472,7 +464,7 @@ test("cancellation guards reject unknown transactions and non-ticket transaction
       airtimeInput({ scenario: "SUCCESS" }),
     );
     await assert.rejects(
-      cancelTicketTransaction(store, demoDeps(store, repos), {
+      cancelTicketTransaction(demoDeps(store, repos), {
         transactionId: airtime.transaction.id,
         now: NOW,
       }),

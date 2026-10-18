@@ -1102,7 +1102,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
           return;
         }
         case "cancel-ticket": {
-          await cancelTicketTransaction(deps.store, deps, {
+          await cancelTicketTransaction(deps, {
             transactionId: txn.id,
           });
           redirect(res, 303, `/admin/transactions/${txn.reference}`);

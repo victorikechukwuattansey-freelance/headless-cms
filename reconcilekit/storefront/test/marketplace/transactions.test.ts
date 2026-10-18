@@ -967,7 +967,6 @@ test("marketplaceTransactionFacts resolves the canonical trail from the store", 
     );
 
     const facts = await marketplaceTransactionFacts(
-      store,
       repos,
       result.transaction.id,
     );

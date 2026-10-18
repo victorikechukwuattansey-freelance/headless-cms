@@ -465,7 +465,7 @@ export async function executeMarketplaceTransaction(
   const existing =
     await deps.repos.marketplaceTransactions.readLatestById(transactionId);
   if (existing !== null) {
-    return replayResult(store, deps.repos, existing, orderId, transactionId);
+    return replayResult(deps.repos, existing, orderId, transactionId);
   }
 
   const quote = quoteService(deps.catalog, service);
@@ -894,7 +894,7 @@ async function runProvider(run: {
     now,
   });
 
-  const withResolution = await applyResolutionToEvents(store, run.deps.repos, {
+  const withResolution = await applyResolutionToEvents(run.deps.repos, {
     transactionId,
     scenario,
     result,
@@ -904,7 +904,7 @@ async function runProvider(run: {
     now,
   });
 
-  const terminal = await finalizeTransaction(store, run.deps.repos, {
+  const terminal = await finalizeTransaction(run.deps.repos, {
     transactionId,
     orderId,
     customerId: sourceInput.customerId,
@@ -1090,7 +1090,7 @@ async function runGiftCardFlow(run: {
     now,
   });
 
-  const withResolution = await applyResolutionToEvents(store, run.deps.repos, {
+  const withResolution = await applyResolutionToEvents(run.deps.repos, {
     transactionId,
     scenario,
     result,
@@ -1100,7 +1100,7 @@ async function runGiftCardFlow(run: {
     now,
   });
 
-  const terminal = await finalizeTransaction(store, run.deps.repos, {
+  const terminal = await finalizeTransaction(run.deps.repos, {
     transactionId,
     orderId,
     customerId: sourceInput.customerId,
@@ -1361,7 +1361,7 @@ async function runTicketingFlow(run: {
     now,
   });
 
-  const withResolution = await applyResolutionToEvents(store, run.deps.repos, {
+  const withResolution = await applyResolutionToEvents(run.deps.repos, {
     transactionId,
     scenario,
     result: issuedResult ?? reserveResult,
@@ -1371,7 +1371,7 @@ async function runTicketingFlow(run: {
     now,
   });
 
-  const terminal = await finalizeTransaction(store, run.deps.repos, {
+  const terminal = await finalizeTransaction(run.deps.repos, {
     transactionId,
     orderId,
     customerId: sourceInput.customerId,
@@ -1411,7 +1411,6 @@ async function runTicketingFlow(run: {
 }
 
 async function applyResolutionToEvents(
-  store: JsonlStore,
   repos: Repositories,
   input: {
     readonly transactionId: string;
@@ -1694,7 +1693,6 @@ async function appendScenarioEvents(
 }
 
 async function finalizeTransaction(
-  store: JsonlStore,
   repos: Repositories,
   input: {
     readonly transactionId: string;
@@ -2382,7 +2380,6 @@ export function factFlags(
 }
 
 export async function marketplaceTransactionFacts(
-  store: JsonlStore,
   repos: Repositories,
   transactionId: string,
 ): Promise<TransactionReconciliationFacts | null> {
@@ -2437,7 +2434,6 @@ export async function marketplaceTransactionFacts(
 }
 
 async function replayResult(
-  store: JsonlStore,
   repos: Repositories,
   transaction: MarketplaceTransaction,
   orderId: string,

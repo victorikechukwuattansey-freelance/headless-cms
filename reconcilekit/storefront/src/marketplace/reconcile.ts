@@ -93,7 +93,6 @@ async function readEvidenceFacts(
 }
 
 async function readArtifacts(
-  store: JsonlStore,
   repos: Repositories,
   transactionId: string,
 ): Promise<readonly (TicketArtifact | GiftCardArtifact)[]> {
@@ -103,12 +102,11 @@ async function readArtifacts(
 }
 
 async function replayTruth(
-  store: JsonlStore,
   repos: Repositories,
   transaction: MarketplaceTransaction,
   pack: EvidencePack,
 ): Promise<TransactionTruth> {
-  const facts = await marketplaceTransactionFacts(store, repos, transaction.id);
+  const facts = await marketplaceTransactionFacts(repos, transaction.id);
   return buildTransactionTruth({
     transactionId: transaction.id,
     outcome:
@@ -150,12 +148,7 @@ export async function reconcileMarketplaceTransaction(
     evidencePackId(input.transactionId),
   );
   if (existingPack !== null) {
-    const truth = await replayTruth(
-      store,
-      deps.repos,
-      transaction,
-      existingPack,
-    );
+    const truth = await replayTruth(deps.repos, transaction, existingPack);
     return {
       transactionId: input.transactionId,
       truth,
@@ -167,7 +160,6 @@ export async function reconcileMarketplaceTransaction(
   }
 
   const facts = await marketplaceTransactionFacts(
-    store,
     deps.repos,
     input.transactionId,
   );
@@ -183,7 +175,7 @@ export async function reconcileMarketplaceTransaction(
     transaction,
     deps.catalog,
   );
-  const artifacts = await readArtifacts(store, deps.repos, input.transactionId);
+  const artifacts = await readArtifacts(deps.repos, input.transactionId);
 
   const context: MarketplaceReconcileContext = {
     facts,

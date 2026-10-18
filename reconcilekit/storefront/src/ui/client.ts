@@ -1,4 +1,3 @@
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import type { Outcome, ReconciliationCode } from "../../../src/domain/model.ts";
 import {
   executeMarketplaceTransaction,
@@ -371,14 +370,13 @@ export async function findTransactionByIdentifier(
 }
 
 async function truthFor(
-  store: JsonlStore,
   repos: Repositories,
   transaction: MarketplaceTransaction,
 ): Promise<TransactionTruth> {
   const pack = await repos.evidencePacks.readLatestById(
     `evp_${transaction.id}`,
   );
-  const facts = await marketplaceTransactionFacts(store, repos, transaction.id);
+  const facts = await marketplaceTransactionFacts(repos, transaction.id);
   const input: TruthDeterminationInput = {
     transactionId: transaction.id,
     outcome:
@@ -405,7 +403,6 @@ async function latestAttempt(
 }
 
 async function artifactsFor(
-  store: JsonlStore,
   repos: Repositories,
   transactionId: string,
 ): Promise<{
@@ -494,7 +491,7 @@ async function buildTransactionRows(
   for (const transaction of await latestTransactions(deps.repos)) {
     const service = findServiceById(deps.catalog, transaction.serviceId);
     const amounts = await orderAmounts(deps.repos, transaction.orderId);
-    const truth = await truthFor(deps.store, deps.repos, transaction);
+    const truth = await truthFor(deps.repos, transaction);
     rows.push(
       transactionRow(
         transaction,
@@ -633,14 +630,14 @@ export async function transactionDetailViewModel(
     transaction.orderId,
   );
   const service = findServiceById(deps.catalog, transaction.serviceId) ?? null;
-  const truth = await truthFor(deps.store, deps.repos, transaction);
+  const truth = await truthFor(deps.repos, transaction);
   const pack = await deps.repos.evidencePacks.readLatestById(
     `evp_${transaction.id}`,
   );
   const evidence = pack === null ? null : redactEvidencePack(pack);
   const providerAttempt = await latestAttempt(deps.repos, transaction.id);
   const events = await listTransactionEvents(deps.repos, transaction.id);
-  const artifacts = await artifactsFor(deps.store, deps.repos, transaction.id);
+  const artifacts = await artifactsFor(deps.repos, transaction.id);
   const receipt = await deps.repos.receipts.readLatestById(
     `rcpt_${transaction.id}`,
   );
@@ -659,11 +656,7 @@ export async function transactionDetailViewModel(
   const notifications = (
     await listNotificationsByCustomer(deps.store, transaction.customerId)
   ).filter((record) => record.transactionId === transaction.id);
-  const facts = await marketplaceTransactionFacts(
-    deps.store,
-    deps.repos,
-    transaction.id,
-  );
+  const facts = await marketplaceTransactionFacts(deps.repos, transaction.id);
   const ledger = await deps.repos.walletLedger.listByTransaction(
     transaction.id,
   );
@@ -1128,11 +1121,7 @@ export async function findingDeterminationViewModel(
     return null;
   }
   const customer = await customerProfile(deps.repos, transaction.customerId);
-  const facts = await marketplaceTransactionFacts(
-    deps.store,
-    deps.repos,
-    transaction.id,
-  );
+  const facts = await marketplaceTransactionFacts(deps.repos, transaction.id);
   const outcome = pack.reconciliation?.outcome ?? "UNRESOLVED";
   const codes = findingCodesFor(pack);
   const notes = pack.reconciliation?.notes ?? [];
