@@ -53,8 +53,8 @@ function txn(
   };
 }
 
-async function providerAttempts(store: JsonlStore): Promise<number> {
-  return (await store.readAll("marketplace_provider_attempts")).length;
+async function providerAttempts(repos: Repositories): Promise<number> {
+  return (await repos.marketplaceProviderAttempts.list()).length;
 }
 
 async function orders(repos: Repositories): Promise<number> {
@@ -123,6 +123,7 @@ test("generic validator: missing required fields and SELECT membership are deter
 test("validation boundary: unknown service throws TransactionInputError, betting compliance blocks before validation", async (t) => {
   const store = tempStore(t);
   const ordersBefore = await orders(repos);
+  const attemptsBefore = await providerAttempts(repos);
   await assert.rejects(
     executeMarketplaceTransaction(
       demoDeps(store, repos),
@@ -141,7 +142,7 @@ test("validation boundary: unknown service throws TransactionInputError, betting
     (error: unknown) =>
       error instanceof Error && !(error instanceof ServiceInputValidationError),
   );
-  assert.equal(await providerAttempts(store), 0);
+  assert.equal(await providerAttempts(repos), attemptsBefore);
   assert.equal(await orders(repos), ordersBefore);
 });
 
@@ -160,6 +161,7 @@ test("missing airtime recipient is rejected before any write", async (t) => {
   const store = tempStore(t);
   const ledgerBefore = await ledgerEntries(repos);
   const ordersBefore = await orders(repos);
+  const attemptsBefore = await providerAttempts(repos);
   await expectValidationError(
     store,
     txn({
@@ -168,7 +170,7 @@ test("missing airtime recipient is rejected before any write", async (t) => {
     "recipient",
     "MISSING_REQUIRED",
   );
-  assert.equal(await providerAttempts(store), 0);
+  assert.equal(await providerAttempts(repos), attemptsBefore);
   assert.equal(await orders(repos), ordersBefore);
   assert.equal(await ledgerEntries(repos), ledgerBefore);
 });
@@ -617,6 +619,7 @@ test("invalid input never debits the wallet", async (t) => {
 
 test("invalid input never calls the provider", async (t) => {
   const store = tempStore(t);
+  const attemptsBefore = await providerAttempts(repos);
   await expectValidationError(
     store,
     txn({
@@ -631,7 +634,7 @@ test("invalid input never calls the provider", async (t) => {
     "flight",
     "MISSING_REQUIRED",
   );
-  assert.equal(await providerAttempts(store), 0);
+  assert.equal(await providerAttempts(repos), attemptsBefore);
 });
 
 test("invalid input never creates fulfillment artifacts or orders", async (t) => {

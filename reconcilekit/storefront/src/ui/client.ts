@@ -397,12 +397,11 @@ async function truthFor(
 }
 
 async function latestAttempt(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<ProviderAttempt | null> {
-  const attempts = (
-    await store.readAll<ProviderAttempt>("marketplace_provider_attempts")
-  ).filter((attempt) => attempt.transactionId === transactionId);
+  const attempts =
+    await repos.marketplaceProviderAttempts.listByTransaction(transactionId);
   return attempts.at(-1) ?? null;
 }
 
@@ -645,7 +644,7 @@ export async function transactionDetailViewModel(
     `evp_${transaction.id}`,
   );
   const evidence = pack === null ? null : redactEvidencePack(pack);
-  const providerAttempt = await latestAttempt(deps.store, transaction.id);
+  const providerAttempt = await latestAttempt(deps.repos, transaction.id);
   const events = await listTransactionEvents(deps.store, transaction.id);
   const artifacts = await artifactsFor(deps.store, transaction.id);
   const receipt = await deps.store.readLatestById<ReceiptRecord>(

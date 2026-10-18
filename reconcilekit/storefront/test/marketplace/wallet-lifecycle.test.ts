@@ -412,12 +412,9 @@ test("wallet lifecycle: a failed fulfillment keeps payment/ledger truth separate
     const matched = merchantResult(report, result.transaction.id);
     assert.equal(matched?.outcome, "MATCH");
 
-    const attempts = (
-      await store.readAll<{
-        transactionId: string;
-        canonicalStatus: string | null;
-      }>("marketplace_provider_attempts")
-    ).filter((attempt) => attempt.transactionId === result.transaction.id);
+    const attempts = await repos.marketplaceProviderAttempts.listByTransaction(
+      result.transaction.id,
+    );
     assert.equal(attempts.at(-1)?.canonicalStatus, "FAILED");
 
     const truth = buildTransactionTruth({
@@ -456,7 +453,7 @@ test("wallet lifecycle: reconciliation never causes provider side effects", asyn
       paymentEvents: (await store.readAll("payment_events")).length,
       ledger: (await ledgerForWallet(repos, wallet.id)).length,
       payments: (await store.readAll("payments")).length,
-      attempts: (await store.readAll("marketplace_provider_attempts")).length,
+      attempts: (await repos.marketplaceProviderAttempts.list()).length,
       tickets: (await store.readAll("ticket_artifacts")).length,
       gifts: (await store.readAll("gift_card_artifacts")).length,
       transactions: (await repos.marketplaceTransactions.list()).length,
@@ -471,7 +468,7 @@ test("wallet lifecycle: reconciliation never causes provider side effects", asyn
       paymentEvents: (await store.readAll("payment_events")).length,
       ledger: (await ledgerForWallet(repos, wallet.id)).length,
       payments: (await store.readAll("payments")).length,
-      attempts: (await store.readAll("marketplace_provider_attempts")).length,
+      attempts: (await repos.marketplaceProviderAttempts.list()).length,
       tickets: (await store.readAll("ticket_artifacts")).length,
       gifts: (await store.readAll("gift_card_artifacts")).length,
       transactions: (await repos.marketplaceTransactions.list()).length,

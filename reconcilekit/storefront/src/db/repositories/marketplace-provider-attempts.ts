@@ -49,6 +49,13 @@ export class MarketplaceProviderAttemptRepository {
     });
     return rows.map(fromPrismaAttempt);
   }
+
+  async list(): Promise<ProviderAttempt[]> {
+    const rows = await this.client.marketplaceProviderAttempt.findMany({
+      orderBy: [{ attemptedAt: "asc" }, { id: "asc" }],
+    });
+    return rows.map(fromPrismaAttempt);
+  }
 }
 
 interface MarketplaceProviderAttemptRow {

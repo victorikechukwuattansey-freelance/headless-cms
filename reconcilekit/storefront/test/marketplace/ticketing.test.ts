@@ -4,7 +4,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
-import { buildRepositories } from "../../src/db/repositories/index.ts";
+import {
+  buildRepositories,
+  type Repositories,
+} from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
@@ -83,11 +86,11 @@ async function ticketLatest(
 }
 
 async function attemptCount(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<number> {
-  return (await store.readAll("marketplace_provider_attempts")).filter(
-    (row) => (row as { transactionId: string }).transactionId === transactionId,
+  return (
+    await repos.marketplaceProviderAttempts.listByTransaction(transactionId)
   ).length;
 }
 
@@ -295,7 +298,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
       store,
       result.transaction.id,
     );
-    const attemptsBefore = await attemptCount(store, result.transaction.id);
+    const attemptsBefore = await attemptCount(repos, result.transaction.id);
     assert.equal(attemptsBefore, 2);
 
     const outcome = await cancelTicketTransaction(
@@ -334,7 +337,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
     );
 
     assert.equal(
-      await attemptCount(store, result.transaction.id),
+      await attemptCount(repos, result.transaction.id),
       attemptsBefore,
       "provider cancellation must not create a reconcile-attempt row",
     );
@@ -529,7 +532,7 @@ test("ticket code material is never written in full", async (t) => {
     const serialized = [
       result,
       await store.readAll("ticket_artifacts"),
-      await store.readAll("marketplace_provider_attempts"),
+      await repos.marketplaceProviderAttempts.list(),
       events,
     ].map((value) => JSON.stringify(value));
 

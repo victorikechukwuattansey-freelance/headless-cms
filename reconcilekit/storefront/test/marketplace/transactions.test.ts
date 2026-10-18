@@ -61,12 +61,10 @@ function input(
 }
 
 async function attemptsFor(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<readonly ProviderAttempt[]> {
-  return (
-    await store.readAll<ProviderAttempt>("marketplace_provider_attempts")
-  ).filter((attempt) => attempt.transactionId === transactionId);
+  return repos.marketplaceProviderAttempts.listByTransaction(transactionId);
 }
 
 async function ledgerFor(
@@ -128,7 +126,7 @@ test("airtime SUCCESS: quote, debit, provider response, and fulfillment share on
     assert.equal(payment?.expectedAmountMinor, 1000);
     assert.equal(payment?.actualAmountMinor, 1000);
 
-    const attemptList = await attemptsFor(store, result.transaction.id);
+    const attemptList = await attemptsFor(repos, result.transaction.id);
     assert.equal(attemptList.length, 1);
     assert.equal(attemptList[0]?.status, "SUCCESS");
     assert.equal(attemptList[0]?.canonicalStatus, "SUCCESS");
@@ -167,7 +165,7 @@ test("airtime FAILED: payment settles, provider declines, fulfillment is failed 
     assert.equal((await orderLatest(repos, result.order.id))?.status, "FAILED");
     assert.deepEqual(result.facts?.flags, ["STATUS_MISMATCH"]);
 
-    const attemptList = await attemptsFor(store, result.transaction.id);
+    const attemptList = await attemptsFor(repos, result.transaction.id);
     assert.equal(attemptList.length, 1);
     assert.equal(attemptList[0]?.status, "FAILED");
     assert.equal(attemptList[0]?.canonicalStatus, "FAILED");
@@ -256,7 +254,7 @@ test("electricity TIMEOUT: pending hold, no provider facts, escalated for review
       "MANUAL_REVIEW",
     );
 
-    const attemptList = await attemptsFor(store, result.transaction.id);
+    const attemptList = await attemptsFor(repos, result.transaction.id);
     assert.equal(attemptList[0]?.status, "TIMEOUT");
     assert.equal(attemptList[0]?.canonicalStatus, "UNKNOWN");
     assert.equal(attemptList[0]?.providerReference, null);
@@ -289,7 +287,7 @@ test("airtime DUPLICATE: a single debit and single fulfillment are preserved", a
     );
     assert.deepEqual(result.facts?.flags, ["DUPLICATE_PROVIDER_RECORD"]);
 
-    const attemptList = await attemptsFor(store, result.transaction.id);
+    const attemptList = await attemptsFor(repos, result.transaction.id);
     assert.equal(attemptList.length, 1);
     assert.equal(attemptList[0]?.status, "DUPLICATE");
     assert.equal(attemptList[0]?.canonicalStatus, "SUCCESS");
@@ -489,7 +487,7 @@ test("airtime UNKNOWN: unmapped provider status goes to manual review with facts
       "MANUAL_REVIEW",
     );
 
-    const attemptList = await attemptsFor(store, result.transaction.id);
+    const attemptList = await attemptsFor(repos, result.transaction.id);
     assert.equal(attemptList[0]?.status, "UNKNOWN");
     assert.equal(attemptList[0]?.canonicalStatus, "UNKNOWN");
 
@@ -672,7 +670,7 @@ test("cinema SUCCESS: search, reservation, and issuance leave a two-attempt trai
       "COMPLETED",
     );
 
-    const attemptList = await attemptsFor(store, result.transaction.id);
+    const attemptList = await attemptsFor(repos, result.transaction.id);
     assert.equal(attemptList.length, 2);
 
     const tickets = (
@@ -731,7 +729,7 @@ test("cinema PENDING: reservation is held but issuance has not completed", async
     assert.equal(tickets[0]?.status, "PENDING");
     assert.equal(tickets[0]?.issueReference, null);
 
-    const attemptList = await attemptsFor(store, result.transaction.id);
+    const attemptList = await attemptsFor(repos, result.transaction.id);
     assert.equal(attemptList[1]?.status, "PENDING");
 
     const types = (
@@ -890,7 +888,7 @@ test("replay is idempotent: no second debit, no new events, no new writes", asyn
       1,
     );
 
-    const attempts = await attemptsFor(store, first.transaction.id);
+    const attempts = await attemptsFor(repos, first.transaction.id);
     assert.equal(attempts.length, 1);
 
     const txRecords = (await repos.marketplaceTransactions.list()).filter(

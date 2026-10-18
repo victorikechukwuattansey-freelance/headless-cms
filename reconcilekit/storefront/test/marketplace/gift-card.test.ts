@@ -144,7 +144,7 @@ test("gift card delivered code material is never written in full", async (t) => 
     const serialized = [
       result,
       await store.readAll("gift_card_artifacts"),
-      await store.readAll("marketplace_provider_attempts"),
+      await repos.marketplaceProviderAttempts.list(),
       events,
       packResult.pack,
     ].map((value) => JSON.stringify(value));
@@ -341,10 +341,10 @@ test("gift card replay is idempotent and never duplicates rows or events", async
       1,
     );
     assert.equal(
-      (await store.readAll("marketplace_provider_attempts")).filter(
-        (row) =>
-          (row as { transactionId: string }).transactionId ===
+      (
+        await repos.marketplaceProviderAttempts.listByTransaction(
           first.transaction.id,
+        )
       ).length,
       1,
     );

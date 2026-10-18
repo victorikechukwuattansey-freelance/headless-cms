@@ -27,7 +27,6 @@ import type {
   MarketplaceCatalog,
   MarketplaceService,
   MarketplaceTransaction,
-  ProviderAttempt,
   TicketArtifact,
   TransactionEvent,
 } from "./types.ts";
@@ -73,7 +72,7 @@ interface EvidenceFacts {
 }
 
 async function readEvidenceFacts(
-  store: JsonlStore,
+  repos: Repositories,
   transaction: MarketplaceTransaction,
   catalog: MarketplaceCatalog,
 ): Promise<EvidenceFacts> {
@@ -85,10 +84,8 @@ async function readEvidenceFacts(
     );
   }
   const last = (
-    await store.readAll<ProviderAttempt>("marketplace_provider_attempts")
-  )
-    .filter((attempt) => attempt.transactionId === transaction.id)
-    .at(-1);
+    await repos.marketplaceProviderAttempts.listByTransaction(transaction.id)
+  ).at(-1);
   return {
     service,
     providerFacts: last === undefined ? {} : last.sourceAttributes,
@@ -186,7 +183,7 @@ export async function reconcileMarketplaceTransaction(
   }
 
   const { service, providerFacts } = await readEvidenceFacts(
-    store,
+    deps.repos,
     transaction,
     deps.catalog,
   );

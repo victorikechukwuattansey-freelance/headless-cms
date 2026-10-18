@@ -65,18 +65,18 @@ function input(
   };
 }
 
-async function snapshotRows(store: JsonlStore): Promise<readonly string[]> {
-  const kinds = [
-    "payments",
-    "marketplace_provider_attempts",
-    "wallet_ledger",
-  ] as const;
-  const json: string[] = [];
-  for (const kind of kinds) {
-    const rows = await store.readAll(kind);
-    json.push(JSON.stringify(rows));
-  }
-  return json;
+async function snapshotRows(
+  store: JsonlStore,
+  repos: Repositories,
+): Promise<readonly string[]> {
+  const payments = await store.readAll("payments");
+  const attempts = await repos.marketplaceProviderAttempts.list();
+  const walletLedger = await store.readAll("wallet_ledger");
+  return [
+    JSON.stringify(payments),
+    JSON.stringify(attempts),
+    JSON.stringify(walletLedger),
+  ];
 }
 
 async function packFor(
@@ -95,7 +95,7 @@ test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
     demoDeps(store, repos),
     input({ scenario: "SUCCESS" }),
   );
-  const rows = await snapshotRows(store);
+  const rows = await snapshotRows(store, repos);
 
   const result = await reconcileMarketplaceTransaction(
     reconcileDeps(store, repos),
@@ -128,7 +128,7 @@ test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
   assert.equal(updated.customerStatus, "CONFIRMED");
   assert.equal(updated.adminStatus, "HEALTHY");
 
-  assert.deepEqual(await snapshotRows(store), rows);
+  assert.deepEqual(await snapshotRows(store, repos), rows);
 });
 
 test("reconcile: FAILED exposes a provider-side discrepancy and money at risk", async (t) => {
@@ -289,7 +289,7 @@ test("reconcile: replay is store-only — no engine re-run, no new rows", async 
     store,
     executed.transaction.id,
   );
-  const rowsAfterFirst = await snapshotRows(store);
+  const rowsAfterFirst = await snapshotRows(store, repos);
 
   const replay = await reconcileMarketplaceTransaction(
     reconcileDeps(store, repos),
@@ -307,7 +307,7 @@ test("reconcile: replay is store-only — no engine re-run, no new rows", async 
     await listTransactionEvents(store, executed.transaction.id),
     eventsAfterFirst,
   );
-  assert.deepEqual(await snapshotRows(store), rowsAfterFirst);
+  assert.deepEqual(await snapshotRows(store, repos), rowsAfterFirst);
 
   const packs = await store.readAll<EvidencePack>("evidence_packs");
   assert.equal(packs.length, 1);

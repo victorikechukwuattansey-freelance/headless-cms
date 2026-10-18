@@ -852,7 +852,7 @@ async function runProvider(run: {
   }>;
   const request = buildServiceRequest(kind, service, quote, sourceInput.inputs);
   const result = await executor.execute(context, request);
-  const attempt = await recordProviderAttempt(store, {
+  const attempt = await recordProviderAttempt(run.deps.repos, {
     transactionId,
     providerId: provider.providerId,
     serviceId: service.id,
@@ -1000,7 +1000,7 @@ async function runGiftCardFlow(run: {
     recipientEmail: null,
   };
   const result = await giftCardProvider.execute(context, request);
-  const attempt = await recordProviderAttempt(store, {
+  const attempt = await recordProviderAttempt(run.deps.repos, {
     transactionId,
     providerId: provider.providerId,
     serviceId: service.id,
@@ -1221,7 +1221,7 @@ async function runTicketingFlow(run: {
       "Demo Customer",
     seat: pick(sourceInput.inputs, ["seat", "seats"]) ?? null,
   });
-  const reserveAttempt = await recordProviderAttempt(store, {
+  const reserveAttempt = await recordProviderAttempt(run.deps.repos, {
     transactionId,
     providerId: provider.providerId,
     serviceId: service.id,
@@ -1287,7 +1287,7 @@ async function runTicketingFlow(run: {
         pick(sourceInput.inputs, ["passenger", "passengerName", "attendee"]) ??
         "Demo Customer",
     });
-    issuedAttempt = await recordProviderAttempt(store, {
+    issuedAttempt = await recordProviderAttempt(run.deps.repos, {
       transactionId,
       providerId: provider.providerId,
       serviceId: service.id,
@@ -1950,7 +1950,7 @@ async function resolveWallet(
 }
 
 async function recordProviderAttempt(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly providerId: string;
@@ -1977,7 +1977,7 @@ async function recordProviderAttempt(
     attemptedAt: input.result.requestTimestamp,
     simulated: true,
   };
-  await store.insert("marketplace_provider_attempts", attempt);
+  await repos.marketplaceProviderAttempts.insert(attempt);
   return attempt;
 }
 
@@ -2388,9 +2388,8 @@ export async function marketplaceTransactionFacts(
   if (transaction === null) {
     return null;
   }
-  const attempts = (
-    await store.readAll<ProviderAttempt>("marketplace_provider_attempts")
-  ).filter((attempt) => attempt.transactionId === transactionId);
+  const attempts =
+    await repos.marketplaceProviderAttempts.listByTransaction(transactionId);
   const lastAttempt = attempts.at(-1) ?? null;
   const payments = await store.readAll<MarketplacePaymentRecord>("payments");
   const payment =
@@ -2442,9 +2441,8 @@ async function replayResult(
   transactionId: string,
 ): Promise<ExecuteTransactionResult> {
   const order = await repos.marketplaceOrders.readLatestById(orderId);
-  const attempts = (
-    await store.readAll<ProviderAttempt>("marketplace_provider_attempts")
-  ).filter((attempt) => attempt.transactionId === transactionId);
+  const attempts =
+    await repos.marketplaceProviderAttempts.listByTransaction(transactionId);
   const payments = await store.readAll<MarketplacePaymentRecord>("payments");
   const payment = payments.find((record) => record.orderId === orderId) ?? null;
   const events = await listTransactionEvents(store, transactionId);
