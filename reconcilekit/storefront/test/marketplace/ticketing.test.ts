@@ -1,15 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import {
   buildRepositories,
   type Repositories,
 } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
   executeMarketplaceTransaction,
@@ -37,12 +33,6 @@ const prisma = getPrismaClient();
 const NOW = WALLET_FIXED_TIMESTAMP;
 
 const FULL_TICKET_CODE_PATTERN = /TKT-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}/;
-
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-tkts-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
 
 function cinemaInput(
   overrides: Partial<ExecuteTransactionInput> = {},
@@ -92,7 +82,6 @@ async function attemptCount(
 }
 
 test("cinema SUCCESS reserves and issues a ticket with a deterministic evidence facet", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -145,7 +134,6 @@ test("cinema SUCCESS reserves and issues a ticket with a deterministic evidence 
 });
 
 test("cinema PENDING holds a reservation but never issues the ticket", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -182,7 +170,6 @@ test("cinema PENDING holds a reservation but never issues the ticket", async (t)
 });
 
 test("cinema TIMEOUT produces no reservation and stays in manual review", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -214,7 +201,6 @@ test("cinema TIMEOUT produces no reservation and stays in manual review", async 
 });
 
 test("searchTicketAvailability enumerates read-only options pre-checkout", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -250,7 +236,6 @@ test("searchTicketAvailability enumerates read-only options pre-checkout", async
 });
 
 test("searchTicketAvailability rejects non-ticketing and unknown services", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -280,7 +265,6 @@ test("searchTicketAvailability rejects non-ticketing and unknown services", asyn
 });
 
 test("cancel invalidates the ticket without touching money or resolution state", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -358,7 +342,6 @@ test("cancel invalidates the ticket without touching money or resolution state",
 });
 
 test("replaying a cancellation is idempotent and writes nothing new", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -404,7 +387,6 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
 });
 
 test("a refunded or reversed transaction is not cancellable", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -423,7 +405,6 @@ test("a refunded or reversed transaction is not cancellable", async (t) => {
         error.code === "TICKET_NOT_CANCELLABLE",
     );
 
-    const store2 = tempStore(t);
     const reversed = await executeMarketplaceTransaction(
       demoDeps(repos),
       cinemaInput({ scenario: "REVERSED" }),
@@ -442,7 +423,6 @@ test("a refunded or reversed transaction is not cancellable", async (t) => {
 });
 
 test("cancellation guards reject unknown transactions and non-ticket transactions", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -508,7 +488,6 @@ test("cinema SUCCESS reconciles clean and issues an evidence-linked receipt", as
 });
 
 test("ticket code material is never written in full", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);

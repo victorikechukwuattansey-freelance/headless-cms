@@ -1,14 +1,10 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import {
   buildRepositories,
   type Repositories,
 } from "../../src/db/repositories/index.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
   executeMarketplaceTransaction,
@@ -33,12 +29,6 @@ after(async () => {
 });
 
 const NOW = WALLET_FIXED_TIMESTAMP;
-
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-input-validation-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
 
 function txn(
   overrides: Partial<ExecuteTransactionInput> = {},
@@ -76,7 +66,6 @@ async function ledgerEntries(repos: Repositories): Promise<number> {
 }
 
 async function expectValidationError(
-  store: JsonlStore,
   execInput: ExecuteTransactionInput,
   field: string,
   code: string,
@@ -121,7 +110,6 @@ test("generic validator: missing required fields and SELECT membership are deter
 });
 
 test("validation boundary: unknown service throws TransactionInputError, betting compliance blocks before validation", async (t) => {
-  const store = tempStore(t);
   const ordersBefore = await orders(repos);
   const attemptsBefore = await providerAttempts(repos);
   await assert.rejects(
@@ -147,7 +135,6 @@ test("validation boundary: unknown service throws TransactionInputError, betting
 });
 
 test("valid airtime input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({ scenario: "SUCCESS" }),
@@ -158,12 +145,10 @@ test("valid airtime input executes successfully", async (t) => {
 });
 
 test("missing airtime recipient is rejected before any write", async (t) => {
-  const store = tempStore(t);
   const ledgerBefore = await ledgerEntries(repos);
   const ordersBefore = await orders(repos);
   const attemptsBefore = await providerAttempts(repos);
   await expectValidationError(
-    store,
     txn({
       inputs: { network: "MTN", amount: "1000" },
     }),
@@ -176,9 +161,7 @@ test("missing airtime recipient is rejected before any write", async (t) => {
 });
 
 test("invalid airtime network SELECT is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       inputs: { network: "Vodafone", recipient: "08030000000", amount: "1000" },
     }),
@@ -188,9 +171,7 @@ test("invalid airtime network SELECT is rejected", async (t) => {
 });
 
 test("invalid airtime amount NUMBER is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       inputs: { network: "MTN", recipient: "08030000000", amount: "abc" },
     }),
@@ -200,9 +181,7 @@ test("invalid airtime amount NUMBER is rejected", async (t) => {
 });
 
 test("invalid airtime recipient PHONE is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       inputs: { network: "MTN", recipient: "not-a-phone", amount: "1000" },
     }),
@@ -212,9 +191,7 @@ test("invalid airtime recipient PHONE is rejected", async (t) => {
 });
 
 test("missing field reports the first schema-order error deterministically", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       inputs: { recipient: "08030000000", amount: "1000" },
     }),
@@ -224,7 +201,6 @@ test("missing field reports the first schema-order error deterministically", asy
 });
 
 test("valid data input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -236,9 +212,7 @@ test("valid data input executes successfully", async (t) => {
 });
 
 test("missing data plan is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_data_mtn",
       inputs: { network: "MTN", recipient: "08030000000" },
@@ -249,7 +223,6 @@ test("missing data plan is rejected", async (t) => {
 });
 
 test("valid electricity input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -266,9 +239,7 @@ test("valid electricity input executes successfully", async (t) => {
 });
 
 test("missing electricity meter number is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_electricity_aedc",
       inputs: { provider: "AEDC", meterType: "prepaid", amount: "10000" },
@@ -279,7 +250,6 @@ test("missing electricity meter number is rejected", async (t) => {
 });
 
 test("valid cable input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -295,9 +265,7 @@ test("valid cable input executes successfully", async (t) => {
 });
 
 test("missing cable subscriber number is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_cable_dstv",
       inputs: { provider: "DStv", package: "Compact" },
@@ -308,7 +276,6 @@ test("missing cable subscriber number is rejected", async (t) => {
 });
 
 test("valid internet input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -324,7 +291,6 @@ test("valid internet input executes successfully", async (t) => {
 });
 
 test("valid education input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -340,7 +306,6 @@ test("valid education input executes successfully", async (t) => {
 });
 
 test("valid gift card input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -357,9 +322,7 @@ test("valid gift card input executes successfully", async (t) => {
 });
 
 test("invalid gift card region is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_giftcard_amazon",
       inputs: {
@@ -375,9 +338,7 @@ test("invalid gift card region is rejected", async (t) => {
 });
 
 test("invalid gift card denomination is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_giftcard_amazon",
       inputs: {
@@ -393,7 +354,6 @@ test("invalid gift card denomination is rejected", async (t) => {
 });
 
 test("valid digital voucher input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -410,7 +370,6 @@ test("valid digital voucher input executes successfully", async (t) => {
 });
 
 test("valid cinema booking input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -427,9 +386,7 @@ test("valid cinema booking input executes successfully", async (t) => {
 });
 
 test("missing cinema screening is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_cinema_filmhouse",
       inputs: {
@@ -444,9 +401,7 @@ test("missing cinema screening is rejected", async (t) => {
 });
 
 test("missing cinema seats is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_cinema_filmhouse",
       inputs: {
@@ -461,9 +416,7 @@ test("missing cinema seats is rejected", async (t) => {
 });
 
 test("invalid cinema screening DATE is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_cinema_filmhouse",
       inputs: {
@@ -479,7 +432,6 @@ test("invalid cinema screening DATE is rejected", async (t) => {
 });
 
 test("valid event booking input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -496,7 +448,6 @@ test("valid event booking input executes successfully", async (t) => {
 });
 
 test("valid bus booking input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -514,9 +465,7 @@ test("valid bus booking input executes successfully", async (t) => {
 });
 
 test("missing bus passenger is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_bus_lagos_abuja",
       inputs: {
@@ -532,9 +481,7 @@ test("missing bus passenger is rejected", async (t) => {
 });
 
 test("missing bus route (origin) is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_bus_lagos_abuja",
       inputs: {
@@ -550,7 +497,6 @@ test("missing bus route (origin) is rejected", async (t) => {
 });
 
 test("valid airline booking input executes successfully", async (t) => {
-  const store = tempStore(t);
   const result = await executeMarketplaceTransaction(
     demoDeps(repos),
     txn({
@@ -568,9 +514,7 @@ test("valid airline booking input executes successfully", async (t) => {
 });
 
 test("missing airline passenger is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_airline_los_abv",
       inputs: {
@@ -586,9 +530,7 @@ test("missing airline passenger is rejected", async (t) => {
 });
 
 test("missing airline flight is rejected", async (t) => {
-  const store = tempStore(t);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_airline_los_abv",
       inputs: {
@@ -604,10 +546,8 @@ test("missing airline flight is rejected", async (t) => {
 });
 
 test("invalid input never debits the wallet", async (t) => {
-  const store = tempStore(t);
   const ledgerBefore = await ledgerEntries(repos);
   await expectValidationError(
-    store,
     txn({
       inputs: { network: "MTN", amount: "1000" },
     }),
@@ -618,10 +558,8 @@ test("invalid input never debits the wallet", async (t) => {
 });
 
 test("invalid input never calls the provider", async (t) => {
-  const store = tempStore(t);
   const attemptsBefore = await providerAttempts(repos);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_airline_los_abv",
       inputs: {
@@ -638,12 +576,10 @@ test("invalid input never calls the provider", async (t) => {
 });
 
 test("invalid input never creates fulfillment artifacts or orders", async (t) => {
-  const store = tempStore(t);
   const ordersBefore = await orders(repos);
   const giftArtifactsBefore = await giftArtifacts(repos);
   const ticketArtifactsBefore = await ticketArtifacts(repos);
   await expectValidationError(
-    store,
     txn({
       serviceId: "svc_giftcard_amazon",
       inputs: { brand: "Amazon", region: "US", quantity: "1" },

@@ -1,12 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
   executeMarketplaceTransaction,
@@ -36,12 +32,6 @@ const prisma = getPrismaClient();
 
 const NOW = WALLET_FIXED_TIMESTAMP;
 
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-res-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
-
 async function runSuccess(
   t: { after: (fn: () => void) => void },
   repos: Repositories,
@@ -50,8 +40,7 @@ async function runSuccess(
     recipient: "08030000000",
     amount: "1000",
   },
-): Promise<{ store: JsonlStore; result: ExecuteTransactionResult }> {
-  const store = tempStore(t);
+): Promise<{ result: ExecuteTransactionResult }> {
   const result = await executeMarketplaceTransaction(demoDeps(repos), {
     customerId: "cus_demo",
     serviceId: "svc_airtime_mtn",
@@ -59,7 +48,7 @@ async function runSuccess(
     inputs: inputsOverride,
     now: NOW,
   });
-  return { store, result };
+  return { result };
 }
 
 async function readTransaction(

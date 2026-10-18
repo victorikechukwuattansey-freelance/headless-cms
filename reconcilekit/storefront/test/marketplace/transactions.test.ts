@@ -1,13 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
 import { seedCustomer, seedOrg } from "../db/fixtures.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import type { Repositories } from "../../src/db/repositories/index.ts";
 import {
   WALLET_FIXED_TIMESTAMP,
@@ -38,12 +34,6 @@ import type {
 
 const prisma = getPrismaClient();
 const NOW = WALLET_FIXED_TIMESTAMP;
-
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-txn-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
 
 function input(
   overrides: Partial<ExecuteTransactionInput> = {},
@@ -94,7 +84,6 @@ async function seedDemoCustomer(
 }
 
 test("airtime SUCCESS: quote, debit, provider response, and fulfillment share one deterministic trail", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -146,7 +135,6 @@ test("airtime SUCCESS: quote, debit, provider response, and fulfillment share on
 });
 
 test("airtime FAILED: payment settles, provider declines, fulfillment is failed without a double charge", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -179,7 +167,6 @@ test("airtime FAILED: payment settles, provider declines, fulfillment is failed 
 });
 
 test("electricity PENDING: funds are held while the provider is pending", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -224,7 +211,6 @@ test("electricity PENDING: funds are held while the provider is pending", async 
 });
 
 test("electricity TIMEOUT: pending hold, no provider facts, escalated for review", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -266,7 +252,6 @@ test("electricity TIMEOUT: pending hold, no provider facts, escalated for review
 });
 
 test("airtime DUPLICATE: a single debit and single fulfillment are preserved", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -304,7 +289,6 @@ test("airtime DUPLICATE: a single debit and single fulfillment are preserved", a
 });
 
 test("airtime MISMATCH: provider amount differs from the quote and is flagged", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -333,7 +317,6 @@ test("airtime MISMATCH: provider amount differs from the quote and is flagged", 
 });
 
 test("airtime PARTIAL_SUCCESS: partial fulfillment is flagged, not silently accepted", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -360,7 +343,6 @@ test("airtime PARTIAL_SUCCESS: partial fulfillment is flagged, not silently acce
 });
 
 test("airtime REVERSED: the reversal restores the wallet balance", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -397,7 +379,6 @@ test("airtime REVERSED: the reversal restores the wallet balance", async (t) => 
 });
 
 test("airtime REFUND_PENDING: refund is queued and funds remain held", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -433,7 +414,6 @@ test("airtime REFUND_PENDING: refund is queued and funds remain held", async (t)
 });
 
 test("airtime REFUND_COMPLETED: refund restores the balance and closes the transaction", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -466,7 +446,6 @@ test("airtime REFUND_COMPLETED: refund restores the balance and closes the trans
 });
 
 test("airtime UNKNOWN: unmapped provider status goes to manual review with facts preserved", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -497,7 +476,6 @@ test("airtime UNKNOWN: unmapped provider status goes to manual review with facts
 });
 
 test("gift card SUCCESS: only a masked code preview is delivered with the artifact", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -543,7 +521,6 @@ test("gift card SUCCESS: only a masked code preview is delivered with the artifa
 });
 
 test("gift card FAILED: no code is exposed and fulfillment fails", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -579,7 +556,6 @@ test("gift card FAILED: no code is exposed and fulfillment fails", async (t) => 
 });
 
 test("gift card TIMEOUT: funds held and the gift card is escalated for review", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -614,7 +590,6 @@ test("gift card TIMEOUT: funds held and the gift card is escalated for review", 
 });
 
 test("gift card MISMATCH: the artifact carries a risk flag and the amount is flagged", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -642,7 +617,6 @@ test("gift card MISMATCH: the artifact carries a risk flag and the amount is fla
 });
 
 test("cinema SUCCESS: search, reservation, and issuance leave a two-attempt trail", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -694,7 +668,6 @@ test("cinema SUCCESS: search, reservation, and issuance leave a two-attempt trai
 });
 
 test("cinema PENDING: reservation is held but issuance has not completed", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -739,7 +712,6 @@ test("cinema PENDING: reservation is held but issuance has not completed", async
 });
 
 test("bus SUCCESS: route metadata is captured on the issued artifact", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -773,7 +745,6 @@ test("bus SUCCESS: route metadata is captured on the issued artifact", async (t)
 });
 
 test("airline PENDING: a large booking holds funds without issuing", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -812,7 +783,6 @@ test("airline PENDING: a large booking holds funds without issuing", async (t) =
 });
 
 test("wallet funding then purchase: a pre-funded wallet is reused across transactions", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -857,7 +827,6 @@ test("wallet funding then purchase: a pre-funded wallet is reused across transac
 });
 
 test("replay is idempotent: no second debit, no new events, no new writes", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -896,7 +865,6 @@ test("replay is idempotent: no second debit, no new events, no new writes", asyn
 });
 
 test("failed payment guard: an underfunded wallet never reaches the provider", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -934,7 +902,6 @@ test("failed payment guard: an underfunded wallet never reaches the provider", a
 });
 
 test("unknown service throws TransactionInputError and betting is checkout-blocked", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const deps = demoDeps(repos);
@@ -956,7 +923,6 @@ test("unknown service throws TransactionInputError and betting is checkout-block
 });
 
 test("marketplaceTransactionFacts resolves the canonical trail from repositories", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);

@@ -1,9 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
   buildEvidencePack,
@@ -174,12 +170,6 @@ test("maskProviderFacts never admits raw sensitive material", () => {
   assert.equal(JSON.stringify(masked).includes("5399838383835381"), false);
 });
 
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-rct-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
-
 test("receipt links back to the transaction's evidence pack", () => {
   const input = giftCardFailureFixture();
   const receipt = buildReceipt({
@@ -262,7 +252,6 @@ test("issueReceipt persists and is idempotent per transaction", async () => {
 });
 
 test("ensureReceipt reconciles when the evidence pack is missing", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);

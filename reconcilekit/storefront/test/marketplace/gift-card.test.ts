@@ -1,12 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
   executeMarketplaceTransaction,
@@ -35,12 +31,6 @@ const prisma = getPrismaClient();
 const NOW = WALLET_FIXED_TIMESTAMP;
 
 const FULL_CODE_PATTERN = /GC-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}/;
-
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-gift-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
 
 function reconcileDeps(repos: Repositories): MarketplaceReconcileDeps {
   return { repos, catalog: buildDemoCatalog() };
@@ -72,7 +62,6 @@ async function artifactsFor(
 }
 
 test("gift card SUCCESS delivers a masked code and snapshots an evidence facet", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -119,7 +108,6 @@ test("gift card SUCCESS delivers a masked code and snapshots an evidence facet",
 });
 
 test("gift card delivered code material is never written in full", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -151,7 +139,6 @@ test("gift card delivered code material is never written in full", async (t) => 
 });
 
 test("gift card FAILED keeps money moved, flags a provider discrepancy, and notifies the customer", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -206,7 +193,6 @@ test("gift card FAILED keeps money moved, flags a provider discrepancy, and noti
 });
 
 test("gift card SUCCESS reconciles clean and issues an evidence-linked receipt", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -254,7 +240,6 @@ test("gift card SUCCESS reconciles clean and issues an evidence-linked receipt",
 });
 
 test("gift card REFUND_COMPLETED moves the resolution state and notifies refunded", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -286,7 +271,6 @@ test("gift card REFUND_COMPLETED moves the resolution state and notifies refunde
 });
 
 test("gift card replay is idempotent and never duplicates rows or events", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
