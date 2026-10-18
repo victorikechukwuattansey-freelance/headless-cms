@@ -65,13 +65,11 @@ const TERMINAL_STATES: ReadonlySet<ResolutionStatus> = new Set([
 ]);
 
 async function requireTransaction(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<MarketplaceTransaction> {
-  const transaction = await store.readLatestById<MarketplaceTransaction>(
-    "marketplace_transactions",
-    transactionId,
-  );
+  const transaction =
+    await repos.marketplaceTransactions.readLatestById(transactionId);
   if (transaction === null) {
     throw new ResolutionError(
       "TRANSACTION_NOT_FOUND",
@@ -124,7 +122,7 @@ function assertMoneyOpen(state: ResolutionStatus, action: string): void {
 }
 
 async function updateResolutionStatus(
-  store: JsonlStore,
+  repos: Repositories,
   transaction: MarketplaceTransaction,
   resolutionStatus: ResolutionStatus,
   now: string,
@@ -134,7 +132,7 @@ async function updateResolutionStatus(
     resolutionStatus,
     updatedAt: now,
   };
-  await store.insert("marketplace_transactions", updated);
+  await repos.marketplaceTransactions.insert(updated);
   return updated;
 }
 
@@ -162,7 +160,7 @@ export async function initiateTransactionRefund(
   },
 ): Promise<RefundActionOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
-  const transaction = await requireTransaction(store, input.transactionId);
+  const transaction = await requireTransaction(repos, input.transactionId);
   if (TERMINAL_STATES.has(transaction.resolutionStatus)) {
     throw new ResolutionError(
       "INVALID_RESOLUTION_TRANSITION",
@@ -208,7 +206,7 @@ export async function initiateTransactionRefund(
     simulated: true,
   };
   await store.insert("refunds", refund);
-  await updateResolutionStatus(store, transaction, "REFUND_PENDING", now);
+  await updateResolutionStatus(repos, transaction, "REFUND_PENDING", now);
 
   const eventInitiated = await appendTransactionEvent(store, {
     transactionId: input.transactionId,
@@ -263,7 +261,7 @@ export async function completeTransactionRefund(
   },
 ): Promise<RefundActionOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
-  const transaction = await requireTransaction(store, input.transactionId);
+  const transaction = await requireTransaction(repos, input.transactionId);
   assertMoneyOpen(transaction.resolutionStatus, "complete_refund");
 
   const refund = await store.readLatestById<RefundRecord>(
@@ -297,7 +295,7 @@ export async function completeTransactionRefund(
     ledgerReference,
   };
   await store.insert("refunds", completed);
-  await updateResolutionStatus(store, transaction, "REFUNDED", now);
+  await updateResolutionStatus(repos, transaction, "REFUNDED", now);
 
   const event = await appendTransactionEvent(store, {
     transactionId: input.transactionId,
@@ -347,7 +345,7 @@ export async function reverseTransactionDebit(
   },
 ): Promise<ReversalActionOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
-  const transaction = await requireTransaction(store, input.transactionId);
+  const transaction = await requireTransaction(repos, input.transactionId);
   assertMoneyOpen(transaction.resolutionStatus, "reverse_debit");
 
   const payment = await requirePayment(store, transaction.orderId);
@@ -378,7 +376,7 @@ export async function reverseTransactionDebit(
     simulated: true,
   };
   await store.insert("reversals", reversal);
-  await updateResolutionStatus(store, transaction, "REVERSED", now);
+  await updateResolutionStatus(repos, transaction, "REVERSED", now);
 
   const eventInitiated = await appendTransactionEvent(store, {
     transactionId: input.transactionId,
@@ -433,6 +431,7 @@ export interface DisputeActionOutcome {
  */
 export async function openDispute(
   store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly reason: string;
@@ -441,7 +440,7 @@ export async function openDispute(
   },
 ): Promise<DisputeActionOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
-  const transaction = await requireTransaction(store, input.transactionId);
+  const transaction = await requireTransaction(repos, input.transactionId);
   if (TERMINAL_STATES.has(transaction.resolutionStatus)) {
     throw new ResolutionError(
       "INVALID_RESOLUTION_TRANSITION",
@@ -475,7 +474,7 @@ export async function openDispute(
     simulated: true,
   };
   await store.insert("disputes", dispute);
-  await updateResolutionStatus(store, transaction, "DISPUTED", now);
+  await updateResolutionStatus(repos, transaction, "DISPUTED", now);
 
   const event = await appendTransactionEvent(store, {
     transactionId: input.transactionId,
@@ -506,6 +505,7 @@ export async function openDispute(
  */
 export async function resolveDispute(
   store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly resolutionNote: string;
@@ -513,7 +513,7 @@ export async function resolveDispute(
   },
 ): Promise<DisputeActionOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
-  const transaction = await requireTransaction(store, input.transactionId);
+  const transaction = await requireTransaction(repos, input.transactionId);
   const dispute = await store.readLatestById<DisputeRecord>(
     "disputes",
     `dsp_${input.transactionId}`,
@@ -540,7 +540,7 @@ export async function resolveDispute(
       ? "NONE"
       : transaction.resolutionStatus;
   const updated = await updateResolutionStatus(
-    store,
+    repos,
     transaction,
     nextState,
     now,
@@ -581,6 +581,7 @@ export interface ManualReviewActionOutcome {
  */
 export async function markManualReview(
   store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly reason: string;
@@ -589,7 +590,7 @@ export async function markManualReview(
   },
 ): Promise<ManualReviewActionOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
-  const transaction = await requireTransaction(store, input.transactionId);
+  const transaction = await requireTransaction(repos, input.transactionId);
   if (TERMINAL_STATES.has(transaction.resolutionStatus)) {
     throw new ResolutionError(
       "INVALID_RESOLUTION_TRANSITION",
@@ -612,7 +613,7 @@ export async function markManualReview(
     simulated: true,
   };
   await store.insert("manual_reviews", review);
-  await updateResolutionStatus(store, transaction, "MANUAL_REVIEW", now);
+  await updateResolutionStatus(repos, transaction, "MANUAL_REVIEW", now);
 
   const event = await appendTransactionEvent(store, {
     transactionId: input.transactionId,
@@ -643,6 +644,7 @@ export async function markManualReview(
  */
 export async function resolveManualReview(
   store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly operatorNote: string;
@@ -650,7 +652,7 @@ export async function resolveManualReview(
   },
 ): Promise<ManualReviewActionOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
-  const transaction = await requireTransaction(store, input.transactionId);
+  const transaction = await requireTransaction(repos, input.transactionId);
   const review = await store.readLatestById<ManualReviewRecord>(
     "manual_reviews",
     `mr_${input.transactionId}`,
@@ -676,7 +678,7 @@ export async function resolveManualReview(
       ? "NONE"
       : transaction.resolutionStatus;
   const updated = await updateResolutionStatus(
-    store,
+    repos,
     transaction,
     nextState,
     now,

@@ -893,10 +893,10 @@ test("replay is idempotent: no second debit, no new events, no new writes", asyn
     const attempts = await attemptsFor(store, first.transaction.id);
     assert.equal(attempts.length, 1);
 
-    const txRecords = (await store.readAll("marketplace_transactions")).filter(
-      (record) => (record as { id: string }).id === first.transaction.id,
+    const txRecords = (await repos.marketplaceTransactions.list()).filter(
+      (record) => record.id === first.transaction.id,
     );
-    assert.equal(txRecords.length, 2);
+    assert.equal(txRecords.length, 1);
   });
 });
 
@@ -973,6 +973,7 @@ test("marketplaceTransactionFacts resolves the canonical trail from the store", 
 
     const facts = await marketplaceTransactionFacts(
       store,
+      repos,
       result.transaction.id,
     );
     assert.notEqual(facts, null);

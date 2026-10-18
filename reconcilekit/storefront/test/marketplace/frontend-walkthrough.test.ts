@@ -1,4 +1,4 @@
-import { test, after } from "node:test";
+import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
@@ -30,6 +30,10 @@ const prisma = getPrismaClient();
 const repos = buildRepositories(prisma);
 
 // (existing lines)
+
+beforeEach(async () => {
+  await truncateCommittedState(prisma);
+});
 
 after(async () => {
   await truncateCommittedState(prisma);

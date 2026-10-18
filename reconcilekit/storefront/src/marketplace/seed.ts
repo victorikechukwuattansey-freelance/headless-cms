@@ -196,7 +196,6 @@ function buildAliasMaps(): {
  * friendly-name override is skipped once the latest record already carries it.
  */
 async function seedOrderScenario(
-  store: JsonlStore,
   deps: MarketplaceTransactionDeps,
   reconcileDeps: MarketplaceReconcileDeps,
   scenario: DemoOrderScenario,
@@ -215,15 +214,13 @@ async function seedOrderScenario(
   });
 
   const latest =
-    (await store.readLatestById<MarketplaceTransaction>(
-      "marketplace_transactions",
-      transactionId,
-    )) ?? executed.transaction;
+    (await deps.repos.marketplaceTransactions.readLatestById(transactionId)) ??
+    executed.transaction;
 
   let transaction: MarketplaceTransaction = latest;
   if (latest.demoScenarioName !== scenario.name) {
     transaction = { ...latest, demoScenarioName: scenario.name };
-    await store.insert("marketplace_transactions", transaction);
+    await deps.repos.marketplaceTransactions.insert(transaction);
   }
 
   return {
@@ -313,13 +310,13 @@ export async function seedDemoData(
   const catalog = buildDemoCatalog();
   const registry = createMockProviderRegistry();
   const deps: MarketplaceTransactionDeps = { store, repos, registry, catalog };
-  const reconcileDeps: MarketplaceReconcileDeps = { store, catalog };
+  const reconcileDeps: MarketplaceReconcileDeps = { store, catalog, repos };
 
   const entries: SeededDemoEntry[] = [];
   const byName: Record<string, SeededDemoEntry> = {};
 
   for (const scenario of DEMO_ORDER_SCENARIOS) {
-    const entry = await seedOrderScenario(store, deps, reconcileDeps, scenario);
+    const entry = await seedOrderScenario(deps, reconcileDeps, scenario);
     entries.push(entry);
     byName[scenario.name] = entry;
   }

@@ -462,10 +462,8 @@ export async function executeMarketplaceTransaction(
   const reference = buildTransactionReference(seed);
   const orderId = buildOrderId(seed);
 
-  const existing = await store.readLatestById<MarketplaceTransaction>(
-    "marketplace_transactions",
-    transactionId,
-  );
+  const existing =
+    await deps.repos.marketplaceTransactions.readLatestById(transactionId);
   if (existing !== null) {
     return replayResult(store, deps.repos, existing, orderId, transactionId);
   }
@@ -534,7 +532,7 @@ export async function executeMarketplaceTransaction(
     orderStatus: "CREATED",
     now,
   });
-  await store.insert("marketplace_transactions", initial);
+  await deps.repos.marketplaceTransactions.insert(initial);
 
   const walletId = await resolveWallet(deps.repos, {
     customerId: input.customerId,
@@ -687,7 +685,7 @@ async function runPaymentAndFulfillment(input: {
         occurredAt: now,
       }),
     );
-    const finalTx = await persistTransaction(store, {
+    const finalTx = await persistTransaction(deps.repos, {
       transactionId,
       orderId,
       customerId: sourceInput.customerId,
@@ -1745,7 +1743,7 @@ async function finalizeTransaction(
     await finalStatusEvent(store, { transactionId, scenario, state, now }),
   );
 
-  const tx = await persistTransaction(store, {
+  const tx = await persistTransaction(repos, {
     transactionId,
     orderId,
     customerId,
@@ -1854,7 +1852,7 @@ function buildTransactionRecord(input: {
 }
 
 async function persistTransaction(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly orderId: string;
@@ -1875,7 +1873,7 @@ async function persistTransaction(
     adminStatus: input.state.adminStatus,
     orderStatus: input.state.orderStatus,
   });
-  await store.insert("marketplace_transactions", record);
+  await repos.marketplaceTransactions.insert(record);
   return record;
 }
 
@@ -2382,12 +2380,11 @@ export function factFlags(
 
 export async function marketplaceTransactionFacts(
   store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<TransactionReconciliationFacts | null> {
-  const transaction = await store.readLatestById<MarketplaceTransaction>(
-    "marketplace_transactions",
-    transactionId,
-  );
+  const transaction =
+    await repos.marketplaceTransactions.readLatestById(transactionId);
   if (transaction === null) {
     return null;
   }

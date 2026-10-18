@@ -1040,7 +1040,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
     const disputePostMatch = path.match(/^\/transactions\/([^/]+)\/disputes$/);
     if (disputePostMatch) {
       const identifier = decodeURIComponent(disputePostMatch[1]);
-      const txn = await findTransactionByIdentifier(deps.store, identifier);
+      const txn = await findTransactionByIdentifier(deps.repos, identifier);
       if (txn === null) {
         throw new HttpError(
           404,
@@ -1051,7 +1051,11 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
       const form = await readFormBody(req);
       const reason = stringForm(form, "reason");
       const message = form.get("message") ?? "";
-      await openDispute(deps.store, { transactionId: txn.id, reason, message });
+      await openDispute(deps.store, repos, {
+        transactionId: txn.id,
+        reason,
+        message,
+      });
       redirect(res, 303, `/transactions/${txn.reference}`);
       return;
     }
@@ -1062,7 +1066,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
     if (adminTxnPostMatch) {
       const identifier = decodeURIComponent(adminTxnPostMatch[1]);
       const action = adminTxnPostMatch[2];
-      const txn = await findTransactionByIdentifier(deps.store, identifier);
+      const txn = await findTransactionByIdentifier(deps.repos, identifier);
       if (txn === null) {
         throw new HttpError(
           404,
@@ -1106,13 +1110,16 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         }
         case "review": {
           const reason = stringForm(form, "reason");
-          await markManualReview(deps.store, { transactionId: txn.id, reason });
+          await markManualReview(deps.store, repos, {
+            transactionId: txn.id,
+            reason,
+          });
           redirect(res, 303, `/admin/transactions/${txn.reference}`);
           return;
         }
         case "dispute/resolve": {
           const resolutionNote = stringForm(form, "resolutionNote");
-          await resolveDispute(deps.store, {
+          await resolveDispute(deps.store, repos, {
             transactionId: txn.id,
             resolutionNote,
           });
@@ -1121,7 +1128,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         }
         case "review/resolve": {
           const operatorNote = stringForm(form, "operatorNote");
-          await resolveManualReview(deps.store, {
+          await resolveManualReview(deps.store, repos, {
             transactionId: txn.id,
             operatorNote,
           });

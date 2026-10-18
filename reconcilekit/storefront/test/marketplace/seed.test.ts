@@ -28,10 +28,7 @@ import {
 } from "../../src/marketplace/wallet.ts";
 import { createMockProviderRegistry } from "../../src/marketplace/providers/registry.ts";
 import { findTransactionByIdentifier } from "../../src/ui/client.ts";
-import type {
-  MarketplaceTransaction,
-  WalletLedgerEntry,
-} from "../../src/marketplace/types.ts";
+import type { WalletLedgerEntry } from "../../src/marketplace/types.ts";
 import type { Repositories } from "../../src/db/repositories/index.ts";
 import type {
   SeededDemoEntry,
@@ -114,8 +111,7 @@ test("demo seed produces stable, unique identities with friendly names", async (
       assert.ok(entry.reference.startsWith("txn_"), entry.reference);
       assert.equal(entry.transaction.demoScenarioName, entry.demoScenarioName);
       assert.equal(entry.transaction.reference, entry.reference);
-      const persisted = await store.readLatestById<MarketplaceTransaction>(
-        "marketplace_transactions",
+      const persisted = await repos.marketplaceTransactions.readLatestById(
         entry.transactionId,
       );
       assert.equal(
@@ -142,14 +138,14 @@ test("friendly reference aliases resolve through the existing transaction lookup
       assert.ok(resolved, alias);
       assert.equal(resolved.id, entry.transactionId);
 
-      const found = await findTransactionByIdentifier(store, alias);
+      const found = await findTransactionByIdentifier(repos, alias);
       assert.ok(found, `lookup by alias should find ${alias}`);
       assert.equal(found.id, entry.transactionId);
       assert.equal(found.demoScenarioName, scenario.name);
     }
 
     const funding = await findTransactionByIdentifier(
-      store,
+      repos,
       demoAliasFor(WALLET_FUNDING_SCENARIO_NAME),
     );
     assert.equal(

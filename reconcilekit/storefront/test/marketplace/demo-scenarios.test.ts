@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,6 +8,7 @@ import {
   buildRepositories,
   type Repositories,
 } from "../../src/db/repositories/index.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   DEMO_ORDER_SCENARIOS,
@@ -30,6 +31,10 @@ import type {
 
 const prisma = getPrismaClient();
 const repos = buildRepositories(prisma);
+
+beforeEach(async () => {
+  await truncateCommittedState(prisma);
+});
 
 function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
   const dir = mkdtempSync(join(tmpdir(), "storefront-demo-"));

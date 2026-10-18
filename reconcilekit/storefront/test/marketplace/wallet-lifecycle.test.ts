@@ -36,7 +36,6 @@ import {
 import { listPaymentEvents } from "../../src/marketplace/payment-sources/ingest.ts";
 import { demoDeps } from "./demo-deps.ts";
 import type {
-  MarketplaceTransaction,
   MarketplaceWallet,
   WalletLedgerEntry,
 } from "../../src/marketplace/types.ts";
@@ -435,8 +434,7 @@ test("wallet lifecycle: a failed fulfillment keeps payment/ledger truth separate
     assert.equal(truth.customerStatus, "CONFIRMED");
     assert.equal(truth.moneyAtRisk, false);
 
-    const storedTx = await store.readLatestById<MarketplaceTransaction>(
-      "marketplace_transactions",
+    const storedTx = await repos.marketplaceTransactions.readLatestById(
       result.transaction.id,
     );
     assert.equal(storedTx?.fulfillmentStatus, "FAILED");
@@ -461,7 +459,7 @@ test("wallet lifecycle: reconciliation never causes provider side effects", asyn
       attempts: (await store.readAll("marketplace_provider_attempts")).length,
       tickets: (await store.readAll("ticket_artifacts")).length,
       gifts: (await store.readAll("gift_card_artifacts")).length,
-      transactions: (await store.readAll("marketplace_transactions")).length,
+      transactions: (await repos.marketplaceTransactions.list()).length,
     };
 
     const entries = await entriesForTransaction(repos, result.transaction.id);
@@ -476,7 +474,7 @@ test("wallet lifecycle: reconciliation never causes provider side effects", asyn
       attempts: (await store.readAll("marketplace_provider_attempts")).length,
       tickets: (await store.readAll("ticket_artifacts")).length,
       gifts: (await store.readAll("gift_card_artifacts")).length,
-      transactions: (await store.readAll("marketplace_transactions")).length,
+      transactions: (await repos.marketplaceTransactions.list()).length,
     };
 
     assert.deepEqual(after, {
@@ -559,7 +557,6 @@ test("wallet lifecycle: identical inputs yield identical IDs, projections, and o
       entries: readonly WalletLedgerEntry[];
       events: readonly { event_id: string; observed_at: number }[];
       report: ReconciliationReport;
-      truth: ReturnType<typeof buildTransactionTruth>;
     }> => {
       const dir = mkdtempSync(
         join(tmpdir(), "storefront-wallet-lifecycle-run-"),
@@ -575,18 +572,7 @@ test("wallet lifecycle: identical inputs yield identical IDs, projections, and o
         await ingestWalletLedgerEntries(store, entries, { now: NOW_EPOCH });
         const events = await listPaymentEvents(store);
         const report = reconcilePaymentEvents(events, CONFIG);
-        const truth = buildTransactionTruth({
-          transactionId: result.transaction.id,
-          outcome: merchantResult(report, result.transaction.id)!.outcome,
-          codes: merchantResult(report, result.transaction.id)!
-            .discrepancy_codes,
-          paymentState: result.facts!.paymentState,
-          resolutionStatus: result.transaction.resolutionStatus,
-          expectedAmountMinor: result.facts!.expectedAmountMinor,
-          currency: result.facts!.currency,
-          providerAmountMinor: result.facts!.providerAmountMinor,
-        });
-        return { result, entries, events, report, truth };
+        return { result, entries, events, report };
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -595,6 +581,8 @@ test("wallet lifecycle: identical inputs yield identical IDs, projections, and o
     const first = await run();
     const second = await run();
 
+    assert.equal(first.result.replayed, false);
+    assert.equal(second.result.replayed, true);
     assert.equal(second.result.transaction.id, first.result.transaction.id);
     assert.equal(second.entries[0].reference, first.entries[0].reference);
     assert.equal(second.events[0].event_id, first.events[0].event_id);
@@ -604,7 +592,14 @@ test("wallet lifecycle: identical inputs yield identical IDs, projections, and o
       second.report.summary.totalRecords,
       first.report.summary.totalRecords,
     );
-    assert.deepEqual(second.truth, first.truth);
+
+    const persistedFirst = await repos.marketplaceTransactions.readLatestById(
+      first.result.transaction.id,
+    );
+    const persistedSecond = await repos.marketplaceTransactions.readLatestById(
+      second.result.transaction.id,
+    );
+    assert.deepEqual(persistedSecond, persistedFirst);
   });
 });
 

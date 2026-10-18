@@ -1,4 +1,4 @@
-import { test, after } from "node:test";
+import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
@@ -18,13 +18,14 @@ import {
   type SeededOrderEntry,
 } from "../../src/marketplace/seed.ts";
 import { loginAndGetCookie, withCookie } from "../auth/helpers.ts";
-import type {
-  EvidencePack,
-  MarketplaceTransaction,
-} from "../../src/marketplace/types.ts";
+import type { EvidencePack } from "../../src/marketplace/types.ts";
 
 const prisma = getPrismaClient();
 const repos = buildRepositories(prisma);
+
+beforeEach(async () => {
+  await truncateCommittedState(prisma);
+});
 
 after(async () => {
   await truncateCommittedState(prisma);
@@ -263,9 +264,7 @@ test("3D workflow: read-only — no store mutations across the three pages", asy
   try {
     const before = {
       packs: await app.store.readAll<EvidencePack>("evidence_packs"),
-      txns: await app.store.readAll<MarketplaceTransaction>(
-        "marketplace_transactions",
-      ),
+      txns: await repos.marketplaceTransactions.list(),
     };
 
     await fetch(`${app.baseUrl}/findings`, withCookie(app.cookie));
@@ -281,9 +280,7 @@ test("3D workflow: read-only — no store mutations across the three pages", asy
 
     const after = {
       packs: await app.store.readAll<EvidencePack>("evidence_packs"),
-      txns: await app.store.readAll<MarketplaceTransaction>(
-        "marketplace_transactions",
-      ),
+      txns: await repos.marketplaceTransactions.list(),
     };
 
     assert.deepEqual(after, before, "3D must not mutate the store");

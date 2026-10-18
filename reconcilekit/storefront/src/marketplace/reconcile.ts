@@ -5,6 +5,7 @@ import type {
 } from "../../../src/domain/model.ts";
 import { reconcileRecords } from "../../../src/application/reconcile-records.ts";
 import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import { findServiceById } from "./catalog.ts";
 import {
   buildMarketplaceReconcileInput,
@@ -33,6 +34,7 @@ import type {
 
 export interface MarketplaceReconcileDeps {
   readonly store: JsonlStore;
+  readonly repos: Repositories;
   readonly catalog: MarketplaceCatalog;
 }
 
@@ -108,10 +110,11 @@ async function readArtifacts(
 
 async function replayTruth(
   store: JsonlStore,
+  repos: Repositories,
   transaction: MarketplaceTransaction,
   pack: EvidencePack,
 ): Promise<TransactionTruth> {
-  const facts = await marketplaceTransactionFacts(store, transaction.id);
+  const facts = await marketplaceTransactionFacts(store, repos, transaction.id);
   return buildTransactionTruth({
     transactionId: transaction.id,
     outcome:
@@ -139,8 +142,7 @@ export async function reconcileMarketplaceTransaction(
 ): Promise<ReconcileTransactionResult> {
   const store = deps.store;
   const now = input.now ?? new Date().toISOString();
-  const transaction = await store.readLatestById<MarketplaceTransaction>(
-    "marketplace_transactions",
+  const transaction = await deps.repos.marketplaceTransactions.readLatestById(
     input.transactionId,
   );
   if (transaction === null) {
@@ -155,7 +157,12 @@ export async function reconcileMarketplaceTransaction(
     evidencePackId(input.transactionId),
   );
   if (existingPack !== null) {
-    const truth = await replayTruth(store, transaction, existingPack);
+    const truth = await replayTruth(
+      store,
+      deps.repos,
+      transaction,
+      existingPack,
+    );
     return {
       transactionId: input.transactionId,
       truth,
@@ -166,7 +173,11 @@ export async function reconcileMarketplaceTransaction(
     };
   }
 
-  const facts = await marketplaceTransactionFacts(store, input.transactionId);
+  const facts = await marketplaceTransactionFacts(
+    store,
+    deps.repos,
+    input.transactionId,
+  );
   if (facts === null) {
     throw new ReconcileError(
       "TRANSACTION_NOT_FOUND",
@@ -249,7 +260,7 @@ export async function reconcileMarketplaceTransaction(
     simulated: true,
   };
   await store.insert("evidence_packs", pack);
-  await store.insert("marketplace_transactions", {
+  await deps.repos.marketplaceTransactions.insert({
     ...transaction,
     reconcileOutcome: truth.reconcileOutcome,
     customerStatus: truth.customerStatus,

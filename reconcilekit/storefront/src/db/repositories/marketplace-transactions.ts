@@ -49,6 +49,11 @@ export class MarketplaceTransactionRepository {
     });
     return row === null ? null : fromPrismaTransaction(row);
   }
+
+  async list(): Promise<readonly MarketplaceTransaction[]> {
+    const rows = await this.client.marketplaceTransaction.findMany();
+    return rows.map((row) => fromPrismaTransaction(row));
+  }
 }
 
 interface MarketplaceTransactionRow {

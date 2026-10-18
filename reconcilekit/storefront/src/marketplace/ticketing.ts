@@ -8,7 +8,6 @@ import {
 } from "./timeline.ts";
 import type {
   MarketplaceServiceKind,
-  MarketplaceTransaction,
   MockProviderScenario,
   TicketArtifact,
   TransactionEvent,
@@ -152,8 +151,7 @@ export async function cancelTicketTransaction(
   },
 ): Promise<CancelTicketOutcome> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
-  const transaction = await store.readLatestById<MarketplaceTransaction>(
-    "marketplace_transactions",
+  const transaction = await deps.repos.marketplaceTransactions.readLatestById(
     input.transactionId,
   );
   if (transaction === null) {

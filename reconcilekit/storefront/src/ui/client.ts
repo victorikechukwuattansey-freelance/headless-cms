@@ -348,28 +348,20 @@ export async function customerProfile(
 }
 
 async function latestTransactions(
-  store: JsonlStore,
+  repos: Repositories,
 ): Promise<readonly MarketplaceTransaction[]> {
-  const all = await store.readAll<MarketplaceTransaction>(
-    "marketplace_transactions",
-  );
-  const latest = new Map<string, MarketplaceTransaction>();
-  for (const record of all) {
-    latest.set(record.id, record);
-  }
-  return Array.from(latest.values()).sort((a, b) =>
-    b.updatedAt.localeCompare(a.updatedAt),
-  );
+  const all = await repos.marketplaceTransactions.list();
+  return Array.from(all).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export async function findTransactionByIdentifier(
-  store: JsonlStore,
+  repos: Repositories,
   identifier: string,
 ): Promise<MarketplaceTransaction | null> {
   const resolved = resolveDemoAlias(identifier);
   const candidateId = resolved?.id ?? identifier;
   const candidateReference = resolved?.reference ?? identifier;
-  const all = await latestTransactions(store);
+  const all = await latestTransactions(repos);
   return (
     all.find(
       (record) =>
@@ -380,13 +372,14 @@ export async function findTransactionByIdentifier(
 
 async function truthFor(
   store: JsonlStore,
+  repos: Repositories,
   transaction: MarketplaceTransaction,
 ): Promise<TransactionTruth> {
   const pack = await store.readLatestById<EvidencePack>(
     "evidence_packs",
     `evp_${transaction.id}`,
   );
-  const facts = await marketplaceTransactionFacts(store, transaction.id);
+  const facts = await marketplaceTransactionFacts(store, repos, transaction.id);
   const input: TruthDeterminationInput = {
     transactionId: transaction.id,
     outcome:
@@ -502,10 +495,10 @@ async function buildTransactionRows(
   deps: MarketplaceTransactionDeps,
 ): Promise<TransactionRow[]> {
   const rows: TransactionRow[] = [];
-  for (const transaction of await latestTransactions(deps.store)) {
+  for (const transaction of await latestTransactions(deps.repos)) {
     const service = findServiceById(deps.catalog, transaction.serviceId);
     const amounts = await orderAmounts(deps.repos, transaction.orderId);
-    const truth = await truthFor(deps.store, transaction);
+    const truth = await truthFor(deps.store, deps.repos, transaction);
     rows.push(
       transactionRow(
         transaction,
@@ -632,7 +625,7 @@ export async function transactionDetailViewModel(
   deps: MarketplaceTransactionDeps,
   identifier: string,
 ): Promise<TransactionDetailViewModel | null> {
-  const transaction = await findTransactionByIdentifier(deps.store, identifier);
+  const transaction = await findTransactionByIdentifier(deps.repos, identifier);
   if (transaction === null) {
     return null;
   }
@@ -646,7 +639,7 @@ export async function transactionDetailViewModel(
     payments.find((candidate) => candidate.orderId === transaction.orderId) ??
     null;
   const service = findServiceById(deps.catalog, transaction.serviceId) ?? null;
-  const truth = await truthFor(deps.store, transaction);
+  const truth = await truthFor(deps.store, deps.repos, transaction);
   const pack = await deps.store.readLatestById<EvidencePack>(
     "evidence_packs",
     `evp_${transaction.id}`,
@@ -678,7 +671,11 @@ export async function transactionDetailViewModel(
   const notifications = (
     await listNotificationsByCustomer(deps.store, transaction.customerId)
   ).filter((record) => record.transactionId === transaction.id);
-  const facts = await marketplaceTransactionFacts(deps.store, transaction.id);
+  const facts = await marketplaceTransactionFacts(
+    deps.store,
+    deps.repos,
+    transaction.id,
+  );
   const ledger = await deps.repos.walletLedger.listByTransaction(
     transaction.id,
   );
@@ -750,7 +747,7 @@ export async function evidenceViewModel(
   deps: MarketplaceTransactionDeps,
   identifier: string,
 ): Promise<EvidenceViewModel | null> {
-  const transaction = await findTransactionByIdentifier(deps.store, identifier);
+  const transaction = await findTransactionByIdentifier(deps.repos, identifier);
   if (transaction === null) {
     return null;
   }
@@ -770,7 +767,7 @@ export async function ensureReceipt(
   deps: MarketplaceTransactionDeps,
   identifier: string,
 ): Promise<ReceiptViewModel | null> {
-  const transaction = await findTransactionByIdentifier(deps.store, identifier);
+  const transaction = await findTransactionByIdentifier(deps.repos, identifier);
   if (transaction === null) {
     return null;
   }
@@ -836,7 +833,7 @@ export async function disputesViewModel(
 export async function adminDashboardViewModel(
   deps: MarketplaceTransactionDeps,
 ): Promise<AdminDashboardViewModel> {
-  const transactions = await latestTransactions(deps.store);
+  const transactions = await latestTransactions(deps.repos);
   const statuses = [
     "HEALTHY",
     "PENDING_PROVIDER",
@@ -1037,9 +1034,7 @@ export async function findingsSummaryViewModel(
 ): Promise<FindingsSummaryViewModel> {
   const customer = await customerProfile(deps.repos, customerId);
   const transactions = latestTransactionMap(
-    await deps.store.readAll<MarketplaceTransaction>(
-      "marketplace_transactions",
-    ),
+    await deps.repos.marketplaceTransactions.list(),
   );
   const packs = latestPackMap(
     await deps.store.readAll<EvidencePack>("evidence_packs"),
@@ -1123,7 +1118,7 @@ export async function findingDeterminationViewModel(
   deps: MarketplaceTransactionDeps,
   identifier: string,
 ): Promise<FindingDeterminationViewModel | null> {
-  const transaction = await findTransactionByIdentifier(deps.store, identifier);
+  const transaction = await findTransactionByIdentifier(deps.repos, identifier);
   if (transaction === null) {
     return null;
   }
@@ -1135,7 +1130,11 @@ export async function findingDeterminationViewModel(
     return null;
   }
   const customer = await customerProfile(deps.repos, transaction.customerId);
-  const facts = await marketplaceTransactionFacts(deps.store, transaction.id);
+  const facts = await marketplaceTransactionFacts(
+    deps.store,
+    deps.repos,
+    transaction.id,
+  );
   const outcome = pack.reconciliation?.outcome ?? "UNRESOLVED";
   const codes = findingCodesFor(pack);
   const notes = pack.reconciliation?.notes ?? [];
@@ -1169,7 +1168,7 @@ export async function findingEvidenceViewModel(
   deps: MarketplaceTransactionDeps,
   identifier: string,
 ): Promise<FindingEvidenceViewModel | null> {
-  const transaction = await findTransactionByIdentifier(deps.store, identifier);
+  const transaction = await findTransactionByIdentifier(deps.repos, identifier);
   if (transaction === null) {
     return null;
   }
