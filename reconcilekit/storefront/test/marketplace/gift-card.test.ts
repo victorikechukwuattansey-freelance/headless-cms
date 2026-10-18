@@ -111,7 +111,7 @@ test("gift card SUCCESS delivers a masked code and snapshots an evidence facet",
     assert.ok(facet.maskedCodePreview !== null);
     assert.match(facet.maskedCodePreview, /^GC-[a-z0-9_]{4}-\*{4}$/);
 
-    const events = await listTransactionEvents(store, result.transaction.id);
+    const events = await listTransactionEvents(repos, result.transaction.id);
     assert.ok(
       events.some(
         (event) => event.type === TransactionEventType.GiftCardDelivered,
@@ -135,7 +135,7 @@ test("gift card delivered code material is never written in full", async (t) => 
       demoDeps(store, repos),
       giftInput({ scenario: "SUCCESS" }),
     );
-    const events = await listTransactionEvents(store, result.transaction.id);
+    const events = await listTransactionEvents(repos, result.transaction.id);
     const packResult = await reconcileMarketplaceTransaction(
       reconcileDeps(store, repos),
       { transactionId: result.transaction.id, now: NOW },
@@ -181,7 +181,7 @@ test("gift card FAILED keeps money moved, flags a provider discrepancy, and noti
     assert.equal(result.evidence.giftCard?.deliveryStatus, "FAILED");
     assert.equal(result.evidence.giftCard?.maskedCodePreview, null);
 
-    const events = await listTransactionEvents(store, result.transaction.id);
+    const events = await listTransactionEvents(repos, result.transaction.id);
     assert.ok(
       events.some(
         (event) =>
@@ -307,7 +307,7 @@ test("gift card replay is idempotent and never duplicates rows or events", async
       input,
     );
     const eventsBefore = await listTransactionEvents(
-      store,
+      repos,
       first.transaction.id,
     );
 
@@ -352,7 +352,7 @@ test("gift card replay is idempotent and never duplicates rows or events", async
     );
 
     const eventsAfter = await listTransactionEvents(
-      store,
+      repos,
       first.transaction.id,
     );
     assert.equal(eventsAfter.length, eventsBefore.length);

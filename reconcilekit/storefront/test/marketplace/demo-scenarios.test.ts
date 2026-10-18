@@ -62,10 +62,10 @@ function orderEntry(
 }
 
 async function eventsFor(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<readonly TransactionEvent[]> {
-  return listTransactionEvents(store, transactionId);
+  return listTransactionEvents(repos, transactionId);
 }
 
 async function ledgerFor(
@@ -138,7 +138,7 @@ test("successful_airtime reconciles to MATCH with fulfilled top-up", async (t) =
     (await orderFor(repos, entry.transaction.orderId))?.status,
     "COMPLETED",
   );
-  const events = await eventsFor(store, transactionId);
+  const events = await eventsFor(repos, transactionId);
   assert.ok(events.some((event) => event.type === "TRANSACTION_FULFILLED"));
   assert.ok(
     (await ledgerFor(repos, transactionId)).some(
@@ -188,7 +188,7 @@ test("provider_timeout leaves no provider record", async (t) => {
   assert.equal(entry.transaction.adminStatus, "PENDING_PROVIDER");
   assert.equal(entry.truth.reconcileOutcome, "MISSING_PROVIDER_RECORD");
   assert.equal(entry.truth.moneyAtRisk, true);
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(events.some((event) => event.type === "PROVIDER_TIMEOUT"));
 });
 
@@ -216,7 +216,7 @@ test("duplicate_debit completes cleanly and fires the duplicate marker", async (
     false,
     "a provider-duplicate response must not double-debit the wallet",
   );
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(
     events.some((event) => event.type === "DUPLICATE_PROVIDER_RESPONSE"),
   );
@@ -233,7 +233,7 @@ test("provider_mismatch surfaces an amount mismatch", async (t) => {
   assert.equal(entry.transaction.customerStatus, "NEEDS_ATTENTION");
   assert.equal(entry.transaction.adminStatus, "MISMATCH");
   assert.equal(entry.truth.reconcileOutcome, "DISCREPANCY");
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(events.some((event) => event.type === "PROVIDER_AMOUNT_MISMATCH"));
 });
 
@@ -268,7 +268,7 @@ test("gift_card_fulfillment_failure keeps the code masked and records failure", 
   assert.equal(giftCards.length, 1);
   assert.equal(giftCards[0]?.deliveryStatus, "FAILED");
   assert.equal(giftCards[0]?.maskedCodePreview, null);
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(
     events.some((event) => event.type === "GIFT_CARD_FULFILLMENT_FAILED"),
   );
@@ -288,7 +288,7 @@ test("cinema_ticket_success issues a masked ticket artifact", async (t) => {
   assert.equal(tickets.length, 1);
   assert.equal(tickets[0]?.status, "ISSUED");
   assert.ok(tickets[0]?.maskedCode);
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(events.some((event) => event.type === "TICKET_ISSUED"));
 });
 
@@ -307,7 +307,7 @@ test("bus_ticket_refund completes a wallet refund", async (t) => {
     "completed refund ledger entry expected",
   );
   assert.ok(ledger.some((entry) => entry.type === "DEBIT_SUCCESS"));
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(events.some((event) => event.type === "REFUND_COMPLETED"));
 });
 
@@ -344,7 +344,7 @@ test("payment_success_service_failure splits payment truth from fulfillment fail
       (entry) => entry.type === "DEBIT_SUCCESS",
     ),
   );
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(events.some((event) => event.type === "PROVIDER_FAILED"));
   assert.ok(
     events.some((event) => event.type === "GIFT_CARD_FULFILLMENT_FAILED"),
@@ -363,7 +363,7 @@ test("payment_reversal reverses the wallet debit", async (t) => {
   assert.equal(entry.transaction.adminStatus, "HEALTHY");
   const ledger = await ledgerFor(repos, entry.transactionId);
   assert.ok(ledger.some((entry) => entry.type === "REVERSAL_COMPLETED"));
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(events.some((event) => event.type === "REVERSAL_COMPLETED"));
 });
 
@@ -379,7 +379,7 @@ test("refund_pending waits for the refund provider", async (t) => {
   assert.equal(entry.transaction.adminStatus, "REFUND_QUEUE");
   const ledger = await ledgerFor(repos, entry.transactionId);
   assert.ok(ledger.some((entry) => entry.type === "REFUND_PENDING"));
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(events.some((event) => event.type === "REFUND_PENDING"));
 });
 
@@ -399,7 +399,7 @@ test("manual_review requires operator attention without auto-conclusion", async 
     true,
   );
   assert.equal(entry.truth.moneyAtRisk, true);
-  const events = await eventsFor(store, entry.transactionId);
+  const events = await eventsFor(repos, entry.transactionId);
   assert.ok(
     events.some((event) => event.type === "TRANSACTION_REQUIRES_REVIEW"),
   );

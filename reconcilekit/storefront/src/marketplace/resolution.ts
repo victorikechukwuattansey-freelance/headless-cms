@@ -207,7 +207,7 @@ export async function initiateTransactionRefund(
   await store.insert("refunds", refund);
   await updateResolutionStatus(repos, transaction, "REFUND_PENDING", now);
 
-  const eventInitiated = await appendTransactionEvent(store, {
+  const eventInitiated = await appendTransactionEvent(repos, {
     transactionId: input.transactionId,
     type: TransactionEventType.RefundInitiated,
     label: "Refund initiated",
@@ -222,7 +222,7 @@ export async function initiateTransactionRefund(
     }),
     occurredAt: now,
   });
-  const eventPending = await appendTransactionEvent(store, {
+  const eventPending = await appendTransactionEvent(repos, {
     transactionId: input.transactionId,
     type: TransactionEventType.RefundPending,
     label: "Refund pending",
@@ -296,7 +296,7 @@ export async function completeTransactionRefund(
   await store.insert("refunds", completed);
   await updateResolutionStatus(repos, transaction, "REFUNDED", now);
 
-  const event = await appendTransactionEvent(store, {
+  const event = await appendTransactionEvent(repos, {
     transactionId: input.transactionId,
     type: TransactionEventType.RefundCompleted,
     label: "Refund completed",
@@ -377,7 +377,7 @@ export async function reverseTransactionDebit(
   await store.insert("reversals", reversal);
   await updateResolutionStatus(repos, transaction, "REVERSED", now);
 
-  const eventInitiated = await appendTransactionEvent(store, {
+  const eventInitiated = await appendTransactionEvent(repos, {
     transactionId: input.transactionId,
     type: TransactionEventType.ReversalInitiated,
     label: "Reversal initiated",
@@ -392,7 +392,7 @@ export async function reverseTransactionDebit(
     }),
     occurredAt: now,
   });
-  const eventCompleted = await appendTransactionEvent(store, {
+  const eventCompleted = await appendTransactionEvent(repos, {
     transactionId: input.transactionId,
     type: TransactionEventType.ReversalCompleted,
     label: "Reversal completed",
@@ -475,7 +475,7 @@ export async function openDispute(
   await store.insert("disputes", dispute);
   await updateResolutionStatus(repos, transaction, "DISPUTED", now);
 
-  const event = await appendTransactionEvent(store, {
+  const event = await appendTransactionEvent(repos, {
     transactionId: input.transactionId,
     type: TransactionEventType.DisputeOpened,
     label: "Dispute opened",
@@ -545,7 +545,7 @@ export async function resolveDispute(
     now,
   );
 
-  const event = await appendTransactionEvent(store, {
+  const event = await appendTransactionEvent(repos, {
     transactionId: input.transactionId,
     type: TransactionEventType.DisputeResolved,
     label: "Dispute resolved",
@@ -614,7 +614,7 @@ export async function markManualReview(
   await store.insert("manual_reviews", review);
   await updateResolutionStatus(repos, transaction, "MANUAL_REVIEW", now);
 
-  const event = await appendTransactionEvent(store, {
+  const event = await appendTransactionEvent(repos, {
     transactionId: input.transactionId,
     type: TransactionEventType.ManualReviewRequested,
     label: "Manual review requested",
@@ -683,7 +683,7 @@ export async function resolveManualReview(
     now,
   );
 
-  const event = await appendTransactionEvent(store, {
+  const event = await appendTransactionEvent(repos, {
     transactionId: input.transactionId,
     type: TransactionEventType.ManualReviewResolved,
     label: "Manual review resolved",

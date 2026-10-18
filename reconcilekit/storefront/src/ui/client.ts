@@ -643,7 +643,7 @@ export async function transactionDetailViewModel(
   );
   const evidence = pack === null ? null : redactEvidencePack(pack);
   const providerAttempt = await latestAttempt(deps.repos, transaction.id);
-  const events = await listTransactionEvents(deps.store, transaction.id);
+  const events = await listTransactionEvents(deps.repos, transaction.id);
   const artifacts = await artifactsFor(deps.store, transaction.id);
   const receipt = await deps.store.readLatestById<ReceiptRecord>(
     "receipts",

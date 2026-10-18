@@ -236,7 +236,7 @@ export async function cancelTicketTransaction(
   };
   await store.insert("ticket_artifacts", cancelled);
 
-  const event = await appendTransactionEvent(store, {
+  const event = await appendTransactionEvent(deps.repos, {
     transactionId: transaction.id,
     type: TransactionEventType.TicketCancelled,
     label: "Ticket cancelled",

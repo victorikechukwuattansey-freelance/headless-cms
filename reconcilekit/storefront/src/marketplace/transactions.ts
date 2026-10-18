@@ -481,42 +481,6 @@ export async function executeMarketplaceTransaction(
     now,
   });
 
-  const queued: TransactionEvent[] = [];
-  queued.push(
-    await appendTransactionEvent(store, {
-      transactionId,
-      type: TransactionEventType.OrderCreated,
-      label: "Order created",
-      description: `Order ${orderId} created for service ${service.id}.`,
-      actor: "SYSTEM",
-      source: "MARKETPLACE",
-      metadata: sourceAttributes({
-        order_id: orderId,
-        customer_id: input.customerId,
-        service_id: service.id,
-        scenario: input.scenario,
-      }),
-      occurredAt: now,
-    }),
-  );
-  queued.push(
-    await appendTransactionEvent(store, {
-      transactionId,
-      type: TransactionEventType.QuoteRecorded,
-      label: "Price quote recorded",
-      description: `Checked-out amount ${quote.expectedCheckoutMinor} ${quote.currency} (${quote.source}).`,
-      actor: "SYSTEM",
-      source: "MARKETPLACE",
-      metadata: sourceAttributes({
-        expected_amount_minor: String(quote.expectedCheckoutMinor),
-        currency: quote.currency,
-        quote_source: quote.source,
-        product_id: quote.productId,
-      }),
-      occurredAt: now,
-    }),
-  );
-
   const initial = buildTransactionRecord({
     transactionId,
     orderId,
@@ -533,6 +497,42 @@ export async function executeMarketplaceTransaction(
     now,
   });
   await deps.repos.marketplaceTransactions.insert(initial);
+
+  const queued: TransactionEvent[] = [];
+  queued.push(
+    await appendTransactionEvent(deps.repos, {
+      transactionId,
+      type: TransactionEventType.OrderCreated,
+      label: "Order created",
+      description: `Order ${orderId} created for service ${service.id}.`,
+      actor: "SYSTEM",
+      source: "MARKETPLACE",
+      metadata: sourceAttributes({
+        order_id: orderId,
+        customer_id: input.customerId,
+        service_id: service.id,
+        scenario: input.scenario,
+      }),
+      occurredAt: now,
+    }),
+  );
+  queued.push(
+    await appendTransactionEvent(deps.repos, {
+      transactionId,
+      type: TransactionEventType.QuoteRecorded,
+      label: "Price quote recorded",
+      description: `Checked-out amount ${quote.expectedCheckoutMinor} ${quote.currency} (${quote.source}).`,
+      actor: "SYSTEM",
+      source: "MARKETPLACE",
+      metadata: sourceAttributes({
+        expected_amount_minor: String(quote.expectedCheckoutMinor),
+        currency: quote.currency,
+        quote_source: quote.source,
+        product_id: quote.productId,
+      }),
+      occurredAt: now,
+    }),
+  );
 
   const walletId = await resolveWallet(deps.repos, {
     customerId: input.customerId,
@@ -624,7 +624,7 @@ async function runPaymentAndFulfillment(input: {
 
   const paymentScenario = paymentScenarioForService(sourceInput.scenario);
   events.push(
-    await appendTransactionEvent(store, {
+    await appendTransactionEvent(deps.repos, {
       transactionId,
       type: TransactionEventType.PaymentInitiated,
       label: "Payment initiated",
@@ -661,7 +661,7 @@ async function runPaymentAndFulfillment(input: {
   if (debit.lifecycle === "FAILED") {
     const state = paymentFailureState();
     events.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(deps.repos, {
         transactionId,
         type: TransactionEventType.PaymentFailed,
         label: "Payment failed",
@@ -677,7 +677,7 @@ async function runPaymentAndFulfillment(input: {
       }),
     );
     events.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(deps.repos, {
         transactionId,
         type: TransactionEventType.TransactionFailed,
         label: "Transaction failed",
@@ -721,7 +721,7 @@ async function runPaymentAndFulfillment(input: {
 
   if (debit.lifecycle === "PENDING") {
     events.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(deps.repos, {
         transactionId,
         type: TransactionEventType.PaymentPending,
         label: "Payment pending",
@@ -738,7 +738,7 @@ async function runPaymentAndFulfillment(input: {
     );
   } else {
     events.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(deps.repos, {
         transactionId,
         type: TransactionEventType.PaymentAuthorized,
         label: "Payment authorized",
@@ -756,7 +756,7 @@ async function runPaymentAndFulfillment(input: {
 
   const provider = deps.registry.providerForServiceKind(service.kind);
   events.push(
-    await appendTransactionEvent(store, {
+    await appendTransactionEvent(deps.repos, {
       transactionId,
       type: TransactionEventType.ProviderRequestSent,
       label: "Provider request sent",
@@ -866,7 +866,7 @@ async function runProvider(run: {
 
   const allEvents = [
     ...events,
-    await appendTransactionEvent(store, {
+    await appendTransactionEvent(run.deps.repos, {
       transactionId,
       type: TransactionEventType.ProviderResponseReceived,
       label: "Provider response received",
@@ -885,7 +885,7 @@ async function runProvider(run: {
     }),
   ];
 
-  const extras = await appendScenarioEvents(store, {
+  const extras = await appendScenarioEvents(run.deps.repos, {
     transactionId,
     scenario,
     result,
@@ -1028,7 +1028,7 @@ async function runGiftCardFlow(run: {
 
   const allEvents = [
     ...events,
-    await appendTransactionEvent(store, {
+    await appendTransactionEvent(run.deps.repos, {
       transactionId,
       type: TransactionEventType.ProviderResponseReceived,
       label: "Provider response received",
@@ -1047,7 +1047,7 @@ async function runGiftCardFlow(run: {
   ];
   if (result.deliveryStatus === "DELIVERED") {
     allEvents.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(run.deps.repos, {
         transactionId,
         type: TransactionEventType.GiftCardDelivered,
         label: "Gift card delivered",
@@ -1065,7 +1065,7 @@ async function runGiftCardFlow(run: {
     );
   } else if (result.deliveryStatus === "FAILED") {
     allEvents.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(run.deps.repos, {
         transactionId,
         type: TransactionEventType.GiftCardFulfillmentFailed,
         label: "Gift card fulfillment failed",
@@ -1081,7 +1081,7 @@ async function runGiftCardFlow(run: {
     );
   }
 
-  const extras = await appendScenarioEvents(store, {
+  const extras = await appendScenarioEvents(run.deps.repos, {
     transactionId,
     scenario,
     result,
@@ -1235,7 +1235,7 @@ async function runTicketingFlow(run: {
 
   const allEvents = [
     ...events,
-    await appendTransactionEvent(store, {
+    await appendTransactionEvent(run.deps.repos, {
       transactionId,
       type: TransactionEventType.ProviderResponseReceived,
       label: "Provider response received",
@@ -1256,7 +1256,7 @@ async function runTicketingFlow(run: {
   let issuedAttempt: ProviderAttempt | null = null;
   if (reserveResult.reservationReference !== null) {
     allEvents.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(run.deps.repos, {
         transactionId,
         type: TransactionEventType.TicketReserved,
         label: "Ticket reserved",
@@ -1299,7 +1299,7 @@ async function runTicketingFlow(run: {
       result: issuedResult,
     });
     allEvents.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(run.deps.repos, {
         transactionId,
         type: TransactionEventType.ProviderResponseReceived,
         label: "Provider response received",
@@ -1316,7 +1316,7 @@ async function runTicketingFlow(run: {
     );
     if (issuedResult.issueReference !== null) {
       allEvents.push(
-        await appendTransactionEvent(store, {
+        await appendTransactionEvent(run.deps.repos, {
           transactionId,
           type: TransactionEventType.TicketIssued,
           label: "Ticket issued",
@@ -1352,7 +1352,7 @@ async function runTicketingFlow(run: {
   });
   await store.insert("ticket_artifacts", artifact);
 
-  const extras = await appendScenarioEvents(store, {
+  const extras = await appendScenarioEvents(run.deps.repos, {
     transactionId,
     scenario,
     result: issuedResult ?? reserveResult,
@@ -1434,7 +1434,7 @@ async function applyResolutionToEvents(
 
   if (scenario === "REVERSED") {
     collected.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(repos, {
         transactionId,
         type: TransactionEventType.ReversalInitiated,
         label: "Reversal initiated",
@@ -1462,7 +1462,7 @@ async function applyResolutionToEvents(
         (entry) => entry.type === "REVERSAL_COMPLETED",
       )?.reference ?? null;
     collected.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(repos, {
         transactionId,
         type: TransactionEventType.ReversalCompleted,
         label: "Reversal completed",
@@ -1478,7 +1478,7 @@ async function applyResolutionToEvents(
     );
   } else if (scenario === "REFUND_PENDING") {
     collected.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(repos, {
         transactionId,
         type: TransactionEventType.RefundInitiated,
         label: "Refund initiated",
@@ -1505,7 +1505,7 @@ async function applyResolutionToEvents(
       refund.ledgerEntries.find((entry) => entry.type === "REFUND_PENDING")
         ?.reference ?? null;
     collected.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(repos, {
         transactionId,
         type: TransactionEventType.RefundPending,
         label: "Refund pending",
@@ -1521,7 +1521,7 @@ async function applyResolutionToEvents(
     );
   } else if (scenario === "REFUND_COMPLETED") {
     collected.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(repos, {
         transactionId,
         type: TransactionEventType.RefundInitiated,
         label: "Refund initiated",
@@ -1559,7 +1559,7 @@ async function applyResolutionToEvents(
         ?.reference ??
       null;
     collected.push(
-      await appendTransactionEvent(store, {
+      await appendTransactionEvent(repos, {
         transactionId,
         type: TransactionEventType.RefundCompleted,
         label: "Refund completed",
@@ -1579,7 +1579,7 @@ async function applyResolutionToEvents(
 }
 
 async function appendScenarioEvents(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly scenario: MockProviderScenario;
@@ -1597,7 +1597,7 @@ async function appendScenarioEvents(
   switch (scenario) {
     case "DUPLICATE":
       events.push(
-        await appendTransactionEvent(store, {
+        await appendTransactionEvent(repos, {
           transactionId,
           type: TransactionEventType.DuplicateProviderResponse,
           label: "Duplicate provider response",
@@ -1615,7 +1615,7 @@ async function appendScenarioEvents(
       break;
     case "FAILED":
       events.push(
-        await appendTransactionEvent(store, {
+        await appendTransactionEvent(repos, {
           transactionId,
           type: TransactionEventType.ProviderFailed,
           label: "Provider failed",
@@ -1633,7 +1633,7 @@ async function appendScenarioEvents(
       break;
     case "TIMEOUT":
       events.push(
-        await appendTransactionEvent(store, {
+        await appendTransactionEvent(repos, {
           transactionId,
           type: TransactionEventType.ProviderTimeout,
           label: "Provider timed out",
@@ -1652,7 +1652,7 @@ async function appendScenarioEvents(
       break;
     case "MISMATCH":
       events.push(
-        await appendTransactionEvent(store, {
+        await appendTransactionEvent(repos, {
           transactionId,
           type: TransactionEventType.ProviderAmountMismatch,
           label: "Provider amount mismatch",
@@ -1672,7 +1672,7 @@ async function appendScenarioEvents(
       break;
     case "PARTIAL_SUCCESS":
       events.push(
-        await appendTransactionEvent(store, {
+        await appendTransactionEvent(repos, {
           transactionId,
           type: TransactionEventType.ProviderPartialFulfillment,
           label: "Provider partial fulfillment",
@@ -1743,7 +1743,7 @@ async function finalizeTransaction(
   const state = deriveTransactionState({ scenario, paymentStatus });
   const events: TransactionEvent[] = [...allEvents];
   events.push(
-    await finalStatusEvent(store, { transactionId, scenario, state, now }),
+    await finalStatusEvent(repos, { transactionId, scenario, state, now }),
   );
 
   const tx = await persistTransaction(repos, {
@@ -1761,7 +1761,7 @@ async function finalizeTransaction(
 }
 
 async function finalStatusEvent(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly transactionId: string;
     readonly scenario: MockProviderScenario;
@@ -1771,7 +1771,7 @@ async function finalStatusEvent(
 ): Promise<TransactionEvent> {
   const { transactionId, scenario, state, now } = input;
   if (state.orderStatus === "COMPLETED") {
-    return appendTransactionEvent(store, {
+    return appendTransactionEvent(repos, {
       transactionId,
       type: TransactionEventType.TransactionFulfilled,
       label: "Transaction fulfilled",
@@ -1783,7 +1783,7 @@ async function finalStatusEvent(
     });
   }
   if (state.orderStatus === "FAILED" || state.orderStatus === "CANCELLED") {
-    return appendTransactionEvent(store, {
+    return appendTransactionEvent(repos, {
       transactionId,
       type: TransactionEventType.TransactionFailed,
       label: "Transaction failed",
@@ -1795,7 +1795,7 @@ async function finalStatusEvent(
     });
   }
   if (scenario === "PENDING" || scenario === "REFUND_PENDING") {
-    return appendTransactionEvent(store, {
+    return appendTransactionEvent(repos, {
       transactionId,
       type: TransactionEventType.TransactionPending,
       label: "Transaction pending",
@@ -1806,7 +1806,7 @@ async function finalStatusEvent(
       occurredAt: now,
     });
   }
-  return appendTransactionEvent(store, {
+  return appendTransactionEvent(repos, {
     transactionId,
     type: TransactionEventType.TransactionRequiresReview,
     label: "Transaction requires review",
@@ -2447,7 +2447,7 @@ async function replayResult(
   const attempts =
     await repos.marketplaceProviderAttempts.listByTransaction(transactionId);
   const payment = await repos.marketplacePayments.findByOrderId(orderId);
-  const events = await listTransactionEvents(store, transactionId);
+  const events = await listTransactionEvents(repos, transactionId);
   const ticketArtifacts = (
     await store.readAll<TicketArtifact>("ticket_artifacts")
   ).filter((artifact) => artifact.transactionId === transactionId);

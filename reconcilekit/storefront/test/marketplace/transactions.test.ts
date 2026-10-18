@@ -131,7 +131,7 @@ test("airtime SUCCESS: quote, debit, provider response, and fulfillment share on
     assert.equal(attemptList[0]?.canonicalStatus, "SUCCESS");
     assert.match(attemptList[0]?.providerReference ?? "", /^air_/);
 
-    const events = await listTransactionEvents(store, result.transaction.id);
+    const events = await listTransactionEvents(repos, result.transaction.id);
     const types = events.map((event) => event.type);
     assert.ok(types.includes(TransactionEventType.PaymentAuthorized));
     assert.ok(types.includes(TransactionEventType.ProviderResponseReceived));
@@ -170,7 +170,7 @@ test("airtime FAILED: payment settles, provider declines, fulfillment is failed 
     assert.equal(attemptList[0]?.canonicalStatus, "FAILED");
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.ProviderFailed));
     assert.ok(types.includes(TransactionEventType.TransactionFailed));
@@ -213,7 +213,7 @@ test("electricity PENDING: funds are held while the provider is pending", async 
     assert.equal(payment?.actualAmountMinor, null);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.PaymentPending));
     assert.ok(types.includes(TransactionEventType.TransactionPending));
@@ -259,7 +259,7 @@ test("electricity TIMEOUT: pending hold, no provider facts, escalated for review
     assert.equal(attemptList[0]?.providerReference, null);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.ProviderTimeout));
     assert.ok(types.includes(TransactionEventType.TransactionRequiresReview));
@@ -298,7 +298,7 @@ test("airtime DUPLICATE: a single debit and single fulfillment are preserved", a
     );
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.DuplicateProviderResponse));
     assert.ok(types.includes(TransactionEventType.TransactionFulfilled));
@@ -327,7 +327,7 @@ test("airtime MISMATCH: provider amount differs from the quote and is flagged", 
     assert.deepEqual(result.facts?.flags, ["AMOUNT_MISMATCH"]);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.ProviderAmountMismatch));
     assert.ok(types.includes(TransactionEventType.TransactionRequiresReview));
@@ -355,7 +355,7 @@ test("airtime PARTIAL_SUCCESS: partial fulfillment is flagged, not silently acce
     assert.deepEqual(result.facts?.flags, ["AMOUNT_MISMATCH"]);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.ProviderPartialFulfillment));
   });
@@ -391,7 +391,7 @@ test("airtime REVERSED: the reversal restores the wallet balance", async (t) => 
     assert.equal(balance.availableMinor, 500_000);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.ReversalInitiated));
     assert.ok(types.includes(TransactionEventType.ReversalCompleted));
@@ -426,7 +426,7 @@ test("airtime REFUND_PENDING: refund is queued and funds remain held", async (t)
     assert.equal(balance.availableMinor, 499_000);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.RefundInitiated));
     assert.ok(types.includes(TransactionEventType.RefundPending));
@@ -461,7 +461,7 @@ test("airtime REFUND_COMPLETED: refund restores the balance and closes the trans
     assert.equal(balance.availableMinor, 500_000);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.RefundCompleted));
   });
@@ -491,7 +491,7 @@ test("airtime UNKNOWN: unmapped provider status goes to manual review with facts
     assert.equal(attemptList[0]?.canonicalStatus, "UNKNOWN");
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.TransactionRequiresReview));
     assert.deepEqual(result.facts?.flags, ["STATUS_UNRESOLVED"]);
@@ -535,7 +535,7 @@ test("gift card SUCCESS: only a masked code preview is delivered with the artifa
     assert.match(artifact.maskedCodePreview ?? "", /^GC-.*\*{4}$/);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.GiftCardDelivered));
 
@@ -574,7 +574,7 @@ test("gift card FAILED: no code is exposed and fulfillment fails", async (t) => 
     assert.equal(artifacts[0]?.maskedCodePreview, null);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.GiftCardFulfillmentFailed));
   });
@@ -685,7 +685,7 @@ test("cinema SUCCESS: search, reservation, and issuance leave a two-attempt trai
     assert.match(ticket.maskedCode ?? "", /^TKT-.*\*{4}$/);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.TicketReserved));
     assert.ok(types.includes(TransactionEventType.TicketIssued));
@@ -732,7 +732,7 @@ test("cinema PENDING: reservation is held but issuance has not completed", async
     assert.equal(attemptList[1]?.status, "PENDING");
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.TicketReserved));
     assert.ok(!types.includes(TransactionEventType.TicketIssued));
@@ -878,7 +878,7 @@ test("replay is idempotent: no second debit, no new events, no new writes", asyn
     assert.equal(replay.facts, null);
     assert.equal(replay.transaction.id, first.transaction.id);
 
-    const events = await listTransactionEvents(store, first.transaction.id);
+    const events = await listTransactionEvents(repos, first.transaction.id);
     assert.equal(events.length, first.events.length);
 
     const ledger = await ledgerFor(repos, "wl_cus_demo_ngn");
@@ -924,7 +924,7 @@ test("failed payment guard: an underfunded wallet never reaches the provider", a
     assert.equal(result.providerAttempts.length, 0);
 
     const types = (
-      await listTransactionEvents(store, result.transaction.id)
+      await listTransactionEvents(repos, result.transaction.id)
     ).map((e) => e.type);
     assert.ok(types.includes(TransactionEventType.PaymentFailed));
     assert.ok(types.includes(TransactionEventType.TransactionFailed));

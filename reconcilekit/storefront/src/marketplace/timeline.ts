@@ -1,5 +1,5 @@
 import type { SourceAttributes } from "../../../src/domain/model.ts";
-import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import { buildEventId } from "../ids.ts";
 import { WALLET_FIXED_TIMESTAMP } from "./wallet.ts";
 import type {
@@ -67,11 +67,11 @@ export interface AppendTransactionEventInput {
 }
 
 export async function appendTransactionEvent(
-  store: JsonlStore,
+  repos: Repositories,
   input: AppendTransactionEventInput,
 ): Promise<TransactionEvent> {
   const occurredAt = input.occurredAt ?? WALLET_FIXED_TIMESTAMP;
-  const existing = await listTransactionEvents(store, input.transactionId);
+  const existing = await listTransactionEvents(repos, input.transactionId);
   const seq = existing.length + 1;
   const event: TransactionEvent = {
     id: buildEventId(input.transactionId, seq),
@@ -85,23 +85,16 @@ export async function appendTransactionEvent(
     metadata: input.metadata,
     simulated: true,
   };
-  await store.insert("transaction_events", event);
+  await repos.transactionEvents.insert(event);
   return event;
 }
 
 /** Chronological, deterministic timeline for one transaction (oldest first). */
 export async function listTransactionEvents(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<readonly TransactionEvent[]> {
-  const events = await store.readAll<TransactionEvent>("transaction_events");
-  return events
-    .filter((event) => event.transactionId === transactionId)
-    .slice()
-    .sort((a, b) => {
-      const byTime = a.occurredAt.localeCompare(b.occurredAt);
-      return byTime !== 0 ? byTime : a.id.localeCompare(b.id);
-    });
+  return repos.transactionEvents.listByTransaction(transactionId);
 }
 
 export function sourceAttributes(input: {

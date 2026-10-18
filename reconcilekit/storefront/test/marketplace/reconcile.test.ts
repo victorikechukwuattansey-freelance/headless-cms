@@ -114,7 +114,7 @@ test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
   assert.equal(result.pack.reconciliation?.outcome, "MATCH");
   assert.deepEqual(result.pack.mismatchFlags, []);
 
-  const events = await listTransactionEvents(store, executed.transaction.id);
+  const events = await listTransactionEvents(repos, executed.transaction.id);
   assert.equal(events.length, executed.events.length + 2);
   assert.equal(events.filter((e) => e.source === "RECONCILE_KIT").length, 2);
   assert.equal(result.events[0].type, TransactionEventType.ReconcileInputBuilt);
@@ -286,7 +286,7 @@ test("reconcile: replay is store-only — no engine re-run, no new rows", async 
     },
   );
   const eventsAfterFirst = await listTransactionEvents(
-    store,
+    repos,
     executed.transaction.id,
   );
   const rowsAfterFirst = await snapshotRows(store, repos);
@@ -304,7 +304,7 @@ test("reconcile: replay is store-only — no engine re-run, no new rows", async 
   assert.deepEqual(replay.truth, first.truth);
   assert.equal(replay.pack.id, first.pack.id);
   assert.deepEqual(
-    await listTransactionEvents(store, executed.transaction.id),
+    await listTransactionEvents(repos, executed.transaction.id),
     eventsAfterFirst,
   );
   assert.deepEqual(await snapshotRows(store, repos), rowsAfterFirst);

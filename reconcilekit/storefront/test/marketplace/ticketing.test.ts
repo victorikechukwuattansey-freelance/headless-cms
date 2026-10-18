@@ -130,7 +130,7 @@ test("cinema SUCCESS reserves and issues a ticket with a deterministic evidence 
     assert.equal(artifact.cancellationReference, null);
     assert.equal(artifact.cancelledAt, null);
 
-    const events = await listTransactionEvents(store, result.transaction.id);
+    const events = await listTransactionEvents(repos, result.transaction.id);
     assert.ok(
       events.some(
         (event) => event.type === TransactionEventType.TicketReserved,
@@ -172,7 +172,7 @@ test("cinema PENDING holds a reservation but never issues the ticket", async (t)
     assert.ok(artifact.reservationReference !== null);
     assert.equal(artifact.issueReference, null);
 
-    const events = await listTransactionEvents(store, result.transaction.id);
+    const events = await listTransactionEvents(repos, result.transaction.id);
     assert.ok(
       events.some(
         (event) => event.type === TransactionEventType.TicketReserved,
@@ -204,7 +204,7 @@ test("cinema TIMEOUT produces no reservation and stays in manual review", async 
     assert.equal(artifact.reservationReference, null);
     assert.equal(artifact.issueReference, null);
 
-    const events = await listTransactionEvents(store, result.transaction.id);
+    const events = await listTransactionEvents(repos, result.transaction.id);
     assert.ok(
       !events.some(
         (event) => event.type === TransactionEventType.TicketReserved,
@@ -295,7 +295,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
       cinemaInput({ scenario: "SUCCESS" }),
     );
     const eventsBefore = await listTransactionEvents(
-      store,
+      repos,
       result.transaction.id,
     );
     const attemptsBefore = await attemptCount(repos, result.transaction.id);
@@ -329,7 +329,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
     assert.equal(artifact.cancelledAt, NOW);
     assert.equal(artifact.cancellationReference, outcome.cancellationReference);
 
-    const events = await listTransactionEvents(store, result.transaction.id);
+    const events = await listTransactionEvents(repos, result.transaction.id);
     assert.equal(events.length, eventsBefore.length + 1);
     assert.equal(
       events[events.length - 1].type,
@@ -382,7 +382,7 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
       now: NOW,
     });
     const eventsAfterFirst = await listTransactionEvents(
-      store,
+      repos,
       result.transaction.id,
     );
 
@@ -400,7 +400,7 @@ test("replaying a cancellation is idempotent and writes nothing new", async (t) 
     assert.equal(replay.event, null);
     assert.equal(replay.cancellationReference, first.cancellationReference);
     assert.equal(
-      (await listTransactionEvents(store, result.transaction.id)).length,
+      (await listTransactionEvents(repos, result.transaction.id)).length,
       eventsAfterFirst.length,
     );
     assert.equal(
@@ -528,7 +528,7 @@ test("ticket code material is never written in full", async (t) => {
       demoDeps(store, repos),
       cinemaInput({ scenario: "SUCCESS" }),
     );
-    const events = await listTransactionEvents(store, result.transaction.id);
+    const events = await listTransactionEvents(repos, result.transaction.id);
     const serialized = [
       result,
       await store.readAll("ticket_artifacts"),

@@ -202,7 +202,7 @@ export async function reconcileMarketplaceTransaction(
   const truth = buildMarketplaceTruth(report, context);
   const snapshot = toReconciliationSnapshot(result);
 
-  const eventInputBuilt = await appendTransactionEvent(store, {
+  const eventInputBuilt = await appendTransactionEvent(deps.repos, {
     transactionId: input.transactionId,
     type: "RECONCILE_INPUT_BUILT",
     label: "Marketplace reconciliation input built",
@@ -216,7 +216,7 @@ export async function reconcileMarketplaceTransaction(
     }),
     occurredAt: now,
   });
-  const eventDetermined = await appendTransactionEvent(store, {
+  const eventDetermined = await appendTransactionEvent(deps.repos, {
     transactionId: input.transactionId,
     type:
       truth.reconcileOutcome === "MATCH"

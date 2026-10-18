@@ -42,6 +42,13 @@ export class TransactionEventRepository {
     });
     return rows.map(fromPrismaEvent);
   }
+
+  async list(): Promise<TransactionEvent[]> {
+    const rows = await this.client.transactionEvent.findMany({
+      orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+    });
+    return rows.map(fromPrismaEvent);
+  }
 }
 
 interface TransactionEventRow {

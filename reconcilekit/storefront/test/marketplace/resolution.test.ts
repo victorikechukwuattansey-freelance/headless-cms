@@ -73,10 +73,10 @@ async function readTransaction(
 }
 
 async function eventTypes(
-  store: JsonlStore,
+  repos: Repositories,
   transactionId: string,
 ): Promise<string[]> {
-  const events = await listTransactionEvents(store, transactionId);
+  const events = await listTransactionEvents(repos, transactionId);
   return events.map((event) => event.type);
 }
 
@@ -103,7 +103,7 @@ test("a reversal is a distinct money movement from a refund", async (t) => {
     const refunds = await store.readAll("refunds");
     assert.equal(refunds.length, 0);
 
-    const types = await eventTypes(store, transactionId);
+    const types = await eventTypes(repos, transactionId);
     assert.ok(types.includes(TransactionEventType.ReversalInitiated));
     assert.ok(types.includes(TransactionEventType.ReversalCompleted));
     assert.ok(!types.includes(TransactionEventType.RefundInitiated));
@@ -141,7 +141,7 @@ test("refund pending and refunded are two distinct resolution states", async (t)
       "REFUNDED",
     );
 
-    const types = await eventTypes(store, transactionId);
+    const types = await eventTypes(repos, transactionId);
     assert.ok(types.includes(TransactionEventType.RefundInitiated));
     assert.ok(types.includes(TransactionEventType.RefundPending));
     assert.ok(types.includes(TransactionEventType.RefundCompleted));
