@@ -646,12 +646,10 @@ export async function transactionDetailViewModel(
   const receipt = await deps.repos.receipts.readLatestById(
     `rcpt_${transaction.id}`,
   );
-  const refund = await deps.store.readLatestById<RefundRecord>(
-    "refunds",
+  const refund = await deps.repos.refunds.readLatestById(
     `ref_${transaction.id}`,
   );
-  const reversal = await deps.store.readLatestById<ReversalRecord>(
-    "reversals",
+  const reversal = await deps.repos.reversals.readLatestById(
     `rev_${transaction.id}`,
   );
   const dispute = await deps.store.readLatestById<DisputeRecord>(

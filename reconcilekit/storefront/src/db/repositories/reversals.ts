@@ -33,6 +33,13 @@ export class ReversalRepository {
     const row = await this.client.reversal.findUnique({ where: { id } });
     return row === null ? null : fromPrismaReversal(row);
   }
+
+  async list(): Promise<ReversalRecord[]> {
+    const rows = await this.client.reversal.findMany({
+      orderBy: [{ initiatedAt: "asc" }, { id: "asc" }],
+    });
+    return rows.map(fromPrismaReversal);
+  }
 }
 
 interface ReversalRow {

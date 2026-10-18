@@ -150,7 +150,6 @@ export interface RefundActionOutcome {
  * flight or completed.
  */
 export async function initiateTransactionRefund(
-  store: JsonlStore,
   repos: Repositories,
   input: {
     readonly transactionId: string;
@@ -166,8 +165,7 @@ export async function initiateTransactionRefund(
       `cannot initiate a refund from resolution state ${transaction.resolutionStatus}`,
     );
   }
-  const existing = await store.readLatestById<RefundRecord>(
-    "refunds",
+  const existing = await repos.refunds.readLatestById(
     `ref_${input.transactionId}`,
   );
   if (existing !== null && existing.status !== "FAILED_REVIEW") {
@@ -204,7 +202,7 @@ export async function initiateTransactionRefund(
     ledgerReference,
     simulated: true,
   };
-  await store.insert("refunds", refund);
+  await repos.refunds.insert(refund);
   await updateResolutionStatus(repos, transaction, "REFUND_PENDING", now);
 
   const eventInitiated = await appendTransactionEvent(repos, {
@@ -252,7 +250,6 @@ export async function initiateTransactionRefund(
  * never complete before it was initiated.
  */
 export async function completeTransactionRefund(
-  store: JsonlStore,
   repos: Repositories,
   input: {
     readonly transactionId: string;
@@ -263,8 +260,7 @@ export async function completeTransactionRefund(
   const transaction = await requireTransaction(repos, input.transactionId);
   assertMoneyOpen(transaction.resolutionStatus, "complete_refund");
 
-  const refund = await store.readLatestById<RefundRecord>(
-    "refunds",
+  const refund = await repos.refunds.readLatestById(
     `ref_${input.transactionId}`,
   );
   if (refund === null || refund.status !== "PENDING") {
@@ -293,7 +289,7 @@ export async function completeTransactionRefund(
     completedAt: now,
     ledgerReference,
   };
-  await store.insert("refunds", completed);
+  await repos.refunds.insert(completed);
   await updateResolutionStatus(repos, transaction, "REFUNDED", now);
 
   const event = await appendTransactionEvent(repos, {
@@ -335,7 +331,6 @@ export interface ReversalActionOutcome {
  * closed.
  */
 export async function reverseTransactionDebit(
-  store: JsonlStore,
   repos: Repositories,
   input: {
     readonly transactionId: string;
@@ -374,7 +369,7 @@ export async function reverseTransactionDebit(
     ledgerReference,
     simulated: true,
   };
-  await store.insert("reversals", reversal);
+  await repos.reversals.insert(reversal);
   await updateResolutionStatus(repos, transaction, "REVERSED", now);
 
   const eventInitiated = await appendTransactionEvent(repos, {

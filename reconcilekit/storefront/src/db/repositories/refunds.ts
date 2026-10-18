@@ -33,6 +33,13 @@ export class RefundRepository {
     const row = await this.client.refund.findUnique({ where: { id } });
     return row === null ? null : fromPrismaRefund(row);
   }
+
+  async list(): Promise<RefundRecord[]> {
+    const rows = await this.client.refund.findMany({
+      orderBy: [{ initiatedAt: "asc" }, { id: "asc" }],
+    });
+    return rows.map(fromPrismaRefund);
+  }
 }
 
 interface RefundRow {

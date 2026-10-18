@@ -1078,7 +1078,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
       switch (action) {
         case "refund": {
           const reason = form.get("reason") ?? "OPERATOR_INITIATED_REFUND";
-          await initiateTransactionRefund(deps.store, repos, {
+          await initiateTransactionRefund(repos, {
             transactionId: txn.id,
             reason,
           });
@@ -1086,7 +1086,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
           return;
         }
         case "refund/complete": {
-          await completeTransactionRefund(deps.store, repos, {
+          await completeTransactionRefund(repos, {
             transactionId: txn.id,
           });
           redirect(res, 303, `/admin/transactions/${txn.reference}`);
@@ -1094,7 +1094,7 @@ ${providerFactsGrid(vm.evidence.providerFacts as Record<string, string | number 
         }
         case "reversal": {
           const reason = form.get("reason") ?? "OPERATOR_INITIATED_REVERSAL";
-          await reverseTransactionDebit(deps.store, repos, {
+          await reverseTransactionDebit(repos, {
             transactionId: txn.id,
             reason,
           });

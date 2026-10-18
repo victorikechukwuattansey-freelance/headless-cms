@@ -84,10 +84,10 @@ test("a reversal is a distinct money movement from a refund", async (t) => {
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const { store, result } = await runSuccess(t, repos);
+    const { result } = await runSuccess(t, repos);
     const transactionId = result.transaction.id;
 
-    const outcome = await reverseTransactionDebit(store, repos, {
+    const outcome = await reverseTransactionDebit(repos, {
       transactionId,
       reason: "DOUBLE_CHARGE",
     });
@@ -100,7 +100,7 @@ test("a reversal is a distinct money movement from a refund", async (t) => {
       (await readTransaction(repos, transactionId)).resolutionStatus,
       "REVERSED",
     );
-    const refunds = await store.readAll("refunds");
+    const refunds = await repos.refunds.list();
     assert.equal(refunds.length, 0);
 
     const types = await eventTypes(repos, transactionId);
@@ -115,10 +115,10 @@ test("refund pending and refunded are two distinct resolution states", async (t)
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const { store, result } = await runSuccess(t, repos);
+    const { result } = await runSuccess(t, repos);
     const transactionId = result.transaction.id;
 
-    const initiated = await initiateTransactionRefund(store, repos, {
+    const initiated = await initiateTransactionRefund(repos, {
       transactionId,
       reason: "BAD_DELIVERY",
     });
@@ -130,7 +130,7 @@ test("refund pending and refunded are two distinct resolution states", async (t)
       "REFUND_PENDING",
     );
 
-    const completed = await completeTransactionRefund(store, repos, {
+    const completed = await completeTransactionRefund(repos, {
       transactionId,
     });
     assert.equal(completed.resolutionStatus, "REFUNDED");
@@ -152,9 +152,9 @@ test("a refund cannot complete before it was initiated", async (t) => {
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const { store, result } = await runSuccess(t, repos);
+    const { result } = await runSuccess(t, repos);
     await assert.rejects(
-      completeTransactionRefund(store, repos, {
+      completeTransactionRefund(repos, {
         transactionId: result.transaction.id,
       }),
       (error: unknown) =>
@@ -167,14 +167,14 @@ test("a refund cannot be initiated twice", async (t) => {
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const { store, result } = await runSuccess(t, repos);
+    const { result } = await runSuccess(t, repos);
     const transactionId = result.transaction.id;
-    await initiateTransactionRefund(store, repos, {
+    await initiateTransactionRefund(repos, {
       transactionId,
       reason: "FIRST",
     });
     await assert.rejects(
-      initiateTransactionRefund(store, repos, {
+      initiateTransactionRefund(repos, {
         transactionId,
         reason: "SECOND",
       }),
@@ -189,14 +189,14 @@ test("a reversal cannot follow an in-flight refund", async (t) => {
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
-    const { store, result } = await runSuccess(t, repos);
+    const { result } = await runSuccess(t, repos);
     const transactionId = result.transaction.id;
-    await initiateTransactionRefund(store, repos, {
+    await initiateTransactionRefund(repos, {
       transactionId,
       reason: "TEST",
     });
     await assert.rejects(
-      reverseTransactionDebit(store, repos, { transactionId }),
+      reverseTransactionDebit(repos, { transactionId }),
       (error: unknown) =>
         error instanceof ResolutionError &&
         error.code === "INVALID_RESOLUTION_TRANSITION",
@@ -296,11 +296,11 @@ test("a dispute cannot be opened on a refunded transaction", async (t) => {
     const repos = buildRepositories(tx);
     const { store, result } = await runSuccess(t, repos);
     const transactionId = result.transaction.id;
-    await initiateTransactionRefund(store, repos, {
+    await initiateTransactionRefund(repos, {
       transactionId,
       reason: "TEST",
     });
-    await completeTransactionRefund(store, repos, { transactionId });
+    await completeTransactionRefund(repos, { transactionId });
     await assert.rejects(
       openDispute(store, repos, { transactionId, reason: "LATE" }),
       (error: unknown) =>

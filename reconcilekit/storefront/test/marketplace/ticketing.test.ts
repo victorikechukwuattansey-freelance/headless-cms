@@ -349,7 +349,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
     assert.equal(latest.resolutionStatus, "NONE");
     assert.equal(latest.paymentStatus, "SUCCESS");
     assert.equal(
-      (await store.readAll("refunds")).filter(
+      (await repos.refunds.list()).filter(
         (row) =>
           (row as { transactionId: string }).transactionId ===
           result.transaction.id,
@@ -357,7 +357,7 @@ test("cancel invalidates the ticket without touching money or resolution state",
       0,
     );
     assert.equal(
-      (await store.readAll("reversals")).filter(
+      (await repos.reversals.list()).filter(
         (row) =>
           (row as { transactionId: string }).transactionId ===
           result.transaction.id,
