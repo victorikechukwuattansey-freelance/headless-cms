@@ -1,4 +1,3 @@
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import type { Repositories } from "../db/repositories/index.ts";
 import { buildTransactionId, buildTransactionReference } from "../ids.ts";
 import { buildDemoCatalog } from "./catalog.ts";
@@ -298,7 +297,6 @@ export async function seedWalletFundingFailure(
  * store is indistinguishable in shape from one produced by real use.
  */
 export async function seedDemoData(
-  store: JsonlStore,
   repos: Repositories,
 ): Promise<SeededDemoData> {
   // Postgres FK ordering: memberships.user_id -> users.id, so the demo user

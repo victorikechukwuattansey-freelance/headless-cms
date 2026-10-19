@@ -50,7 +50,7 @@ async function startFullySeededServer(t: {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-detail-states-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
   const store = new JsonlStore(dataDir);
-  const seeded = await seedDemoData(store, repos);
+  const seeded = await seedDemoData(repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),

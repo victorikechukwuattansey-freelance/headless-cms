@@ -29,7 +29,6 @@ export interface SeededServerContext {
 }
 
 async function createSeededTransaction(
-  store: JsonlStore,
   repos: Repositories,
 ): Promise<MarketplaceTransaction> {
   const deps = demoDeps(repos);
@@ -58,10 +57,10 @@ export async function startSeededServer(): Promise<SeededServerContext> {
 
   // seedDemoData seeds the demo user (Postgres) and the demo tenancy
   // (Postgres) in the correct FK order, then executes the marketplace
-  // scenarios into JSONL.
-  await seedDemoData(store, repos);
+  // scenarios into Postgres repositories.
+  await seedDemoData(repos);
 
-  const transaction = await createSeededTransaction(store, repos);
+  const transaction = await createSeededTransaction(repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),

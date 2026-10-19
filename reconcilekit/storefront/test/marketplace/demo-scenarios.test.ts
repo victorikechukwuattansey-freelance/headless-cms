@@ -1,15 +1,11 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import {
   buildRepositories,
   type Repositories,
 } from "../../src/db/repositories/index.ts";
 import { truncateCommittedState } from "../db/isolation.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   DEMO_ORDER_SCENARIOS,
   resolveDemoAlias,
@@ -36,17 +32,8 @@ beforeEach(async () => {
   await truncateCommittedState(prisma);
 });
 
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-demo-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
-
-async function seededStore(t: {
-  after: (fn: () => void) => void;
-}): Promise<{ seeded: SeededDemoData }> {
-  const store = tempStore(t);
-  const seeded = await seedDemoData(store, repos);
+async function seededStore(): Promise<{ seeded: SeededDemoData }> {
+  const seeded = await seedDemoData(repos);
   return { seeded };
 }
 
@@ -116,8 +103,8 @@ test("alias resolution is pure and canonical", async () => {
   assert.equal(resolveDemoAlias("not-an-alias"), null);
 });
 
-test("successful_airtime reconciles to MATCH with fulfilled top-up", async (t) => {
-  const { seeded } = await seededStore(t);
+test("successful_airtime reconciles to MATCH with fulfilled top-up", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "successful_airtime",
   )!;
@@ -144,8 +131,8 @@ test("successful_airtime reconciles to MATCH with fulfilled top-up", async (t) =
   );
 });
 
-test("failed_data leaves a failed-fulfillment discrepancy", async (t) => {
-  const { seeded } = await seededStore(t);
+test("failed_data leaves a failed-fulfillment discrepancy", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "failed_data",
   )!;
@@ -159,8 +146,8 @@ test("failed_data leaves a failed-fulfillment discrepancy", async (t) => {
   assert.equal(outcomeOf(entry.pack), "DISCREPANCY");
 });
 
-test("pending_electricity waits on the provider", async (t) => {
-  const { seeded } = await seededStore(t);
+test("pending_electricity waits on the provider", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "pending_electricity",
   )!;
@@ -174,8 +161,8 @@ test("pending_electricity waits on the provider", async (t) => {
   assert.equal(entry.truth.moneyAtRisk, true);
 });
 
-test("provider_timeout leaves no provider record", async (t) => {
-  const { seeded } = await seededStore(t);
+test("provider_timeout leaves no provider record", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "provider_timeout",
   )!;
@@ -189,8 +176,8 @@ test("provider_timeout leaves no provider record", async (t) => {
   assert.ok(events.some((event) => event.type === "PROVIDER_TIMEOUT"));
 });
 
-test("duplicate_debit completes cleanly and fires the duplicate marker", async (t) => {
-  const { seeded } = await seededStore(t);
+test("duplicate_debit completes cleanly and fires the duplicate marker", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "duplicate_debit",
   )!;
@@ -219,8 +206,8 @@ test("duplicate_debit completes cleanly and fires the duplicate marker", async (
   );
 });
 
-test("provider_mismatch surfaces an amount mismatch", async (t) => {
-  const { seeded } = await seededStore(t);
+test("provider_mismatch surfaces an amount mismatch", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "provider_mismatch",
   )!;
@@ -234,8 +221,8 @@ test("provider_mismatch surfaces an amount mismatch", async (t) => {
   assert.ok(events.some((event) => event.type === "PROVIDER_AMOUNT_MISMATCH"));
 });
 
-test("successful_gift_card delivers a masked code", async (t) => {
-  const { seeded } = await seededStore(t);
+test("successful_gift_card delivers a masked code", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "successful_gift_card",
   )!;
@@ -251,8 +238,8 @@ test("successful_gift_card delivers a masked code", async (t) => {
   assert.equal(entry.transaction.customerStatus, "CONFIRMED");
 });
 
-test("gift_card_fulfillment_failure keeps the code masked and records failure", async (t) => {
-  const { seeded } = await seededStore(t);
+test("gift_card_fulfillment_failure keeps the code masked and records failure", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "gift_card_fulfillment_failure",
   )!;
@@ -271,8 +258,8 @@ test("gift_card_fulfillment_failure keeps the code masked and records failure", 
   );
 });
 
-test("cinema_ticket_success issues a masked ticket artifact", async (t) => {
-  const { seeded } = await seededStore(t);
+test("cinema_ticket_success issues a masked ticket artifact", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "cinema_ticket_success",
   )!;
@@ -289,8 +276,8 @@ test("cinema_ticket_success issues a masked ticket artifact", async (t) => {
   assert.ok(events.some((event) => event.type === "TICKET_ISSUED"));
 });
 
-test("bus_ticket_refund completes a wallet refund", async (t) => {
-  const { seeded } = await seededStore(t);
+test("bus_ticket_refund completes a wallet refund", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "bus_ticket_refund",
   )!;
@@ -308,8 +295,8 @@ test("bus_ticket_refund completes a wallet refund", async (t) => {
   assert.ok(events.some((event) => event.type === "REFUND_COMPLETED"));
 });
 
-test("airline_booking_pending is reserved but not issued", async (t) => {
-  const { seeded } = await seededStore(t);
+test("airline_booking_pending is reserved but not issued", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "airline_booking_pending",
   )!;
@@ -323,8 +310,8 @@ test("airline_booking_pending is reserved but not issued", async (t) => {
   assert.ok(tickets[0]?.reservationReference);
 });
 
-test("payment_success_service_failure splits payment truth from fulfillment failure", async (t) => {
-  const { seeded } = await seededStore(t);
+test("payment_success_service_failure splits payment truth from fulfillment failure", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "payment_success_service_failure",
   )!;
@@ -348,8 +335,8 @@ test("payment_success_service_failure splits payment truth from fulfillment fail
   );
 });
 
-test("payment_reversal reverses the wallet debit", async (t) => {
-  const { seeded } = await seededStore(t);
+test("payment_reversal reverses the wallet debit", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "payment_reversal",
   )!;
@@ -364,8 +351,8 @@ test("payment_reversal reverses the wallet debit", async (t) => {
   assert.ok(events.some((event) => event.type === "REVERSAL_COMPLETED"));
 });
 
-test("refund_pending waits for the refund provider", async (t) => {
-  const { seeded } = await seededStore(t);
+test("refund_pending waits for the refund provider", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "refund_pending",
   )!;
@@ -380,8 +367,8 @@ test("refund_pending waits for the refund provider", async (t) => {
   assert.ok(events.some((event) => event.type === "REFUND_PENDING"));
 });
 
-test("manual_review requires operator attention without auto-conclusion", async (t) => {
-  const { seeded } = await seededStore(t);
+test("manual_review requires operator attention without auto-conclusion", async () => {
+  const { seeded } = await seededStore();
   const spec = DEMO_ORDER_SCENARIOS.find(
     (scenario) => scenario.name === "manual_review",
   )!;

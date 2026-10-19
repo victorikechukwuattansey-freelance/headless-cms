@@ -1,12 +1,8 @@
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import type { Repositories } from "../../src/db/repositories/index.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import { executeMarketplaceTransaction } from "../../src/marketplace/transactions.ts";
 import {
@@ -39,12 +35,6 @@ after(async () => {
 
 const NOW = WALLET_FIXED_TIMESTAMP;
 
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-reconcile-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
-
 function reconcileDeps(repos: Repositories): MarketplaceReconcileDeps {
   return { repos, catalog: buildDemoCatalog() };
 }
@@ -63,12 +53,16 @@ function input(
 }
 
 async function snapshotRows(
-  store: JsonlStore,
   repos: Repositories,
+  transactionId: string,
 ): Promise<readonly string[]> {
   const payments = await repos.marketplacePayments.list();
   const attempts = await repos.marketplaceProviderAttempts.list();
-  const walletLedger = await store.readAll("wallet_ledger");
+  // wallet_ledger is Postgres-only since 1e; the JSONL read returned []
+  // vacuously. Scope the snapshot to this transaction; the invariant is
+  // that reconcile does not mutate this transaction's ledger.
+  const walletLedger =
+    await repos.walletLedger.listByTransaction(transactionId);
   return [
     JSON.stringify(payments),
     JSON.stringify(attempts),
@@ -83,13 +77,12 @@ async function packFor(
   return repos.evidencePacks.readLatestById(`evp_${transactionId}`);
 }
 
-test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
-  const store = tempStore(t);
+test("reconcile: SUCCESS settles clean — no money at risk", async () => {
   const executed = await executeMarketplaceTransaction(
     demoDeps(repos),
     input({ scenario: "SUCCESS" }),
   );
-  const rows = await snapshotRows(store, repos);
+  const rows = await snapshotRows(repos, executed.transaction.id);
 
   const result = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
     transactionId: executed.transaction.id,
@@ -119,11 +112,10 @@ test("reconcile: SUCCESS settles clean — no money at risk", async (t) => {
   assert.equal(updated.customerStatus, "CONFIRMED");
   assert.equal(updated.adminStatus, "HEALTHY");
 
-  assert.deepEqual(await snapshotRows(store, repos), rows);
+  assert.deepEqual(await snapshotRows(repos, executed.transaction.id), rows);
 });
 
-test("reconcile: FAILED exposes a provider-side discrepancy and money at risk", async (t) => {
-  const store = tempStore(t);
+test("reconcile: FAILED exposes a provider-side discrepancy and money at risk", async () => {
   const executed = await executeMarketplaceTransaction(
     demoDeps(repos),
     input({ scenario: "FAILED" }),
@@ -145,8 +137,7 @@ test("reconcile: FAILED exposes a provider-side discrepancy and money at risk", 
   );
 });
 
-test("reconcile: TIMEOUT has no provider evidence — held, never fabricated", async (t) => {
-  const store = tempStore(t);
+test("reconcile: TIMEOUT has no provider evidence — held, never fabricated", async () => {
   const executed = await executeMarketplaceTransaction(
     demoDeps(repos),
     input({ scenario: "TIMEOUT" }),
@@ -166,8 +157,7 @@ test("reconcile: TIMEOUT has no provider evidence — held, never fabricated", a
   assert.deepEqual(result.pack.mismatchFlags, ["STATUS_UNRESOLVED"]);
 });
 
-test("reconcile: UNKNOWN stays unresolved, never convinced either way", async (t) => {
-  const store = tempStore(t);
+test("reconcile: UNKNOWN stays unresolved, never convinced either way", async () => {
   const executed = await executeMarketplaceTransaction(
     demoDeps(repos),
     input({ scenario: "UNKNOWN" }),
@@ -184,8 +174,7 @@ test("reconcile: UNKNOWN stays unresolved, never convinced either way", async (t
   assert.equal(result.truth.moneyAtRisk, true);
 });
 
-test("reconcile: REVERSAL outcome is resolved — no money at risk", async (t) => {
-  const store = tempStore(t);
+test("reconcile: REVERSAL outcome is resolved — no money at risk", async () => {
   const executed = await executeMarketplaceTransaction(
     demoDeps(repos),
     input({ scenario: "REVERSED" }),
@@ -202,8 +191,7 @@ test("reconcile: REVERSAL outcome is resolved — no money at risk", async (t) =
   assert.equal(result.truth.moneyAtRisk, false);
 });
 
-test("reconcile: declined wallet debit is a clean failure, not a mystery", async (t) => {
-  const store = tempStore(t);
+test("reconcile: declined wallet debit is a clean failure, not a mystery", async () => {
   const executed = await executeMarketplaceTransaction(
     demoDeps(repos),
     input({ scenario: "SUCCESS", openingBalanceMinor: 0 }),
@@ -222,8 +210,7 @@ test("reconcile: declined wallet debit is a clean failure, not a mystery", async
   assert.equal(result.pack.reconciliation?.codes.length, 0);
 });
 
-test("reconcile: evidence pack carries the service snapshot and provider facts", async (t) => {
-  const store = tempStore(t);
+test("reconcile: evidence pack carries the service snapshot and provider facts", async () => {
   const executed = await executeMarketplaceTransaction(
     demoDeps(repos),
     input({ scenario: "SUCCESS" }),
@@ -247,8 +234,7 @@ test("reconcile: evidence pack carries the service snapshot and provider facts",
   assert.equal(pack.simulated, true);
 });
 
-test("reconcile: replay is store-only — no engine re-run, no new rows", async (t) => {
-  const store = tempStore(t);
+test("reconcile: replay is store-only — no engine re-run, no new rows", async () => {
   const executed = await executeMarketplaceTransaction(
     demoDeps(repos),
     input({ scenario: "FAILED" }),
@@ -262,7 +248,7 @@ test("reconcile: replay is store-only — no engine re-run, no new rows", async 
     repos,
     executed.transaction.id,
   );
-  const rowsAfterFirst = await snapshotRows(store, repos);
+  const rowsAfterFirst = await snapshotRows(repos, executed.transaction.id);
 
   const replay = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
     transactionId: executed.transaction.id,
@@ -277,14 +263,16 @@ test("reconcile: replay is store-only — no engine re-run, no new rows", async 
     await listTransactionEvents(repos, executed.transaction.id),
     eventsAfterFirst,
   );
-  assert.deepEqual(await snapshotRows(store, repos), rowsAfterFirst);
+  assert.deepEqual(
+    await snapshotRows(repos, executed.transaction.id),
+    rowsAfterFirst,
+  );
 
   const packs = await repos.evidencePacks.list();
   assert.equal(packs.length, 1);
 });
 
-test("reconcile: unknown transaction is a typed error", async (t) => {
-  const store = tempStore(t);
+test("reconcile: unknown transaction is a typed error", async () => {
   await assert.rejects(
     () =>
       reconcileMarketplaceTransaction(reconcileDeps(repos), {

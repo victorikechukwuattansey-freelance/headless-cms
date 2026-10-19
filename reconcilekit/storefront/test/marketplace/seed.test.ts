@@ -1,13 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
 import { seedDemoCustomer } from "../db/fixtures.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   DEMO_ORDER_SCENARIOS,
   DEMO_SCENARIO_NAMES,
@@ -38,12 +34,6 @@ import type {
 
 const prisma = getPrismaClient();
 
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-seed-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
-
 async function ledgerFor(
   repos: Repositories,
   transactionId: string,
@@ -59,21 +49,19 @@ function orderEntries(seeded: {
   );
 }
 
-test("demo seed creates all required validation scenarios", async (t) => {
-  const store = tempStore(t);
+test("demo seed creates all required validation scenarios", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const seeded = await seedDemoData(store, repos);
+    const seeded = await seedDemoData(repos);
     const names = seeded.transactions.map((entry) => entry.demoScenarioName);
     assert.deepEqual(names.slice().sort(), DEMO_SCENARIO_NAMES.slice().sort());
   });
 });
 
-test("demo seed produces stable, unique identities with friendly names", async (t) => {
-  const store = tempStore(t);
+test("demo seed produces stable, unique identities with friendly names", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const seeded = await seedDemoData(store, repos);
+    const seeded = await seedDemoData(repos);
     const orders = orderEntries(seeded);
 
     assert.equal(seeded.transactions.length, 16);
@@ -125,11 +113,10 @@ test("demo seed produces stable, unique identities with friendly names", async (
   });
 });
 
-test("friendly reference aliases resolve through the existing transaction lookup", async (t) => {
-  const store = tempStore(t);
+test("friendly reference aliases resolve through the existing transaction lookup", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const seeded = await seedDemoData(store, repos);
+    const seeded = await seedDemoData(repos);
 
     for (const scenario of DEMO_ORDER_SCENARIOS) {
       const entry = seeded.byName[scenario.name] as SeededOrderEntry;
@@ -156,12 +143,11 @@ test("friendly reference aliases resolve through the existing transaction lookup
   });
 });
 
-test("demo seed is idempotent and leaves no duplicate money movement", async (t) => {
-  const store = tempStore(t);
+test("demo seed is idempotent and leaves no duplicate money movement", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const first = await seedDemoData(store, repos);
-    const second = await seedDemoData(store, repos);
+    const first = await seedDemoData(repos);
+    const second = await seedDemoData(repos);
 
     assert.deepEqual(
       first.transactions.map((e) => e.demoScenarioName).sort(),

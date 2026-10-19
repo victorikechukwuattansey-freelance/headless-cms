@@ -55,7 +55,7 @@ async function startFullySeededServer(t: {
   // Phase 5A.3b — protected routes require a session; seed the demo user so
   // the login helper can authenticate against this server.
   await seedDemoUser(repos);
-  const seeded = await seedDemoData(store, repos);
+  const seeded = await seedDemoData(repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
