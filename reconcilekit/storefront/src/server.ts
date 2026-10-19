@@ -257,7 +257,7 @@ async function handleCreateBusiness(
     name,
     createdAt: new Date().toISOString(),
   };
-  await deps.store.insert("businesses", business);
+  await deps.repos.businesses.insert(business);
   writeJson(res, 201, { business });
 }
 
@@ -288,10 +288,7 @@ async function handleCreateProduct(
     );
   }
 
-  const business = await deps.store.readLatestById<Business>(
-    "businesses",
-    businessId,
-  );
+  const business = await deps.repos.businesses.readLatestById(businessId);
   if (business === null) {
     throw new HttpError(404, "BUSINESS_NOT_FOUND", "no such business");
   }
@@ -304,7 +301,7 @@ async function handleCreateProduct(
     currency,
     createdAt: new Date().toISOString(),
   };
-  await deps.store.insert("products", product);
+  await deps.repos.products.insert(product);
   writeJson(res, 201, { product });
 }
 
@@ -327,17 +324,11 @@ async function handleCreateOrder(
     );
   }
 
-  const business = await deps.store.readLatestById<Business>(
-    "businesses",
-    businessId,
-  );
+  const business = await deps.repos.businesses.readLatestById(businessId);
   if (business === null) {
     throw new HttpError(404, "BUSINESS_NOT_FOUND", "no such business");
   }
-  const product = await deps.store.readLatestById<Product>(
-    "products",
-    productId,
-  );
+  const product = await deps.repos.products.readLatestById(productId);
   if (product === null) {
     throw new HttpError(404, "PRODUCT_NOT_FOUND", "no such product");
   }
