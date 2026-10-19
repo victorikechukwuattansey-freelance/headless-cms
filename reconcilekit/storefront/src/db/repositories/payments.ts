@@ -20,14 +20,13 @@ import type { PaymentRecord, RefundStatus } from "../../domain/types.ts";
  * after a successful initializeTransaction).
  *
  * Method surface:
- *   - `insert` (server.ts:handleCreateOrder, verify-order.ts:145)
- *   - `readLatestById` (verify-order.ts:82)
- *   - `list` (server.ts:handleReconcile:528, handleReconcileCsv:566 —
- *     replaces `readAll<PaymentRecord>("payments")` + the outer
- *     `effectivePaymentRecords` reduction; under Postgres the PK
- *     deduplicates naturally, so the caller's reduction becomes identity)
- *   - `findByOrderId` (server.ts:handleReconcile:530 — replaces the
- *     `readAll + .filter(orderId)` pattern)
+ *   - `insert` (server.ts:handleCreateOrder, verify-order.ts:149)
+ *   - `readLatestById` (verify-order.ts:94)
+ *   - `list` (server.ts:handleReconcile / handleReconcileCsv — replaces
+ *     `readAll<PaymentRecord>("payments")`; ordered by recordedAt then id.
+ *     Under Postgres the PK deduplicates, so the caller's
+ *     `effectivePaymentRecords` reduction is identity)
+ *   - `findByOrderId` (single-order lookup)
  *
  * `metadata` is a JSON column cast through `unknown`. `status` and
  * `refundStatus` are enums-as-strings; direct cast to the domain union.
@@ -57,7 +56,7 @@ export class PaymentRepository {
 
   async list(): Promise<PaymentRecord[]> {
     const rows = await this.client.payment.findMany({
-      orderBy: { id: "asc" },
+      orderBy: [{ recordedAt: "asc" }, { id: "asc" }],
     });
     return rows.map(fromPrismaPayment);
   }

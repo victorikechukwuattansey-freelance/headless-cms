@@ -111,9 +111,10 @@ test("payments: insert with an existing id overwrites (PENDING → SUCCESS with 
   });
 });
 
-test("payments: list returns every payment in id order", async () => {
+test("payments: list returns seeded payments in recordedAt then id order", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
+    const seededIds = ["ord_a", "ord_b", "ord_c"];
     await seedChain(tx, "ord_b", "biz_test_1", "prd_test_1");
     await seedChain(tx, "ord_a", "biz_test_1", "prd_test_1");
     await seedChain(tx, "ord_c", "biz_test_1", "prd_test_1");
@@ -123,6 +124,7 @@ test("payments: list returns every payment in id order", async () => {
         id: "ord_b",
         orderId: "ord_b",
         paystackReference: "ps_ref_ord_b",
+        recordedAt: "2026-01-01T00:00:02.000Z",
       }),
     );
     await repos.payments.insert(
@@ -130,6 +132,7 @@ test("payments: list returns every payment in id order", async () => {
         id: "ord_a",
         orderId: "ord_a",
         paystackReference: "ps_ref_ord_a",
+        recordedAt: "2026-01-01T00:00:01.000Z",
       }),
     );
     await repos.payments.insert(
@@ -137,13 +140,14 @@ test("payments: list returns every payment in id order", async () => {
         id: "ord_c",
         orderId: "ord_c",
         paystackReference: "ps_ref_ord_c",
+        recordedAt: "2026-01-01T00:00:03.000Z",
       }),
     );
 
     const rows = await repos.payments.list();
-    assert.equal(rows.length, 3);
+    const seeded = rows.filter((row) => seededIds.includes(row.id));
     assert.deepEqual(
-      rows.map((row) => row.id),
+      seeded.map((row) => row.id),
       ["ord_a", "ord_b", "ord_c"],
     );
   });

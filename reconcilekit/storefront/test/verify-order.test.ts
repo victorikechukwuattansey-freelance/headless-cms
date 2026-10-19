@@ -1,9 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { JsonlStore } from "../src/store/jsonl-store.ts";
 import { verifyOrder } from "../src/application/verify-order.ts";
 import type { VerifyOrderResult } from "../src/application/verify-order.ts";
 import type { PaystackGateway } from "../src/paystack/gateway.ts";
@@ -34,7 +30,6 @@ function isoAt(epoch: number): string {
 }
 
 async function seedOrder(
-  store: JsonlStore,
   repos: Repositories,
   options?: {
     readonly reference?: string | null;
@@ -87,7 +82,7 @@ async function seedOrder(
       metadata: { requested_reference: orderReference },
       recordedAt: isoAt(0),
     };
-    await store.insert("payments", payment);
+    await repos.payments.insert(payment);
   }
   return { order, product };
 }
@@ -120,28 +115,22 @@ function gatewayWith(
   };
 }
 
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-verify-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
+async function paymentCount(repos: Repositories): Promise<number> {
+  const payments = await repos.payments.list();
+  return payments.filter((record) => record.orderId === ORDER_ID).length;
 }
 
-async function paymentCount(store: JsonlStore): Promise<number> {
-  return (await store.readAll<PaymentRecord>("payments")).length;
-}
-
-test("PENDING → SUCCESS: records SUCCESS with the Paystack paid_at timestamp", async (t) => {
+test("PENDING → SUCCESS: records SUCCESS with the Paystack paid_at timestamp", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    const { order } = await seedOrder(store, repos);
+    const { order } = await seedOrder(repos);
     const gateway = gatewayWith(async (input) => {
       assert.equal(input.reference, REF);
       assert.deepEqual(input.supportedCurrencies, [CURRENCY]);
       return mapped();
     });
 
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "verified");
     if (result.kind !== "verified") return;
 
@@ -155,25 +144,21 @@ test("PENDING → SUCCESS: records SUCCESS with the Paystack paid_at timestamp",
     assert.equal(result.payment.metadata.paystack_canonical_status, "SUCCESS");
     assert.ok(result.payment.metadata.verified_at);
 
-    const persisted = await store.readLatestById<PaymentRecord>(
-      "payments",
-      ORDER_ID,
-    );
+    const persisted = await repos.payments.readLatestById(ORDER_ID);
     assert.equal(persisted?.status, "SUCCESS");
     assert.equal(persisted?.paidAt, PAID_AT);
   });
 });
 
-test("PENDING → FAILED: records FAILED with no payment timestamp", async (t) => {
+test("PENDING → FAILED: records FAILED with no payment timestamp", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () =>
       mapped({ status: "FAILED", occurred_at: null }),
     );
 
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "verified");
     if (result.kind !== "verified") return;
     assert.equal(result.changed, true);
@@ -183,58 +168,57 @@ test("PENDING → FAILED: records FAILED with no payment timestamp", async (t) =
   });
 });
 
-test("PENDING → PENDING: state is unchanged and nothing is appended", async (t) => {
+test("PENDING → PENDING: state is unchanged and nothing is appended", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () =>
       mapped({ status: "PENDING", occurred_at: null }),
     );
 
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "verified");
     if (result.kind !== "verified") return;
     assert.equal(result.changed, false);
     assert.equal(result.payment.status, "PENDING");
-    assert.equal(await paymentCount(store), 1);
+    assert.equal(await paymentCount(repos), 1);
   });
 });
 
-test("SUCCESS → SUCCESS: repeated verification is a safe no-op", async (t) => {
+test("SUCCESS → SUCCESS: repeated verification is a safe no-op", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () => mapped());
 
-    const first = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const first = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(first.kind, "verified");
     if (first.kind !== "verified") return;
     assert.equal(first.changed, true);
 
-    const second = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const second = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(second.kind, "verified");
     if (second.kind !== "verified") return;
     assert.equal(second.changed, false);
     assert.equal(second.payment.status, "SUCCESS");
-    assert.equal(await paymentCount(store), 2);
+    assert.equal(await paymentCount(repos), 1);
   });
 });
 
-test("repeated successful verification never creates contradictory records", async (t) => {
+test("repeated successful verification never creates contradictory records", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () => mapped());
 
-    await verifyOrder(store, repos, gateway, ORDER_ID);
-    await verifyOrder(store, repos, gateway, ORDER_ID);
-    await verifyOrder(store, repos, gateway, ORDER_ID);
+    await verifyOrder(repos, gateway, ORDER_ID);
+    await verifyOrder(repos, gateway, ORDER_ID);
+    await verifyOrder(repos, gateway, ORDER_ID);
 
-    const all = await store.readAll<PaymentRecord>("payments");
-    assert.equal(all.length, 2);
+    const all = (await repos.payments.list()).filter(
+      (record) => record.orderId === ORDER_ID,
+    );
+    assert.equal(all.length, 1);
     const latest = all[all.length - 1];
     assert.equal(latest.status, "SUCCESS");
     assert.equal(latest.paidAt, PAID_AT);
@@ -246,59 +230,52 @@ test("repeated successful verification never creates contradictory records", asy
   });
 });
 
-test("verifying a nonexistent order returns order_not_found", async (t) => {
+test("verifying a nonexistent order returns order_not_found", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
     const gateway = gatewayWith(async () => mapped());
-    const result = await verifyOrder(store, repos, gateway, "no-such-order");
+    const result = await verifyOrder(repos, gateway, "no-such-order");
     assert.equal(result.kind, "order_not_found");
   });
 });
 
-test("verifying an order without a reference returns not_initialized", async (t) => {
+test("verifying an order without a reference returns not_initialized", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos, {
+    await seedOrder(repos, {
       reference: null,
       orderStatus: "INITIALIZATION_FAILED",
     });
     const gateway = gatewayWith(async () => mapped());
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "not_initialized");
   });
 });
 
-test("reference mismatch is a reference-integrity failure and nothing is recorded", async (t) => {
+test("reference mismatch is a reference-integrity failure and nothing is recorded", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () => mapped({ reference: "stf_EVIL" }));
 
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "reference_mismatch");
 
-    const persisted = await store.readLatestById<PaymentRecord>(
-      "payments",
-      ORDER_ID,
-    );
+    const persisted = await repos.payments.readLatestById(ORDER_ID);
     assert.equal(persisted?.status, "PENDING");
-    assert.equal(await paymentCount(store), 1);
+    assert.equal(await paymentCount(repos), 1);
   });
 });
 
-test("amount mismatch blocks SUCCESS and records UNKNOWN with integrity metadata", async (t) => {
+test("amount mismatch blocks SUCCESS and records UNKNOWN with integrity metadata", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () =>
       mapped({ amount: EXPECTED_AMOUNT + 1 }),
     );
 
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "verified");
     if (result.kind !== "verified") return;
     assert.equal(result.changed, true);
@@ -314,14 +291,13 @@ test("amount mismatch blocks SUCCESS and records UNKNOWN with integrity metadata
   });
 });
 
-test("currency mismatch blocks SUCCESS and records UNKNOWN with integrity metadata", async (t) => {
+test("currency mismatch blocks SUCCESS and records UNKNOWN with integrity metadata", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () => mapped({ currency: "GHS" }));
 
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "verified");
     if (result.kind !== "verified") return;
     assert.equal(result.payment.status, "UNKNOWN");
@@ -329,16 +305,15 @@ test("currency mismatch blocks SUCCESS and records UNKNOWN with integrity metada
   });
 });
 
-test("amount and currency mismatch together are both reported", async (t) => {
+test("amount and currency mismatch together are both reported", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () =>
       mapped({ amount: 1, currency: "GHS" }),
     );
 
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "verified");
     if (result.kind !== "verified") return;
     assert.equal(result.payment.status, "UNKNOWN");
@@ -349,17 +324,16 @@ test("amount and currency mismatch together are both reported", async (t) => {
   });
 });
 
-test("an integrity mismatch never flips back to SUCCESS on repeat", async (t) => {
+test("an integrity mismatch never flips back to SUCCESS on repeat", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () =>
       mapped({ amount: EXPECTED_AMOUNT + 1 }),
     );
 
-    await verifyOrder(store, repos, gateway, ORDER_ID);
-    const second = await verifyOrder(store, repos, gateway, ORDER_ID);
+    await verifyOrder(repos, gateway, ORDER_ID);
+    const second = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(second.kind, "verified");
     if (second.kind !== "verified") return;
     assert.equal(second.changed, false);
@@ -367,11 +341,10 @@ test("an integrity mismatch never flips back to SUCCESS on repeat", async (t) =>
   });
 });
 
-test("malformed Paystack response leaves the effective record untouched", async (t) => {
+test("malformed Paystack response leaves the effective record untouched", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () => {
       throw new PaystackClientError(
         "PAYSTACK_CLIENT_MALFORMED_RESPONSE",
@@ -379,25 +352,21 @@ test("malformed Paystack response leaves the effective record untouched", async 
       );
     });
 
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "verify_failed");
     if (result.kind === "verify_failed") {
       assert.equal(result.causeCode, "PAYSTACK_CLIENT_MALFORMED_RESPONSE");
     }
-    const persisted = await store.readLatestById<PaymentRecord>(
-      "payments",
-      ORDER_ID,
-    );
+    const persisted = await repos.payments.readLatestById(ORDER_ID);
     assert.equal(persisted?.status, "PENDING");
-    assert.equal(await paymentCount(store), 1);
+    assert.equal(await paymentCount(repos), 1);
   });
 });
 
-test("Paystack transport failure leaves the effective record untouched", async (t) => {
+test("Paystack transport failure leaves the effective record untouched", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () => {
       throw new PaystackClientError(
         "PAYSTACK_CLIENT_HTTP_UNAUTHORIZED",
@@ -406,63 +375,53 @@ test("Paystack transport failure leaves the effective record untouched", async (
       );
     });
 
-    const result = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const result = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(result.kind, "verify_failed");
     if (result.kind === "verify_failed") {
       assert.equal(result.causeCode, "PAYSTACK_CLIENT_HTTP_UNAUTHORIZED");
     }
-    const persisted = await store.readLatestById<PaymentRecord>(
-      "payments",
-      ORDER_ID,
-    );
+    const persisted = await repos.payments.readLatestById(ORDER_ID);
     assert.equal(persisted?.status, "PENDING");
   });
 });
 
-test("FAILED → SUCCESS later: later verified state wins", async (t) => {
+test("FAILED → SUCCESS later: later verified state wins", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () =>
       mapped({ status: "FAILED", occurred_at: null }),
     );
 
-    const first = await verifyOrder(store, repos, gateway, ORDER_ID);
+    const first = await verifyOrder(repos, gateway, ORDER_ID);
     assert.equal(first.kind, "verified");
     if (first.kind === "verified") assert.equal(first.payment.status, "FAILED");
 
     const successGateway = gatewayWith(async () => mapped());
-    const second = await verifyOrder(store, repos, successGateway, ORDER_ID);
+    const second = await verifyOrder(repos, successGateway, ORDER_ID);
     assert.equal(second.kind, "verified");
     if (second.kind === "verified") {
       assert.equal(second.changed, true);
       assert.equal(second.payment.status, "SUCCESS");
     }
-    const persisted = await store.readLatestById<PaymentRecord>(
-      "payments",
-      ORDER_ID,
-    );
+    const persisted = await repos.payments.readLatestById(ORDER_ID);
     assert.equal(persisted?.status, "SUCCESS");
     assert.equal(persisted?.paidAt, PAID_AT);
   });
 });
 
-test("unexpected gateway failures surface as verify_failed without a cause code", async (t) => {
+test("unexpected gateway failures surface as verify_failed without a cause code", async () => {
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
-    const store = tempStore(t);
-    await seedOrder(store, repos);
+    await seedOrder(repos);
     const gateway = gatewayWith(async () => {
       throw new Error("mystery");
     });
 
-    const result = (await verifyOrder(
-      store,
-      repos,
-      gateway,
-      ORDER_ID,
-    )) as Extract<VerifyOrderResult, { kind: "verify_failed" }>;
+    const result = (await verifyOrder(repos, gateway, ORDER_ID)) as Extract<
+      VerifyOrderResult,
+      { kind: "verify_failed" }
+    >;
     assert.equal(result.kind, "verify_failed");
     assert.equal(result.causeCode, null);
   });

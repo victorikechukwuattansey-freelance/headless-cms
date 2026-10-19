@@ -412,7 +412,7 @@ async function handleCreateOrder(
     },
     recordedAt: createdAt,
   };
-  await deps.store.insert("payments", payment);
+  await deps.repos.payments.insert(payment);
 
   writeJson(res, 201, { order, payment });
 }
@@ -423,12 +423,7 @@ async function handleVerifyOrder(
   deps: ServerDependencies,
   orderId: string,
 ): Promise<void> {
-  const outcome = await verifyOrder(
-    deps.store,
-    deps.repos,
-    deps.paystack,
-    orderId,
-  );
+  const outcome = await verifyOrder(deps.repos, deps.paystack, orderId);
   switch (outcome.kind) {
     case "verified":
       writeJson(res, 200, {
@@ -480,12 +475,7 @@ async function handleCallback(
     return;
   }
 
-  const outcome = await verifyOrder(
-    deps.store,
-    deps.repos,
-    deps.paystack,
-    orderId,
-  );
+  const outcome = await verifyOrder(deps.repos, deps.paystack, orderId);
   switch (outcome.kind) {
     case "verified": {
       const heading = paymentStatusHeading(outcome.payment.status);
@@ -534,9 +524,7 @@ async function handleReconcile(
   deps: ServerDependencies,
   orderId: string | null,
 ): Promise<void> {
-  const payments = effectivePaymentRecords(
-    await deps.store.readAll<PaymentRecord>("payments"),
-  );
+  const payments = effectivePaymentRecords(await deps.repos.payments.list());
   if (orderId !== null) {
     const matched = payments.filter((payment) => payment.orderId === orderId);
     if (matched.length === 0) {
@@ -572,9 +560,7 @@ async function handleReconcileCsv(
   res: import("node:http").ServerResponse,
   deps: ServerDependencies,
 ): Promise<void> {
-  const payments = effectivePaymentRecords(
-    await deps.store.readAll<PaymentRecord>("payments"),
-  );
+  const payments = effectivePaymentRecords(await deps.repos.payments.list());
   res.writeHead(200, {
     "Content-Type": "text/csv; charset=utf-8",
     "Content-Disposition": 'attachment; filename="merchant-reconcilekit.csv"',

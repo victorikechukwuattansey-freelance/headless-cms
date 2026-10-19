@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { before, test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,26 +8,68 @@ import type { Server } from "node:http";
 import { loadConfig } from "../src/config.ts";
 import { getPrismaClient } from "../src/db/client.ts";
 import { buildRepositories } from "../src/db/repositories/index.ts";
+import type { Repositories } from "../src/db/repositories/index.ts";
 import { JsonlStore } from "../src/store/jsonl-store.ts";
 import { createStorefrontServer } from "../src/server.ts";
 import type { PaystackGateway } from "../src/paystack/gateway.ts";
-import type { PaymentRecord } from "../src/domain/types.ts";
+import type { Order, PaymentRecord } from "../src/domain/types.ts";
+import { withRollback } from "./db/helpers.ts";
 
-const repos = buildRepositories(getPrismaClient());
+const prisma = getPrismaClient();
+
+before(async () => {
+  await prisma.$executeRawUnsafe("DELETE FROM payments");
+});
 
 interface TestContext {
   baseUrl: string;
   close: () => Promise<void>;
 }
 
+async function seedPayments(
+  repos: Repositories,
+  records: readonly PaymentRecord[],
+): Promise<void> {
+  const first = records[0];
+  if (first === undefined) return;
+  await repos.businesses.insert({
+    id: first.businessId,
+    name: "Fixture Biz",
+    createdAt: "2026-08-18T08:00:00.000Z",
+  });
+  await repos.products.insert({
+    id: "p-1",
+    businessId: first.businessId,
+    name: "Cup",
+    priceMinor: first.expectedAmount,
+    currency: first.currency,
+    createdAt: "2026-08-18T08:00:00.000Z",
+  });
+  for (const record of records) {
+    const order: Order = {
+      id: record.orderId,
+      businessId: record.businessId,
+      productId: "p-1",
+      customerEmail: "buyer@example.com",
+      expectedAmountMinor: record.expectedAmount,
+      currency: record.currency,
+      status: "PAYMENT_INITIATED",
+      paystackReference: record.paystackReference,
+      authorizationUrl: "https://checkout.paystack.com/abc",
+      createdAt: "2026-08-18T08:00:00.000Z",
+    };
+    await repos.orders.insert(order);
+    await repos.payments.insert(record);
+  }
+}
+
 async function startServer(
+  repos: Repositories,
   seed?: readonly PaymentRecord[],
 ): Promise<TestContext> {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-reconcile-"));
   const store = new JsonlStore(dataDir);
-  for (const record of seed ?? []) {
-    await store.insert("payments", record);
-  }
+  await seedPayments(repos, seed ?? []);
   const gateway: PaystackGateway = {
     initializeTransaction: async () => ({
       authorizationUrl: "https://checkout.paystack.com/x",
@@ -95,86 +137,102 @@ function successRecord(id: string, reference: string): PaymentRecord {
 }
 
 test("GET /reconcile returns the expected-vs-received view", async () => {
-  const ctx = await startServer([
-    successRecord("o-1", "stf_o1"),
-    successRecord("o-2", "stf_o2"),
-  ]);
-  try {
-    const response = await fetch(`${ctx.baseUrl}/reconcile`);
-    assert.equal(response.status, 200);
-    const body = (await response.json()) as {
-      summary: { matched: number; totalRecords: number };
-      results: Array<{
-        orderId: string;
-        reference: string;
-        expectedAmount: number;
-        receivedAmount: number;
-        difference: number;
-        status: string;
-        outcome: string;
-      }>;
-    };
-    assert.equal(body.summary.matched, 2);
-    assert.equal(body.summary.totalRecords, 4);
-    assert.equal(body.results.length, 2);
-    const first = body.results[0] as NonNullable<(typeof body.results)[number]>;
-    assert.equal(first.orderId, "o-1");
-    assert.equal(first.reference, "stf_o1");
-    assert.equal(first.expectedAmount, 12500);
-    assert.equal(first.receivedAmount, 12500);
-    assert.equal(first.difference, 0);
-    assert.equal(first.status, "SUCCESS");
-    assert.equal(first.outcome, "MATCH");
-  } finally {
-    await ctx.close();
-  }
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const ctx = await startServer(repos, [
+      successRecord("o-1", "stf_o1"),
+      successRecord("o-2", "stf_o2"),
+    ]);
+    try {
+      const response = await fetch(`${ctx.baseUrl}/reconcile`);
+      assert.equal(response.status, 200);
+      const body = (await response.json()) as {
+        summary: { matched: number; totalRecords: number };
+        results: Array<{
+          orderId: string;
+          reference: string;
+          expectedAmount: number;
+          receivedAmount: number;
+          difference: number;
+          status: string;
+          outcome: string;
+        }>;
+      };
+      assert.equal(body.summary.matched, 2);
+      assert.equal(body.summary.totalRecords, 4);
+      assert.equal(body.results.length, 2);
+      const first = body.results[0] as NonNullable<
+        (typeof body.results)[number]
+      >;
+      assert.equal(first.orderId, "o-1");
+      assert.equal(first.reference, "stf_o1");
+      assert.equal(first.expectedAmount, 12500);
+      assert.equal(first.receivedAmount, 12500);
+      assert.equal(first.difference, 0);
+      assert.equal(first.status, "SUCCESS");
+      assert.equal(first.outcome, "MATCH");
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 test("GET /reconcile?orderId= returns one row", async () => {
-  const ctx = await startServer([successRecord("o-1", "stf_o1")]);
-  try {
-    const response = await fetch(`${ctx.baseUrl}/reconcile?orderId=o-1`);
-    assert.equal(response.status, 200);
-    const body = (await response.json()) as {
-      results: Array<{ orderId: string }>;
-    };
-    assert.equal(body.results.length, 1);
-    assert.equal(body.results[0]?.orderId, "o-1");
-  } finally {
-    await ctx.close();
-  }
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const ctx = await startServer(repos, [successRecord("o-1", "stf_o1")]);
+    try {
+      const response = await fetch(`${ctx.baseUrl}/reconcile?orderId=o-1`);
+      assert.equal(response.status, 200);
+      const body = (await response.json()) as {
+        results: Array<{ orderId: string }>;
+      };
+      assert.equal(body.results.length, 1);
+      assert.equal(body.results[0]?.orderId, "o-1");
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 test("GET /reconcile?orderId= unknown order is 404 ORDER_NOT_FOUND", async () => {
-  const ctx = await startServer([successRecord("o-1", "stf_o1")]);
-  try {
-    const response = await fetch(`${ctx.baseUrl}/reconcile?orderId=o-missing`);
-    assert.equal(response.status, 404);
-    const body = (await response.json()) as { error: { code: string } };
-    assert.equal(body.error.code, "ORDER_NOT_FOUND");
-  } finally {
-    await ctx.close();
-  }
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const ctx = await startServer(repos, [successRecord("o-1", "stf_o1")]);
+    try {
+      const response = await fetch(
+        `${ctx.baseUrl}/reconcile?orderId=o-missing`,
+      );
+      assert.equal(response.status, 404);
+      const body = (await response.json()) as { error: { code: string } };
+      assert.equal(body.error.code, "ORDER_NOT_FOUND");
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 test("GET /reconcile/merchant.csv emits the frozen merchant CSV contract", async () => {
-  const ctx = await startServer([successRecord("o-1", "stf_o1")]);
-  try {
-    const response = await fetch(`${ctx.baseUrl}/reconcile/merchant.csv`);
-    assert.equal(response.status, 200);
-    const text = await response.text();
-    const lines = text.trim().split("\n");
-    assert.equal(
-      lines[0],
-      "merchant_reference,amount,currency,status,occurred_at,merchant_record_id",
-    );
-    const row = (lines[1] ?? "").split(",");
-    assert.equal(row[0], "stf_o1");
-    assert.equal(row[1], "12500");
-    assert.equal(row[2], "NGN");
-    assert.equal(row[3], "SUCCESS");
-    assert.equal(row[5], "o-1");
-  } finally {
-    await ctx.close();
-  }
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const ctx = await startServer(repos, [successRecord("o-1", "stf_o1")]);
+    try {
+      const response = await fetch(`${ctx.baseUrl}/reconcile/merchant.csv`);
+      assert.equal(response.status, 200);
+      const text = await response.text();
+      const lines = text.trim().split("\n");
+      assert.equal(
+        lines[0],
+        "merchant_reference,amount,currency,status,occurred_at,merchant_record_id",
+      );
+      const row = (lines[1] ?? "").split(",");
+      assert.equal(row[0], "stf_o1");
+      assert.equal(row[1], "12500");
+      assert.equal(row[2], "NGN");
+      assert.equal(row[3], "SUCCESS");
+      assert.equal(row[5], "o-1");
+    } finally {
+      await ctx.close();
+    }
+  });
 });

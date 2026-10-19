@@ -3,7 +3,6 @@ import { PaystackAdapterError } from "../../../src/adapters/providers/paystack/p
 import { PaystackClientError } from "../paystack/client.ts";
 import type { PaystackGateway } from "../paystack/gateway.ts";
 import type { PaymentRecord } from "../domain/types.ts";
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import type { Repositories } from "../db/repositories/index.ts";
 
 export type IntegrityStatus =
@@ -25,7 +24,7 @@ export type VerifyOrderResult =
 
 /**
  * Verifies the persisted order's Paystack reference and, if the effective
- * payment state changed, appends an updated PaymentRecord (latest wins).
+ * payment state changed, writes an updated PaymentRecord (latest wins).
  *
  * Data integrity rules:
  * - The persisted order owns the reference; a client-supplied reference is
@@ -41,11 +40,10 @@ export type VerifyOrderResult =
  *
  * Idempotency:
  * - The candidate record is compared against the current effective record
- *   on (status, paidAt). Identical states are not re-appended, so repeated
+ *   on (status, paidAt). Identical states are not rewritten, so repeated
  *   verification never creates contradictory records or duplicate effects.
  */
 export async function verifyOrder(
-  store: JsonlStore,
   repos: Repositories,
   gateway: PaystackGateway,
   orderId: string,
@@ -91,10 +89,7 @@ export async function verifyOrder(
           ? "CURRENCY_MISMATCH"
           : "OK";
 
-  const current = await store.readLatestById<PaymentRecord>(
-    "payments",
-    orderId,
-  );
+  const current = await repos.payments.readLatestById(orderId);
   const baseMetadata: Readonly<Record<string, string>> =
     current?.metadata ?? {};
 
@@ -146,6 +141,6 @@ export async function verifyOrder(
     return { kind: "verified", payment: current, changed: false };
   }
 
-  await store.insert("payments", candidate);
+  await repos.payments.insert(candidate);
   return { kind: "verified", payment: candidate, changed: true };
 }
