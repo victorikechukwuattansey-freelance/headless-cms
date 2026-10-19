@@ -4,6 +4,9 @@ import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
+import { withRollback } from "../db/helpers.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   CsvImportErrorCode,
@@ -25,6 +28,8 @@ const FIXTURES = join(
   "..",
   "fixtures",
 );
+
+const prisma = getPrismaClient();
 
 const NOW_MS = 1_784_290_000_000;
 
@@ -229,37 +234,44 @@ test("importCsv produces row diagnostics for mixed valid/invalid imports", () =>
 
 test("recordCsvImport is exactly-once: replay records nothing and resolves to the same event", async (t) => {
   const store = tempStore(t);
-  const first = await recordCsvImport(
-    store,
-    importCsv(RECONCILEKIT_CSV, { importId: "csv_idem" }),
-    {
-      now: NOW_MS,
-    },
-  );
-  assert.equal(first.recorded, 3);
-  assert.equal(first.replayed, 0);
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const first = await recordCsvImport(
+      repos,
+      importCsv(RECONCILEKIT_CSV, { importId: "csv_idem" }),
+      {
+        now: NOW_MS,
+      },
+    );
+    assert.equal(first.recorded, 3);
+    assert.equal(first.replayed, 0);
 
-  const events = await listPaymentEvents(store);
-  assert.equal(events.length, 3);
+    const events = await listPaymentEvents(repos);
+    assert.equal(events.length, 3);
 
-  const second = await recordCsvImport(
-    store,
-    importCsv(RECONCILEKIT_CSV, { importId: "csv_idem" }),
-    {
-      now: NOW_MS,
-    },
-  );
-  assert.equal(second.recorded, 0);
-  assert.equal(second.replayed, 3);
+    const second = await recordCsvImport(
+      repos,
+      importCsv(RECONCILEKIT_CSV, { importId: "csv_idem" }),
+      {
+        now: NOW_MS,
+      },
+    );
+    assert.equal(second.recorded, 0);
+    assert.equal(second.replayed, 3);
 
-  const after = await listPaymentEvents(store);
-  assert.equal(after.length, 3, "replay must not create duplicate store rows");
-  // Deterministic event identity: fresh import of same source + row → same id.
-  assert.equal(second.events[0].event_id, first.events[0].event_id);
-  assert.equal(
-    second.events[0].idempotency_key,
-    first.events[0].idempotency_key,
-  );
+    const after = await listPaymentEvents(repos);
+    assert.equal(
+      after.length,
+      3,
+      "replay must not create duplicate store rows",
+    );
+    // Deterministic event identity: fresh import of same source + row → same id.
+    assert.equal(second.events[0].event_id, first.events[0].event_id);
+    assert.equal(
+      second.events[0].idempotency_key,
+      first.events[0].idempotency_key,
+    );
+  });
 });
 
 test("same import text yields a stable import id (replay-safe, non-random)", () => {
@@ -300,29 +312,35 @@ test("CSV source references never become mk_txn_ anchors; raw intake has null tr
 
 test("end-to-end: recorded CSV evidence flows through the unchanged engine boundary", async (t) => {
   const store = tempStore(t);
-  const result = importCsv(RECONCILEKIT_CSV, { importId: "csv_e2e" });
-  await recordCsvImport(store, result, { now: NOW_MS });
-  const events = await listPaymentEvents(store);
-  assert.equal(events.length, 3);
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const result = importCsv(RECONCILEKIT_CSV, { importId: "csv_e2e" });
+    await recordCsvImport(repos, result, { now: NOW_MS });
+    const events = await listPaymentEvents(repos);
+    assert.equal(events.length, 3);
 
-  // The bridge delegates to the frozen reconcileRecords() engine; raw intake
-  // (no marketplace anchor) contributes merchant-side evidence only.
-  const report: ReconciliationReport = reconcilePaymentEvents(
-    events,
-    TEST_CONFIG,
-  );
-  assert.ok(report);
-  assert.equal(report.summary.totalRecords, 3);
-  assert.equal(report.results.length, 3);
+    // The bridge delegates to the frozen reconcileRecords() engine; raw intake
+    // (no marketplace anchor) contributes merchant-side evidence only.
+    const report: ReconciliationReport = reconcilePaymentEvents(
+      events,
+      TEST_CONFIG,
+    );
+    assert.ok(report);
+    assert.equal(report.summary.totalRecords, 3);
+    assert.equal(report.results.length, 3);
+  });
 });
 
 test("rejected rows produce no normalized events and no persisted records", async (t) => {
   const store = tempStore(t);
-  const csv =
-    "merchant_reference,amount,currency,status\nT_BAD,100,NGN,bogus\n";
-  const result = importCsv(csv, { importId: "csv_rej" });
-  assert.equal(result.normalizedEvents.length, 0);
-  const recorded = await recordCsvImport(store, result, { now: NOW_MS });
-  assert.equal(recorded.recorded, 0);
-  assert.equal((await listPaymentEvents(store)).length, 0);
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const csv =
+      "merchant_reference,amount,currency,status\nT_BAD,100,NGN,bogus\n";
+    const result = importCsv(csv, { importId: "csv_rej" });
+    assert.equal(result.normalizedEvents.length, 0);
+    const recorded = await recordCsvImport(repos, result, { now: NOW_MS });
+    assert.equal(recorded.recorded, 0);
+    assert.equal((await listPaymentEvents(repos)).length, 0);
+  });
 });

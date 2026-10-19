@@ -1,4 +1,4 @@
-import type { JsonlStore } from "../../store/jsonl-store.ts";
+import type { Repositories } from "../../db/repositories/index.ts";
 import type { WalletLedgerEntry } from "../types.ts";
 import { walletLedgerToPaymentEvent } from "./adapters/wallet.ts";
 import { ingestPaymentEvent } from "./ingest.ts";
@@ -25,12 +25,12 @@ export type WalletLedgerIngestOutcome =
  * Async-ingests every eligible ledger entry through the existing
  * deterministic idempotency gate (`ingestPaymentEvent`), so the same entry
  * always resolves to the same stored `PaymentEvent` no matter how many times
- * it is replayed — including after a process restart that re-reads the same
- * JSONL directory. Ledger entries are never modified, and nothing here calls
+ * it is replayed — including after a process restart that reads the same
+ * committed database. Ledger entries are never modified, and nothing here calls
  * the reconciliation engine directly: that stays the storefront layer's job.
  */
 export async function ingestWalletLedgerEntries(
-  store: JsonlStore,
+  repos: Repositories,
   entries: readonly WalletLedgerEntry[],
   options: { readonly now?: number } = {},
 ): Promise<readonly WalletLedgerIngestOutcome[]> {
@@ -42,7 +42,7 @@ export async function ingestWalletLedgerEntries(
       continue;
     }
     const outcome: IngestOutcome = await ingestPaymentEvent(
-      store,
+      repos,
       draft,
       options,
     );

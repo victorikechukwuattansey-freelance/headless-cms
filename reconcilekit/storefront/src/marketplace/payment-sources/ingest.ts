@@ -1,5 +1,5 @@
 import { stableToken } from "../../ids.ts";
-import type { JsonlStore } from "../../store/jsonl-store.ts";
+import type { Repositories } from "../../db/repositories/index.ts";
 import {
   PaymentSourceError,
   type IngestOutcome,
@@ -50,17 +50,14 @@ export function assertSourceIdentity(input: PaymentEventInput): void {
  * no second reconcile side effect downstream.
  */
 export async function ingestPaymentEvent(
-  store: JsonlStore,
+  repos: Repositories,
   input: PaymentEventInput,
   options: { readonly now?: number } = {},
 ): Promise<IngestOutcome> {
   assertSourceIdentity(input);
   const idempotency_key = buildIdempotencyKey(input);
   const event_id = buildPaymentEventId(idempotency_key);
-  const existing = await store.readLatestById<PaymentEvent>(
-    "payment_events",
-    event_id,
-  );
+  const existing = await repos.paymentEvents.getById(event_id);
   if (existing !== null) {
     return { recorded: false, replay: true, event: existing };
   }
@@ -71,12 +68,12 @@ export async function ingestPaymentEvent(
     idempotency_key,
     observed_at: options.now ?? Date.now(),
   };
-  await store.insert("payment_events", event);
+  await repos.paymentEvents.insert(event);
   return { recorded: true, replay: false, event };
 }
 
 export async function listPaymentEvents(
-  store: JsonlStore,
+  repos: Repositories,
 ): Promise<readonly PaymentEvent[]> {
-  return store.readAll<PaymentEvent>("payment_events");
+  return repos.paymentEvents.list();
 }

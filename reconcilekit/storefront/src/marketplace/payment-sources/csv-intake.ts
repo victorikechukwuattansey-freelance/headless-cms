@@ -4,7 +4,7 @@ import type {
 } from "../../../../src/domain/model.ts";
 import { manualCsvPaymentEvent } from "./adapters/manual-csv.ts";
 import { ingestPaymentEvent } from "./ingest.ts";
-import type { JsonlStore } from "../../store/jsonl-store.ts";
+import type { Repositories } from "../../db/repositories/index.ts";
 import type {
   IngestOutcome,
   PaymentEvent,
@@ -688,7 +688,7 @@ function buildSourceAttributes(
  * replayed (duplicate) events. Rows rejected at parse time are not persisted.
  */
 export async function recordCsvImport(
-  store: JsonlStore,
+  repos: Repositories,
   result: CsvImportResult,
   options: { readonly now?: number } = {},
 ): Promise<CsvRecordedResult> {
@@ -696,7 +696,7 @@ export async function recordCsvImport(
   let recorded = 0;
   let replayed = 0;
   for (const draft of result.normalizedEvents) {
-    const outcome: IngestOutcome = await ingestPaymentEvent(store, draft, {
+    const outcome: IngestOutcome = await ingestPaymentEvent(repos, draft, {
       now: options.now,
     });
     events.push(outcome.event);

@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test, beforeEach, after } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { PaystackResponse } from "../../../src/adapters/providers/paystack/paystack.ts";
 import { mapPaystackResponses } from "../../../src/adapters/providers/paystack/paystack.ts";
@@ -20,6 +20,19 @@ import {
   runPilotCli,
   type PilotRunIo,
 } from "../../src/cli/pilot-run.ts";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
+
+const prisma = getPrismaClient();
+
+beforeEach(async () => {
+  await truncateCommittedState(prisma);
+});
+
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 const NOW_MS = 1_784_290_000_000;
 
@@ -225,8 +238,10 @@ test("preview shows the amount unit and the projected report without writing", a
     out().includes("T545417640929901  NGN 1200000 (minor units)  SUCCESS"),
   );
   assert.ok(out().includes("Nothing was written to disk"));
-  assert.ok(
-    !existsSync(join(dataDir, "payment-events.jsonl")),
+  const repos = buildRepositories(prisma);
+  assert.equal(
+    (await repos.paymentEvents.list()).length,
+    0,
     "preview must not write the store",
   );
 });
@@ -296,8 +311,12 @@ test("--run records the import exactly once and replays idempotently", async (t)
   assert.match(first.out(), /recorded\s+3/);
   assert.match(first.out(), /replayed \(exactly-once\)\s+0/);
   const storeFile = join(dataDir, "payment-events.jsonl");
-  assert.ok(existsSync(storeFile), "run mode must persist the events");
-  assert.equal(readFileSync(storeFile, "utf8").trim().split("\n").length, 3);
+  const repos = buildRepositories(prisma);
+  assert.equal(
+    (await repos.paymentEvents.list()).length,
+    3,
+    "run mode must persist the events",
+  );
 
   const second = fakeIo(files, {});
   assert.equal(
@@ -311,7 +330,7 @@ test("--run records the import exactly once and replays idempotently", async (t)
   assert.match(second.out(), /recorded\s+0/);
   assert.match(second.out(), /replayed \(exactly-once\)\s+3/);
   assert.equal(
-    readFileSync(storeFile, "utf8").trim().split("\n").length,
+    (await repos.paymentEvents.list()).length,
     3,
     "replay must not duplicate store rows",
   );
@@ -432,7 +451,8 @@ test("rows rejected at intake fail the run with diagnostics and write nothing", 
   assert.ok(err().includes("rejected 1 of 2 data rows"));
   assert.ok(err().includes("row 2"));
   assert.ok(err().includes("[invalid_status]"));
-  assert.ok(!existsSync(join(dataDir, "payment-events.jsonl")));
+  const repos = buildRepositories(prisma);
+  assert.equal((await repos.paymentEvents.list()).length, 0);
 });
 
 /* ------------------------------------------------------------------ */
@@ -615,8 +635,9 @@ const PILOT_CLI_PATH = fileURLToPath(
   new URL("../../src/cli/pilot-run.ts", import.meta.url),
 );
 
-test("real entry point: preview → recorded → replay end to end", () => {
+test("real entry point: preview → recorded → replay end to end", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pilot-run-e2e-"));
+  const repos = buildRepositories(prisma);
   try {
     const merchantPath = join(dir, "merchant.csv");
     const providerPath = join(dir, "provider.json");
@@ -645,7 +666,7 @@ test("real entry point: preview → recorded → replay end to end", () => {
     );
     const preview = JSON.parse(previewOut);
     assert.equal(preview.phase, "preview");
-    assert.ok(!existsSync(join(dataDir, "payment-events.jsonl")));
+    assert.equal((await repos.paymentEvents.list()).length, 0);
 
     const runOut = execFileSync(
       process.execPath,
@@ -671,12 +692,7 @@ test("real entry point: preview → recorded → replay end to end", () => {
     assert.equal(recorded.phase, "recorded");
     assert.deepEqual(recorded.recorded, { recorded: 3, replayed: 0 });
     assert.equal(recorded.engine.summary.matched, 2);
-    assert.equal(
-      readFileSync(join(dataDir, "payment-events.jsonl"), "utf8")
-        .trim()
-        .split("\n").length,
-      3,
-    );
+    assert.equal((await repos.paymentEvents.list()).length, 3);
 
     const replayOut = execFileSync(
       process.execPath,
@@ -700,12 +716,7 @@ test("real entry point: preview → recorded → replay end to end", () => {
     );
     const replay = JSON.parse(replayOut);
     assert.deepEqual(replay.recorded, { recorded: 0, replayed: 3 });
-    assert.equal(
-      readFileSync(join(dataDir, "payment-events.jsonl"), "utf8")
-        .trim()
-        .split("\n").length,
-      3,
-    );
+    assert.equal((await repos.paymentEvents.list()).length, 3);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -809,8 +820,9 @@ test("the synthetic Paystack Verify fixture is valid input to the provider adapt
   );
 });
 
-test("real entry point: both fixture files flow through the CLI to deterministic findings", () => {
+test("real entry point: both fixture files flow through the CLI to deterministic findings", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pilot-run-fixtures-"));
+  const repos = buildRepositories(prisma);
   try {
     const dataDir = join(dir, "data");
     const args = [
@@ -850,7 +862,7 @@ test("real entry point: both fixture files flow through the CLI to deterministic
       previewOutcomes["T545417640929990"],
       "UNMATCHED_PROVIDER_RECORD",
     );
-    assert.ok(!existsSync(join(dataDir, "payment-events.jsonl")));
+    assert.equal((await repos.paymentEvents.list()).length, 0);
 
     const run = JSON.parse(
       execFileSync(process.execPath, [...args, "--run"], {
@@ -866,12 +878,7 @@ test("real entry point: both fixture files flow through the CLI to deterministic
     assert.equal(runOutcomes["T545417640929902"], "DISCREPANCY");
     assert.equal(runOutcomes["T545417640929903"], "MISSING_PROVIDER_RECORD");
     assert.equal(runOutcomes["T545417640929990"], "UNMATCHED_PROVIDER_RECORD");
-    assert.equal(
-      readFileSync(join(dataDir, "payment-events.jsonl"), "utf8")
-        .trim()
-        .split("\n").length,
-      3,
-    );
+    assert.equal((await repos.paymentEvents.list()).length, 3);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

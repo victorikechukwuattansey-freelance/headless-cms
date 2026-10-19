@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,6 +7,7 @@ import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
 import { seedDemoCustomer } from "../db/fixtures.ts";
+import { truncateCommittedState } from "../db/isolation.ts";
 import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import type { Repositories } from "../../src/db/repositories/index.ts";
 import {
@@ -48,6 +49,14 @@ import type {
 const prisma = getPrismaClient();
 const NOW = WALLET_FIXED_TIMESTAMP;
 const NOW_EPOCH = Date.parse(NOW);
+
+beforeEach(async () => {
+  await truncateCommittedState(prisma);
+});
+
+after(async () => {
+  await truncateCommittedState(prisma);
+});
 
 function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
   const dir = mkdtempSync(join(tmpdir(), "storefront-wallet-lifecycle-"));
@@ -140,7 +149,7 @@ test("wallet lifecycle: a real debit entry normalizes with the anchor as the onl
 
     assert.ok(!JSON.stringify(draft).includes("provider_reference"));
 
-    const outcome = await ingestWalletLedgerEntries(store, [debit], {
+    const outcome = await ingestWalletLedgerEntries(repos, [debit], {
       now: NOW_EPOCH,
     });
     const events = recordedWalletEvents(outcome);
@@ -162,7 +171,7 @@ test("wallet lifecycle: exact reconciliation joins on mk_txn, never on wld", asy
     const deps = demoDeps(repos);
     const result = await executeMarketplaceTransaction(deps, input());
     const debit = await entriesForTransaction(repos, result.transaction.id);
-    const outcomes = await ingestWalletLedgerEntries(store, debit, {
+    const outcomes = await ingestWalletLedgerEntries(repos, debit, {
       now: NOW_EPOCH,
     });
     const events = recordedWalletEvents(outcomes);
@@ -189,7 +198,7 @@ test("wallet lifecycle: source-reference isolation keeps wld out of the join key
     ).find((entry) => entry.type === "DEBIT_SUCCESS");
     assert.ok(debit);
 
-    const outcomes = await ingestWalletLedgerEntries(store, [debit], {
+    const outcomes = await ingestWalletLedgerEntries(repos, [debit], {
       now: NOW_EPOCH,
     });
     const report = reconcilePaymentEvents(
@@ -212,50 +221,47 @@ test("wallet lifecycle: source-reference isolation keeps wld out of the join key
   });
 });
 
-test("wallet lifecycle: replay and process restart store a single stable event", async (t) => {
-  const store = tempStore(t);
-  await withRollback(prisma, async (tx) => {
-    await seedDemoCustomer(tx);
-    const repos = buildRepositories(tx);
-    const deps = demoDeps(repos);
-    const result = await executeMarketplaceTransaction(deps, input());
-    const wallet = await walletFor(repos, "cus_demo");
-    const ledgerBefore = await ledgerForWallet(repos, wallet.id);
-    const entries = await entriesForTransaction(repos, result.transaction.id);
+test("wallet lifecycle: replay and process restart store a single stable event", async () => {
+  await seedDemoCustomer(prisma);
+  const repos = buildRepositories(prisma);
+  const deps = demoDeps(repos);
+  const result = await executeMarketplaceTransaction(deps, input());
+  const wallet = await walletFor(repos, "cus_demo");
+  const ledgerBefore = await ledgerForWallet(repos, wallet.id);
+  const entries = await entriesForTransaction(repos, result.transaction.id);
 
-    const first = await ingestWalletLedgerEntries(store, entries, {
-      now: NOW_EPOCH,
-    });
-    const events = recordedWalletEvents(first);
-    assert.equal(events.length, 1);
-    assert.equal(events[0].observed_at, NOW_EPOCH);
-
-    const second = await ingestWalletLedgerEntries(store, entries, {
-      now: NOW_EPOCH,
-    });
-    assert.equal(second[0].skipped, false);
-    assert.equal((second[0] as { replay: boolean }).replay, true);
-    assert.equal(
-      events[0].event_id,
-      (await listPaymentEvents(store))[0].event_id,
-    );
-    assert.equal((await listPaymentEvents(store)).length, 1);
-
-    const restarted = new JsonlStore(store.dataDir);
-    const afterRestart = await ingestWalletLedgerEntries(restarted, entries, {
-      now: NOW_EPOCH,
-    });
-    assert.equal(afterRestart[0].skipped, false);
-    assert.equal((afterRestart[0] as { replay: boolean }).replay, true);
-    assert.equal(
-      (afterRestart[0] as { event: { event_id: string } }).event.event_id,
-      events[0].event_id,
-    );
-    assert.equal((await listPaymentEvents(restarted)).length, 1);
-
-    const ledgerAfter = await ledgerForWallet(repos, wallet.id);
-    assert.deepEqual(ledgerAfter, ledgerBefore);
+  const first = await ingestWalletLedgerEntries(repos, entries, {
+    now: NOW_EPOCH,
   });
+  const events = recordedWalletEvents(first);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].observed_at, NOW_EPOCH);
+
+  const second = await ingestWalletLedgerEntries(repos, entries, {
+    now: NOW_EPOCH,
+  });
+  assert.equal(second[0].skipped, false);
+  assert.equal((second[0] as { replay: boolean }).replay, true);
+  assert.equal(
+    events[0].event_id,
+    (await listPaymentEvents(repos))[0].event_id,
+  );
+  assert.equal((await listPaymentEvents(repos)).length, 1);
+
+  const restarted = buildRepositories(prisma);
+  const afterRestart = await ingestWalletLedgerEntries(restarted, entries, {
+    now: NOW_EPOCH,
+  });
+  assert.equal(afterRestart[0].skipped, false);
+  assert.equal((afterRestart[0] as { replay: boolean }).replay, true);
+  assert.equal(
+    (afterRestart[0] as { event: { event_id: string } }).event.event_id,
+    events[0].event_id,
+  );
+  assert.equal((await listPaymentEvents(restarted)).length, 1);
+
+  const ledgerAfter = await ledgerForWallet(repos, wallet.id);
+  assert.deepEqual(ledgerAfter, ledgerBefore);
 });
 
 test("wallet lifecycle: OPENING_BALANCE never becomes a payment event", async (t) => {
@@ -275,7 +281,7 @@ test("wallet lifecycle: OPENING_BALANCE never becomes a payment event", async (t
 
     assert.equal(walletLedgerToPaymentEvent(opening), null);
 
-    const outcomes = await ingestWalletLedgerEntries(store, ledger, {
+    const outcomes = await ingestWalletLedgerEntries(repos, ledger, {
       now: NOW_EPOCH,
     });
     assert.equal(outcomes.filter((outcome) => outcome.skipped).length, 1);
@@ -316,7 +322,7 @@ test("wallet lifecycle: an unanchored ledger entry is never heuristically associ
     });
     await repos.walletLedger.insert(orphan);
 
-    const outcomes = await ingestWalletLedgerEntries(store, [orphan], {
+    const outcomes = await ingestWalletLedgerEntries(repos, [orphan], {
       now: NOW_EPOCH,
     });
     const events = recordedWalletEvents(outcomes);
@@ -355,8 +361,8 @@ test("wallet lifecycle: reconciliation leaves the ledger and wallet untouched", 
     );
 
     const entries = await entriesForTransaction(repos, result.transaction.id);
-    await ingestWalletLedgerEntries(store, entries, { now: NOW_EPOCH });
-    const events = await listPaymentEvents(store);
+    await ingestWalletLedgerEntries(repos, entries, { now: NOW_EPOCH });
+    const events = await listPaymentEvents(repos);
     reconcilePaymentEvents(events, CONFIG);
 
     const ledgerAfter = await ledgerForWallet(repos, wallet.id);
@@ -406,7 +412,7 @@ test("wallet lifecycle: a failed fulfillment keeps payment/ledger truth separate
     assert.ok(debit);
 
     const events = recordedWalletEvents(
-      await ingestWalletLedgerEntries(store, [debit], { now: NOW_EPOCH }),
+      await ingestWalletLedgerEntries(repos, [debit], { now: NOW_EPOCH }),
     );
     const report = reconcilePaymentEvents(events, CONFIG);
     const matched = merchantResult(report, result.transaction.id);
@@ -450,7 +456,7 @@ test("wallet lifecycle: reconciliation never causes provider side effects", asyn
     const wallet = await walletFor(repos, "cus_demo");
 
     const before = {
-      paymentEvents: (await store.readAll("payment_events")).length,
+      paymentEvents: (await repos.paymentEvents.list()).length,
       ledger: (await ledgerForWallet(repos, wallet.id)).length,
       payments: (await repos.marketplacePayments.list()).length,
       attempts: (await repos.marketplaceProviderAttempts.list()).length,
@@ -460,12 +466,12 @@ test("wallet lifecycle: reconciliation never causes provider side effects", asyn
     };
 
     const entries = await entriesForTransaction(repos, result.transaction.id);
-    await ingestWalletLedgerEntries(store, entries, { now: NOW_EPOCH });
-    const events = await listPaymentEvents(store);
+    await ingestWalletLedgerEntries(repos, entries, { now: NOW_EPOCH });
+    const events = await listPaymentEvents(repos);
     reconcilePaymentEvents(events, CONFIG);
 
     const after = {
-      paymentEvents: (await store.readAll("payment_events")).length,
+      paymentEvents: (await repos.paymentEvents.list()).length,
       ledger: (await ledgerForWallet(repos, wallet.id)).length,
       payments: (await repos.marketplacePayments.list()).length,
       attempts: (await repos.marketplaceProviderAttempts.list()).length,
@@ -495,16 +501,13 @@ test("wallet lifecycle: end-to-end compose produces one stored event, MATCH, and
 
     assert.deepEqual(result.facts?.evidenceLedgerEntryIds, [entries[0].id]);
 
-    await ingestWalletLedgerEntries(store, entries, { now: NOW_EPOCH });
-    const stored = await listPaymentEvents(store);
+    await ingestWalletLedgerEntries(repos, entries, { now: NOW_EPOCH });
+    const stored = await listPaymentEvents(repos);
     assert.equal(stored.length, 1);
     assert.equal(stored[0].payment_source, "INTERNAL_WALLET");
     assert.equal(stored[0].transaction_id, result.transaction.id);
     assert.equal(stored[0].payment_source_reference, entries[0].reference);
-    const persisted = await store.readLatestById(
-      "payment_events",
-      stored[0].event_id,
-    );
+    const persisted = await repos.paymentEvents.getById(stored[0].event_id);
     assert.deepEqual(persisted, stored[0]);
 
     const report = reconcilePaymentEvents(stored, CONFIG);
@@ -560,14 +563,15 @@ test("wallet lifecycle: identical inputs yield identical IDs, projections, and o
       );
       try {
         const store = new JsonlStore(dir);
+        void store;
         const deps = demoDeps(repos);
         const result = await executeMarketplaceTransaction(deps, input());
         const entries = await entriesForTransaction(
           repos,
           result.transaction.id,
         );
-        await ingestWalletLedgerEntries(store, entries, { now: NOW_EPOCH });
-        const events = await listPaymentEvents(store);
+        await ingestWalletLedgerEntries(repos, entries, { now: NOW_EPOCH });
+        const events = await listPaymentEvents(repos);
         const report = reconcilePaymentEvents(events, CONFIG);
         return { result, entries, events, report };
       } finally {
@@ -610,7 +614,7 @@ test("wallet lifecycle: no tenant/org dimension is fabricated on wallet evidence
     const entries = await entriesForTransaction(repos, result.transaction.id);
     const debit = entries.find((entry) => entry.type === "DEBIT_SUCCESS");
     assert.ok(debit);
-    const outcomes = await ingestWalletLedgerEntries(store, [debit], {
+    const outcomes = await ingestWalletLedgerEntries(repos, [debit], {
       now: NOW_EPOCH,
     });
     const event = outcomes[0].skipped

@@ -27,10 +27,13 @@ export async function withRollback<T>(
 ): Promise<T> {
   let value: T | undefined;
   try {
-    await prisma.$transaction(async (tx) => {
-      value = await fn(tx);
-      throw new RollbackSignal();
-    });
+    await prisma.$transaction(
+      async (tx) => {
+        value = await fn(tx);
+        throw new RollbackSignal();
+      },
+      { timeout: 30_000 },
+    );
     // $transaction should never return normally; the callback always
     // throws. If we reach here, something is wrong with the helper.
     throw new Error(

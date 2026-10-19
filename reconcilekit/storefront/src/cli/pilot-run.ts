@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_DATA_DIR } from "../config.ts";
-import { JsonlStore } from "../store/jsonl-store.ts";
+import { getPrismaClient } from "../db/client.ts";
+import { buildRepositories } from "../db/repositories/index.ts";
 import {
   importCsv,
   recordCsvImport,
@@ -157,9 +158,11 @@ Provider input (choose exactly one):
                              variable. Mutually exclusive with --provider.
 
 Options:
-  --data-dir <path>          Storefront data directory to read or record the
-                             payment-events store from (default: the
-                             storefront data directory, or $STOREFRONT_DATA_DIR)
+  --data-dir <path>          Vestigial as of 5B.1c-1j.1: payment events are
+                             recorded in the payment_events Postgres table, not
+                             under <path>. Kept for backward compatibility
+                             (default: the storefront data directory, or
+                             $STOREFRONT_DATA_DIR)
   --amount-unit <unit>       How the CSV amount column is denominated:
                              minor (default) | decimal. minor treats values as
                              integer minor units (e.g. kobo/cents); decimal
@@ -484,17 +487,18 @@ export async function runPilotCli(
   } | null = null;
   if (run) {
     try {
-      const store = new JsonlStore(dataDir);
-      const outcome = await recordCsvImport(store, importResult, {
+      const repos = buildRepositories(getPrismaClient());
+      const outcome = await recordCsvImport(repos, importResult, {
         now: now(),
       });
       events = outcome.events;
       recorded = { recorded: outcome.recorded, replayed: outcome.replayed };
     } catch (error) {
       io.writeErr(
-        `error: cannot record the import in ${JSON.stringify(dataDir)}: ${errorMessage(error)}\n` +
-          "The payment-events store could not be written. Check that the " +
-          "data directory is writable, then run the command again.\n",
+        `error: cannot record the import in the payment_events table: ${errorMessage(error)}\n` +
+          "The payment-events store could not be written. Check that " +
+          "DATABASE_URL points at a reachable Postgres database with " +
+          "migrations applied, then run the command again.\n",
       );
       return EXIT_INPUT_FAILURE;
     }
@@ -605,7 +609,7 @@ function renderText(context: PilotRunContext): string {
   const lines: string[] = [
     "ReconcileKit payment-source pilot report",
     "",
-    `Phase: ${context.phase === "preview" ? "preview - no data was written" : "recorded - the import was written to the payment-events store"}`,
+    `Phase: ${context.phase === "preview" ? "preview - no data was written" : "recorded - the import was written to the payment_events table"}`,
     "",
     "Import",
     `  ${"import id".padEnd(30)}${context.importResult.importId}`,
@@ -650,8 +654,9 @@ function renderText(context: PilotRunContext): string {
   if (context.phase === "preview") {
     lines.push(
       "",
-      `Nothing was written to disk. Re-run with --run to record exactly once ` +
-        `in ${JSON.stringify(context.dataDir)} and reconcile from the recorded events.`,
+      `Nothing was written to disk. Re-run with --run to record the import ` +
+        `exactly once in the payment_events table and reconcile from the ` +
+        `recorded events.`,
     );
   }
   return `${lines.join("\n")}\n`;
