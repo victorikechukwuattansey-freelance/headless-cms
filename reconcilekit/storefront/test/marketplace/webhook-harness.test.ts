@@ -1,12 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   ingestPaymentEvent,
   listPaymentEvents,
@@ -36,12 +32,6 @@ const prisma = getPrismaClient();
  * A failure means a concrete gap justifies 3E work under freeze §14.
  */
 
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-3e-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
-
 function webhookDelivery(
   overrides: Partial<PaymentEventInput> = {},
 ): PaymentEventInput {
@@ -66,7 +56,6 @@ function webhookDelivery(
 }
 
 test("3E: the same webhook delivery retried is idempotent — one stored record", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const payload = webhookDelivery();
@@ -95,7 +84,6 @@ test("3E: the same webhook delivery retried is idempotent — one stored record"
 });
 
 test("3E: a redelivery with a different source event id is a distinct event", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
 
@@ -120,7 +108,6 @@ test("3E: a redelivery with a different source event id is a distinct event", as
 });
 
 test("3E: out-of-order delivery does not lose or cross-contaminate events", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
 
@@ -156,7 +143,6 @@ test("3E: out-of-order delivery does not lose or cross-contaminate events", asyn
 });
 
 test("3E: a webhook for a reference the storefront does not yet know is accepted", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
 
@@ -186,7 +172,6 @@ test("3E: a webhook for a reference the storefront does not yet know is accepted
 });
 
 test("3E: a webhook with no source identity is rejected — never collapsed or fabricated", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
 
@@ -208,7 +193,6 @@ test("3E: a webhook with no source identity is rejected — never collapsed or f
 });
 
 test("3E: interleaved webhooks for two references do not cross-contaminate", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
 
@@ -250,7 +234,6 @@ test("3E: interleaved webhooks for two references do not cross-contaminate", asy
 });
 
 test("3E: the same reference from a different source is a distinct event", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
 

@@ -1,14 +1,10 @@
 import { test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
 import { seedDemoCustomer } from "../db/fixtures.ts";
 import { truncateCommittedState } from "../db/isolation.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import type { Repositories } from "../../src/db/repositories/index.ts";
 import {
   createLedgerEntry,
@@ -57,12 +53,6 @@ beforeEach(async () => {
 after(async () => {
   await truncateCommittedState(prisma);
 });
-
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-wallet-lifecycle-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
 
 function input(
   overrides: Partial<ExecuteTransactionInput> = {},
@@ -113,7 +103,6 @@ const CONFIG: ReconciliationConfig =
   marketplaceReconcileConfig(buildDemoCatalog());
 
 test("wallet lifecycle: a real debit entry normalizes with the anchor as the only join surface", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -164,7 +153,6 @@ test("wallet lifecycle: a real debit entry normalizes with the anchor as the onl
 });
 
 test("wallet lifecycle: exact reconciliation joins on mk_txn, never on wld", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -187,7 +175,6 @@ test("wallet lifecycle: exact reconciliation joins on mk_txn, never on wld", asy
 });
 
 test("wallet lifecycle: source-reference isolation keeps wld out of the join key", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -265,7 +252,6 @@ test("wallet lifecycle: replay and process restart store a single stable event",
 });
 
 test("wallet lifecycle: OPENING_BALANCE never becomes a payment event", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -293,7 +279,6 @@ test("wallet lifecycle: OPENING_BALANCE never becomes a payment event", async (t
 });
 
 test("wallet lifecycle: an unanchored ledger entry is never heuristically associated", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -344,7 +329,6 @@ test("wallet lifecycle: an unanchored ledger entry is never heuristically associ
 });
 
 test("wallet lifecycle: reconciliation leaves the ledger and wallet untouched", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -390,7 +374,6 @@ test("wallet lifecycle: reconciliation leaves the ledger and wallet untouched", 
 });
 
 test("wallet lifecycle: a failed fulfillment keeps payment/ledger truth separate from fulfillment truth", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -447,7 +430,6 @@ test("wallet lifecycle: a failed fulfillment keeps payment/ledger truth separate
 });
 
 test("wallet lifecycle: reconciliation never causes provider side effects", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -488,7 +470,6 @@ test("wallet lifecycle: reconciliation never causes provider side effects", asyn
 });
 
 test("wallet lifecycle: end-to-end compose produces one stored event, MATCH, and a truthful outcome", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -546,8 +527,6 @@ test("wallet lifecycle: end-to-end compose produces one stored event, MATCH, and
 });
 
 test("wallet lifecycle: identical inputs yield identical IDs, projections, and output", async (t) => {
-  const storeA = tempStore(t);
-  void storeA;
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
     const repos = buildRepositories(tx);
@@ -558,25 +537,13 @@ test("wallet lifecycle: identical inputs yield identical IDs, projections, and o
       events: readonly { event_id: string; observed_at: number }[];
       report: ReconciliationReport;
     }> => {
-      const dir = mkdtempSync(
-        join(tmpdir(), "storefront-wallet-lifecycle-run-"),
-      );
-      try {
-        const store = new JsonlStore(dir);
-        void store;
-        const deps = demoDeps(repos);
-        const result = await executeMarketplaceTransaction(deps, input());
-        const entries = await entriesForTransaction(
-          repos,
-          result.transaction.id,
-        );
-        await ingestWalletLedgerEntries(repos, entries, { now: NOW_EPOCH });
-        const events = await listPaymentEvents(repos);
-        const report = reconcilePaymentEvents(events, CONFIG);
-        return { result, entries, events, report };
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
+      const deps = demoDeps(repos);
+      const result = await executeMarketplaceTransaction(deps, input());
+      const entries = await entriesForTransaction(repos, result.transaction.id);
+      await ingestWalletLedgerEntries(repos, entries, { now: NOW_EPOCH });
+      const events = await listPaymentEvents(repos);
+      const report = reconcilePaymentEvents(events, CONFIG);
+      return { result, entries, events, report };
     };
 
     const first = await run();
@@ -605,7 +572,6 @@ test("wallet lifecycle: identical inputs yield identical IDs, projections, and o
 });
 
 test("wallet lifecycle: no tenant/org dimension is fabricated on wallet evidence", async (t) => {
-  const store = tempStore(t);
   await seedDemoCustomer(prisma, "cus_demo");
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);

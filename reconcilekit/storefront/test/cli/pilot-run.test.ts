@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, beforeEach, after } from "node:test";
@@ -310,7 +304,6 @@ test("--run records the import exactly once and replays idempotently", async (t)
   assert.ok(first.out().includes("Phase: recorded"));
   assert.match(first.out(), /recorded\s+3/);
   assert.match(first.out(), /replayed \(exactly-once\)\s+0/);
-  const storeFile = join(dataDir, "payment-events.jsonl");
   const repos = buildRepositories(prisma);
   assert.equal(
     (await repos.paymentEvents.list()).length,

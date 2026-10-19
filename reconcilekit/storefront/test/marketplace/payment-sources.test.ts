@@ -1,12 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   buildIdempotencyKey,
   buildPaymentEventId,
@@ -49,12 +45,6 @@ const PAYSTACK_OPTIONS: PaystackAdapterOptions = {
   supportedCurrencies: TEST_CONFIG.supportedCurrencies,
   timestampField: "paid_at",
 };
-
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-payment-sources-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
 
 function paystackTransaction(
   overrides: Partial<PaystackTransactionData> = {},
@@ -145,7 +135,6 @@ test("paystack: raw responses normalize via the root adapter mapping", () => {
 });
 
 test("paystack: evidence reaches the engine as an exact MATCH", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const { event } = await ingestPaymentEvent(
@@ -165,7 +154,6 @@ test("paystack: evidence reaches the engine as an exact MATCH", async (t) => {
 });
 
 test("paystack: the source reference is never the join key", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const { event } = await ingestPaymentEvent(
@@ -189,7 +177,6 @@ test("paystack: the source reference is never the join key", async (t) => {
 });
 
 test("bank transfer: a row carrying a reference reconciles as MATCH", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const draft = bankTransferPaymentEvent(
@@ -213,7 +200,6 @@ test("bank transfer: a row carrying a reference reconciles as MATCH", async (t) 
 });
 
 test("bank transfer: an unanchored row stays MISSING_REFERENCE, never auto-correlated", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const draft = bankTransferPaymentEvent(
@@ -246,7 +232,6 @@ test("bank transfer: an unanchored row stays MISSING_REFERENCE, never auto-corre
 });
 
 test("idempotency: replaying an identical event stores exactly once", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const draft = paystackDraft({
@@ -269,7 +254,6 @@ test("idempotency: replaying an identical event stores exactly once", async (t) 
 });
 
 test("idempotency: distinct source references are never collapsed", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const anchor = { transactionId: "mk_txn_a", merchantReference: "mk_txn_a" };
@@ -309,7 +293,6 @@ test("ids: event identity is deterministic and prefixed", () => {
 });
 
 test("wallet: a success debit ledger entry normalizes to SUCCESS evidence", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const entry = walletLedgerEntry();
@@ -344,7 +327,6 @@ test("wallet: OPENING_BALANCE has no payment semantics; failures map to FAILED",
 });
 
 test("manual CSV: imported confidence survives through reconciliation", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const draft = manualCsvPaymentEvent(
@@ -371,7 +353,6 @@ test("manual CSV: imported confidence survives through reconciliation", async (t
 });
 
 test("anchoring: a reference mismatch surfaces missing and unmatched records", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const draft = paystackDraft({
@@ -393,7 +374,6 @@ test("anchoring: a reference mismatch surfaces missing and unmatched records", a
 });
 
 test("UNKNOWN is distinct from a missing status", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
 
@@ -438,7 +418,6 @@ test("UNKNOWN is distinct from a missing status", async (t) => {
 });
 
 test("missing timestamps stay missing without fabricating an anomaly", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const draft = bankTransferPaymentEvent(
@@ -463,7 +442,6 @@ test("missing timestamps stay missing without fabricating an anomaly", async (t)
 });
 
 test("conflicting amounts across two same-anchor events are never silently paired", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const bank = bankTransferPaymentEvent(
@@ -502,7 +480,6 @@ test("conflicting amounts across two same-anchor events are never silently paire
 });
 
 test("ingest: an event with no source identity is rejected, not collapsed", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const anonymous = paystackPaymentEvent(
@@ -523,7 +500,6 @@ test("ingest: an event with no source identity is rejected, not collapsed", asyn
 });
 
 test("all four sources reach the same reconcile boundary in one report", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const bank = bankTransferPaymentEvent(

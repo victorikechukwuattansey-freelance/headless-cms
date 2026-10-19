@@ -1,13 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { withRollback } from "../db/helpers.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import {
   CsvImportErrorCode,
   importCsv,
@@ -37,12 +35,6 @@ const TEST_CONFIG: ReconciliationConfig = {
   timestampValidation: { enabled: true, toleranceMs: 60_000 },
   supportedCurrencies: ["NGN", "USD", "GBP"],
 };
-
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-csv-intake-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
 
 function readFixture(name: string): string {
   return readFileSync(join(FIXTURES, name), "utf8");
@@ -233,7 +225,6 @@ test("importCsv produces row diagnostics for mixed valid/invalid imports", () =>
 /* ------------------------------------------------------------------ */
 
 test("recordCsvImport is exactly-once: replay records nothing and resolves to the same event", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const first = await recordCsvImport(
@@ -311,7 +302,6 @@ test("CSV source references never become mk_txn_ anchors; raw intake has null tr
 });
 
 test("end-to-end: recorded CSV evidence flows through the unchanged engine boundary", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const result = importCsv(RECONCILEKIT_CSV, { importId: "csv_e2e" });
@@ -332,7 +322,6 @@ test("end-to-end: recorded CSV evidence flows through the unchanged engine bound
 });
 
 test("rejected rows produce no normalized events and no persisted records", async (t) => {
-  const store = tempStore(t);
   await withRollback(prisma, async (tx) => {
     const repos = buildRepositories(tx);
     const csv =
