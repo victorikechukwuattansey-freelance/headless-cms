@@ -8,6 +8,7 @@ import type { Server } from "node:http";
 import { loadConfig } from "../src/config.ts";
 import { getPrismaClient } from "../src/db/client.ts";
 import { buildRepositories } from "../src/db/repositories/index.ts";
+import type { Repositories } from "../src/db/repositories/index.ts";
 import { JsonlStore } from "../src/store/jsonl-store.ts";
 import { createStorefrontServer } from "../src/server.ts";
 import type { PaystackGateway } from "../src/paystack/gateway.ts";
@@ -105,6 +106,7 @@ async function seedBusinessAndProduct(
 
 async function seedVerifyFixture(
   store: JsonlStore,
+  repos: Repositories,
   options?: {
     readonly reference?: string | null;
     readonly priceMinor?: number;
@@ -141,9 +143,9 @@ async function seedVerifyFixture(
     authorizationUrl: "https://checkout.paystack.com/x",
     createdAt: "2026-08-18T08:00:00.000Z",
   };
-  await store.insert("businesses", business);
-  await store.insert("products", product);
-  await store.insert("orders", order);
+  await repos.businesses.insert(business);
+  await repos.products.insert(product);
+  await repos.orders.insert(order);
   if (reference !== null) {
     const payment: PaymentRecord = {
       id: order.id,
@@ -279,10 +281,7 @@ test("POST /orders initializes payment and persists order + payment record", asy
   assert.equal(payment.refundStatus, "NONE");
   assert.equal(payment.metadata.requested_reference, order.paystackReference);
 
-  const persistedOrder = await ctx.store.readLatestById<Order>(
-    "orders",
-    order.id,
-  );
+  const persistedOrder = await repos.orders.readLatestById(order.id);
   assert.deepEqual(persistedOrder, order);
   const persistedPayment = await ctx.store.readLatestById<PaymentRecord>(
     "payments",
@@ -358,7 +357,7 @@ test("POST /orders persists INITIALIZATION_FAILED order when Paystack rejects", 
   )?.[1];
   assert.ok(orderId);
 
-  const persisted = await ctx.store.readLatestById<Order>("orders", orderId);
+  const persisted = await repos.orders.readLatestById(orderId);
   assert.equal(persisted?.status, "INITIALIZATION_FAILED");
   assert.equal(persisted?.paystackReference, null);
 
@@ -434,7 +433,7 @@ test("invalid JSON body returns 400", async (t) => {
 test("POST /orders/:orderId/verify transitions PENDING to SUCCESS and is idempotent", async (t) => {
   const ctx = await startServer();
   t.after(() => ctx.close());
-  const order = await seedVerifyFixture(ctx.store);
+  const order = await seedVerifyFixture(ctx.store, repos);
 
   const first = await fetch(`${ctx.baseUrl}/orders/${order.id}/verify`, {
     method: "POST",
@@ -482,7 +481,7 @@ test("POST /orders/:orderId/verify returns 404 for an unknown order", async (t) 
 test("POST /orders/:orderId/verify returns 409 when the order has no reference", async (t) => {
   const ctx = await startServer();
   t.after(() => ctx.close());
-  await seedVerifyFixture(ctx.store, {
+  await seedVerifyFixture(ctx.store, repos, {
     reference: null,
     orderStatus: "INITIALIZATION_FAILED",
   });
@@ -515,7 +514,7 @@ test("POST /orders/:orderId/verify surfaces a reference mismatch without recordi
     },
   });
   t.after(() => ctx.close());
-  const order = await seedVerifyFixture(ctx.store);
+  const order = await seedVerifyFixture(ctx.store, repos);
 
   const response = await fetch(`${ctx.baseUrl}/orders/${order.id}/verify`, {
     method: "POST",
@@ -551,7 +550,7 @@ test("POST /orders/:orderId/verify records an amount mismatch as UNKNOWN", async
     },
   });
   t.after(() => ctx.close());
-  const order = await seedVerifyFixture(ctx.store);
+  const order = await seedVerifyFixture(ctx.store, repos);
 
   const response = await fetch(`${ctx.baseUrl}/orders/${order.id}/verify`, {
     method: "POST",
@@ -578,7 +577,7 @@ test("POST /orders/:orderId/verify surfaces transient failures without changing 
     },
   });
   t.after(() => ctx.close());
-  const order = await seedVerifyFixture(ctx.store);
+  const order = await seedVerifyFixture(ctx.store, repos);
 
   const response = await fetch(`${ctx.baseUrl}/orders/${order.id}/verify`, {
     method: "POST",
@@ -597,7 +596,7 @@ test("POST /orders/:orderId/verify surfaces transient failures without changing 
 test("GET /callback routes the customer through verification without self-certifying", async (t) => {
   const ctx = await startServer();
   t.after(() => ctx.close());
-  const order = await seedVerifyFixture(ctx.store);
+  const order = await seedVerifyFixture(ctx.store, repos);
 
   const response = await fetch(
     `${ctx.baseUrl}/callback?orderId=${order.id}&reference=stf_whatever`,

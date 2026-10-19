@@ -371,7 +371,7 @@ async function handleCreateOrder(
       authorizationUrl: null,
       createdAt,
     };
-    await deps.store.insert("orders", failedOrder);
+    await deps.repos.orders.insert(failedOrder);
     throw new HttpError(
       502,
       "PAYSTACK_INITIALIZE_FAILED",
@@ -391,7 +391,7 @@ async function handleCreateOrder(
     authorizationUrl: initialized.authorizationUrl,
     createdAt,
   };
-  await deps.store.insert("orders", order);
+  await deps.repos.orders.insert(order);
 
   const payment: PaymentRecord = {
     id: order.id,
@@ -423,7 +423,12 @@ async function handleVerifyOrder(
   deps: ServerDependencies,
   orderId: string,
 ): Promise<void> {
-  const outcome = await verifyOrder(deps.store, deps.paystack, orderId);
+  const outcome = await verifyOrder(
+    deps.store,
+    deps.repos,
+    deps.paystack,
+    orderId,
+  );
   switch (outcome.kind) {
     case "verified":
       writeJson(res, 200, {
@@ -475,7 +480,12 @@ async function handleCallback(
     return;
   }
 
-  const outcome = await verifyOrder(deps.store, deps.paystack, orderId);
+  const outcome = await verifyOrder(
+    deps.store,
+    deps.repos,
+    deps.paystack,
+    orderId,
+  );
   switch (outcome.kind) {
     case "verified": {
       const heading = paymentStatusHeading(outcome.payment.status);

@@ -2,8 +2,9 @@ import type { CanonicalPaymentStatus } from "../../../src/domain/model.ts";
 import { PaystackAdapterError } from "../../../src/adapters/providers/paystack/paystack.ts";
 import { PaystackClientError } from "../paystack/client.ts";
 import type { PaystackGateway } from "../paystack/gateway.ts";
-import type { Order, PaymentRecord } from "../domain/types.ts";
+import type { PaymentRecord } from "../domain/types.ts";
 import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 
 export type IntegrityStatus =
   | "OK"
@@ -45,10 +46,11 @@ export type VerifyOrderResult =
  */
 export async function verifyOrder(
   store: JsonlStore,
+  repos: Repositories,
   gateway: PaystackGateway,
   orderId: string,
 ): Promise<VerifyOrderResult> {
-  const order = await store.readLatestById<Order>("orders", orderId);
+  const order = await repos.orders.readLatestById(orderId);
   if (order === null) {
     return { kind: "order_not_found" };
   }
