@@ -12,9 +12,6 @@ import { NotificationRepository } from "./notifications.ts";
 import { SessionRepository } from "./sessions.ts";
 import { OrganizationRepository } from "./organizations.ts";
 import { MembershipRepository } from "./memberships.ts";
-import { CatalogCategoryRepository } from "./catalog-categories.ts";
-import { CatalogServiceRepository } from "./catalog-services.ts";
-import { CatalogProductRepository } from "./catalog-products.ts";
 import { MarketplaceCustomerRepository } from "./marketplace-customers.ts";
 import { MarketplaceOrderRepository } from "./marketplace-orders.ts";
 import { MarketplaceTransactionRepository } from "./marketplace-transactions.ts";
@@ -45,9 +42,6 @@ export interface Repositories {
   readonly manualReviews: ManualReviewRepository;
   readonly receipts: ReceiptRepository;
   readonly notifications: NotificationRepository;
-  readonly catalogCategories: CatalogCategoryRepository;
-  readonly catalogServices: CatalogServiceRepository;
-  readonly catalogProducts: CatalogProductRepository;
   readonly marketplaceCustomers: MarketplaceCustomerRepository;
   readonly marketplaceOrders: MarketplaceOrderRepository;
   readonly marketplaceTransactions: MarketplaceTransactionRepository;
@@ -82,9 +76,6 @@ export function buildRepositories(client: RepositoryClient): Repositories {
     manualReviews: new ManualReviewRepository(client),
     receipts: new ReceiptRepository(client),
     notifications: new NotificationRepository(client),
-    catalogCategories: new CatalogCategoryRepository(client),
-    catalogServices: new CatalogServiceRepository(client),
-    catalogProducts: new CatalogProductRepository(client),
     marketplaceCustomers: new MarketplaceCustomerRepository(client),
     marketplaceOrders: new MarketplaceOrderRepository(client),
     marketplaceTransactions: new MarketplaceTransactionRepository(client),

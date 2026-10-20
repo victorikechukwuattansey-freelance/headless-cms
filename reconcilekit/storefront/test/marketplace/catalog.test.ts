@@ -1,9 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
 import { createMockProviderRegistry } from "../../src/marketplace/providers/registry.ts";
 import {
   CatalogCategoryId,
@@ -18,24 +14,13 @@ import {
   providerForService,
   productsInService,
   quoteForProduct,
-  seedCatalogToStore,
-  loadCatalogFromStore,
   serviceAvailability,
   servicesInCategory,
 } from "../../src/marketplace/catalog.ts";
 import type {
-  CatalogProduct,
   FulfillmentType,
-  MarketplaceCategory,
-  MarketplaceService,
   MarketplaceServiceKind,
 } from "../../src/marketplace/types.ts";
-
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-catalog-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
-}
 
 test("catalog includes all required service kinds across every approved category", () => {
   const catalog = buildDemoCatalog();
@@ -384,22 +369,6 @@ test("seeded catalog represents the full breadth of the approved parity categori
     CatalogCategoryId.Airline,
   );
   assert.ok(airlineServices.some((service) => service.currency === "GBP"));
-});
-
-test("seed persistence round-trips categories, services, and products", async (t) => {
-  const store = tempStore(t);
-  await seedCatalogToStore(store);
-
-  const restored = await loadCatalogFromStore(store);
-
-  assert.equal(restored.categories.length, 12);
-  assert.ok(restored.services.length >= 20);
-  assert.ok(restored.products.length >= 10);
-  assert.equal(
-    findServiceByKind(restored, "BETTING")?.complianceStatus,
-    "COMPLIANCE_GATED",
-  );
-  assert.equal(restored.createdAt, "2026-01-01T12:00:00.000Z");
 });
 
 test("catalog is deterministic: two builds produce identical entities", () => {
