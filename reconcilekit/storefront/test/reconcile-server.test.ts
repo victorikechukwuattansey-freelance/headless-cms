@@ -9,7 +9,7 @@ import { loadConfig } from "../src/config.ts";
 import { getPrismaClient } from "../src/db/client.ts";
 import { buildRepositories } from "../src/db/repositories/index.ts";
 import type { Repositories } from "../src/db/repositories/index.ts";
-import { JsonlStore } from "../src/store/jsonl-store.ts";
+
 import { createStorefrontServer } from "../src/server.ts";
 import type { PaystackGateway } from "../src/paystack/gateway.ts";
 import type { Order, PaymentRecord } from "../src/domain/types.ts";
@@ -68,7 +68,7 @@ async function startServer(
   seed?: readonly PaymentRecord[],
 ): Promise<TestContext> {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-reconcile-"));
-  const store = new JsonlStore(dataDir);
+
   await seedPayments(repos, seed ?? []);
   const gateway: PaystackGateway = {
     initializeTransaction: async () => ({
@@ -90,7 +90,6 @@ async function startServer(
   };
   const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
   const server: Server = createStorefrontServer(config, {
-    store,
     repos,
     paystack: gateway,
   });

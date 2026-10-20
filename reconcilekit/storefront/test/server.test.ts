@@ -9,7 +9,7 @@ import { loadConfig } from "../src/config.ts";
 import { getPrismaClient } from "../src/db/client.ts";
 import { buildRepositories } from "../src/db/repositories/index.ts";
 import type { Repositories } from "../src/db/repositories/index.ts";
-import { JsonlStore } from "../src/store/jsonl-store.ts";
+
 import { createStorefrontServer } from "../src/server.ts";
 import type { PaystackGateway } from "../src/paystack/gateway.ts";
 import type {
@@ -24,7 +24,6 @@ const repos = buildRepositories(getPrismaClient());
 interface TestContext {
   baseUrl: string;
   close: () => Promise<void>;
-  store: JsonlStore;
 }
 
 async function startServer(options?: {
@@ -33,7 +32,7 @@ async function startServer(options?: {
 }): Promise<TestContext> {
   const dataDir =
     options?.dataDir ?? mkdtempSync(join(tmpdir(), "storefront-server-"));
-  const store = new JsonlStore(dataDir);
+
   const gateway: PaystackGateway = options?.gateway ?? {
     initializeTransaction: async (input) => ({
       authorizationUrl: `https://checkout.paystack.com/${input.reference}`,
@@ -54,7 +53,6 @@ async function startServer(options?: {
   };
   const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
   const server: Server = createStorefrontServer(config, {
-    store,
     repos,
     paystack: gateway,
   });
@@ -66,7 +64,6 @@ async function startServer(options?: {
       new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       ),
-    store,
   };
   if (options?.dataDir === undefined) {
     rmSync(dataDir, { recursive: true, force: true });

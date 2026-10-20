@@ -8,7 +8,6 @@ import type {
   PaymentRecord,
   Product,
 } from "./domain/types.ts";
-import type { JsonlStore } from "./store/jsonl-store.ts";
 import type { Repositories } from "./db/repositories/index.ts";
 import type { PaystackGateway } from "./paystack/gateway.ts";
 import type {
@@ -104,7 +103,6 @@ import {
 } from "./marketplace/tenancy.ts";
 
 export interface ServerDependencies {
-  readonly store: JsonlStore;
   /**
    * Top-level repository handle. Mirrors `marketplace.repos` when
    * marketplace is configured; kept separately so non-marketplace paths
@@ -169,7 +167,7 @@ async function handleRequest(
         req,
         res,
         url,
-        deps.store,
+
         deps.marketplace,
         deps.repos,
         config,
@@ -613,7 +611,7 @@ async function tryHandleMarketplace(
   req: import("node:http").IncomingMessage,
   res: import("node:http").ServerResponse,
   url: URL,
-  store: JsonlStore,
+
   deps: MarketplaceTransactionDeps,
   repos: Repositories,
   config: StorefrontConfig,
@@ -621,7 +619,7 @@ async function tryHandleMarketplace(
   const path = url.pathname;
   const method = req.method ?? "GET";
   try {
-    await routeMarketplace(req, res, url, store, deps, repos, method, config);
+    await routeMarketplace(req, res, url, deps, repos, method, config);
     return true;
   } catch (error) {
     writeMarketplaceHtmlError(res, error, path);
@@ -661,7 +659,7 @@ async function routeMarketplace(
   req: import("node:http").IncomingMessage,
   res: import("node:http").ServerResponse,
   url: URL,
-  store: JsonlStore,
+
   deps: MarketplaceTransactionDeps,
   repos: Repositories,
   method: string,

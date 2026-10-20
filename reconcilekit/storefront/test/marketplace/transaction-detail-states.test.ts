@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
 import { truncateCommittedState } from "../db/isolation.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
+
 import { loadConfig } from "../../src/config.ts";
 import { createStorefrontServer } from "../../src/server.ts";
 import { demoDeps } from "./demo-deps.ts";
@@ -40,7 +40,7 @@ interface WalkthroughServer {
   readonly baseUrl: string;
   readonly cookie: string;
   readonly close: () => Promise<void>;
-  readonly store: JsonlStore;
+
   readonly seeded: SeededDemoData;
 }
 
@@ -49,13 +49,12 @@ async function startFullySeededServer(t: {
 }): Promise<WalkthroughServer> {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-detail-states-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
-  const store = new JsonlStore(dataDir);
+
   const seeded = await seedDemoData(repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
-      store,
       repos,
       paystack: {
         initializeTransaction: async () => {
@@ -81,7 +80,7 @@ async function startFullySeededServer(t: {
       new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       ),
-    store,
+
     seeded,
   };
 }

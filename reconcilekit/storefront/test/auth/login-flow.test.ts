@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
+
 import { loadConfig } from "../../src/config.ts";
 import { createStorefrontServer } from "../../src/server.ts";
 import { demoDeps } from "../marketplace/demo-deps.ts";
@@ -21,7 +21,6 @@ const repos = buildRepositories(prisma);
 interface FlowServer {
   readonly baseUrl: string;
   readonly close: () => Promise<void>;
-  readonly store: JsonlStore;
 }
 
 async function startServer(t: {
@@ -29,13 +28,12 @@ async function startServer(t: {
 }): Promise<FlowServer> {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-login-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
-  const store = new JsonlStore(dataDir);
+
   await seedDemoUser(repos);
   await seedDemoTenancy(repos);
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
-      store,
       repos,
       paystack: {
         initializeTransaction: async () => {
@@ -56,7 +54,6 @@ async function startServer(t: {
       new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       ),
-    store,
   };
 }
 
@@ -163,13 +160,12 @@ test("login flow: logout revokes the session and clears the cookie", async (t) =
 test("login flow: sessions persist across a server restart", async (t) => {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-login-restart-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
-  const store = new JsonlStore(dataDir);
+
   await seedDemoUser(repos);
   await seedDemoTenancy(repos);
 
   const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
   const deps = {
-    store,
     repos,
     paystack: {
       initializeTransaction: async () => {

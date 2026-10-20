@@ -9,7 +9,7 @@ import {
   buildRepositories,
   type Repositories,
 } from "../../src/db/repositories/index.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
+
 import { createStorefrontServer } from "../../src/server.ts";
 import { demoDeps } from "./demo-deps.ts";
 import { executeMarketplaceTransaction } from "../../src/marketplace/transactions.ts";
@@ -23,7 +23,7 @@ export interface SeededServerContext {
   readonly baseUrl: string;
   readonly cookie: string;
   readonly close: () => Promise<void>;
-  readonly store: JsonlStore;
+
   readonly transaction: MarketplaceTransaction;
   readonly reference: string;
 }
@@ -52,7 +52,7 @@ async function createSeededTransaction(
 
 export async function startSeededServer(): Promise<SeededServerContext> {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-marketplace-"));
-  const store = new JsonlStore(dataDir);
+
   const repos = buildRepositories(getPrismaClient());
 
   // seedDemoData seeds the demo user (Postgres) and the demo tenancy
@@ -65,7 +65,6 @@ export async function startSeededServer(): Promise<SeededServerContext> {
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
-      store,
       repos,
       paystack: {
         initializeTransaction: async () => {
@@ -91,7 +90,7 @@ export async function startSeededServer(): Promise<SeededServerContext> {
       new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       ),
-    store,
+
     transaction,
     reference: transaction.reference,
   };

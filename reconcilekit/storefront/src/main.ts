@@ -2,7 +2,7 @@ import { loadConfig } from "./config.ts";
 import type { StorefrontConfig } from "./config.ts";
 import { disconnectPrisma, getPrismaClient } from "./db/client.ts";
 import { buildRepositories } from "./db/repositories/index.ts";
-import { JsonlStore } from "./store/jsonl-store.ts";
+
 import { createStorefrontServer } from "./server.ts";
 import type { PaystackGateway } from "./paystack/gateway.ts";
 import { initializeTransaction, verifyTransaction } from "./paystack/client.ts";
@@ -36,7 +36,7 @@ function buildPaystackGateway(config: StorefrontConfig): PaystackGateway {
 }
 
 const config = loadConfig();
-const store = new JsonlStore(config.dataDir);
+
 const repos = buildRepositories(getPrismaClient());
 
 const marketplaceDeps: MarketplaceTransactionDeps = {
@@ -50,7 +50,6 @@ if (config.seedDemo) {
 }
 
 const server = createStorefrontServer(config, {
-  store,
   repos,
   paystack: buildPaystackGateway(config),
   marketplace: marketplaceDeps,

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getPrismaClient } from "../../src/db/client.ts";
 import { buildRepositories } from "../../src/db/repositories/index.ts";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
+
 import { loadConfig } from "../../src/config.ts";
 import { createStorefrontServer } from "../../src/server.ts";
 import { demoDeps } from "../marketplace/demo-deps.ts";
@@ -21,7 +21,6 @@ const repos = buildRepositories(prisma);
 interface ProtServer {
   readonly baseUrl: string;
   readonly close: () => Promise<void>;
-  readonly store: JsonlStore;
 }
 
 async function startServer(t: {
@@ -29,13 +28,12 @@ async function startServer(t: {
 }): Promise<ProtServer> {
   const dataDir = mkdtempSync(join(tmpdir(), "storefront-prot-"));
   t.after(() => rmSync(dataDir, { recursive: true, force: true }));
-  const store = new JsonlStore(dataDir);
+
   await seedDemoData(repos);
 
   const server: Server = createStorefrontServer(
     loadConfig({ STOREFRONT_DATA_DIR: dataDir }),
     {
-      store,
       repos,
       paystack: {
         initializeTransaction: async () => {
@@ -56,7 +54,6 @@ async function startServer(t: {
       new Promise<void>((res, rej) =>
         server.close((e) => (e ? rej(e) : res())),
       ),
-    store,
   };
 }
 
