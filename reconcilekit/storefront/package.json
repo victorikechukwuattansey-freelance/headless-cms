@@ -10,6 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-concurrency=1",
+    "test:clean": "prisma migrate reset --force --skip-seed && node --test --test-concurrency=1",
     "start": "node --env-file-if-exists=.env src/main.ts",
     "pilot:run": "node src/cli/pilot-run.ts",
     "db:generate": "prisma generate",
