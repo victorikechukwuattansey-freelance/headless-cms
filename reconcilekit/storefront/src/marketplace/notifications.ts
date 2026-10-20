@@ -1,4 +1,4 @@
-import type { JsonlStore } from "../store/jsonl-store.ts";
+import type { Repositories } from "../db/repositories/index.ts";
 import { WALLET_FIXED_TIMESTAMP } from "./wallet.ts";
 import type { TransactionTruth } from "./truth.ts";
 import type { NotificationRecord, NotificationStatus } from "./types.ts";
@@ -67,7 +67,7 @@ export interface EmitNotificationInput {
 }
 
 export async function emitNotification(
-  store: JsonlStore,
+  repos: Repositories,
   input: EmitNotificationInput,
 ): Promise<NotificationRecord> {
   const now = input.now ?? WALLET_FIXED_TIMESTAMP;
@@ -81,45 +81,30 @@ export async function emitNotification(
     createdAt: now,
     simulated: true,
   };
-  await store.insert("notifications", record);
+  await repos.notifications.insert(record);
   return record;
 }
 
 /**
- * All notifications for one customer, newest first, collapsed by id so a
- * replayed emission resolves to its latest text.
+ * All notifications for one customer, newest first. The repository upserts
+ * by deterministic id, so a replayed emission resolves to its latest text.
  */
 export async function listNotificationsByCustomer(
-  store: JsonlStore,
+  repos: Repositories,
   customerId: string,
 ): Promise<readonly NotificationRecord[]> {
-  const all = await store.readAll<NotificationRecord>("notifications");
-  const latestById = new Map<string, NotificationRecord>();
-  for (const record of all) {
-    if (record.customerId === customerId) {
-      latestById.set(record.id, record);
-    }
-  }
-  return Array.from(latestById.values())
-    .slice()
-    .sort((a, b) => {
-      const byTime = b.createdAt.localeCompare(a.createdAt);
-      return byTime !== 0 ? byTime : b.id.localeCompare(a.id);
-    });
+  return repos.notifications.listByCustomer(customerId);
 }
 
 export async function markNotificationRead(
-  store: JsonlStore,
+  repos: Repositories,
   input: {
     readonly customerId: string;
     readonly id: string;
     readonly now?: string;
   },
 ): Promise<NotificationRecord> {
-  const current = await store.readLatestById<NotificationRecord>(
-    "notifications",
-    input.id,
-  );
+  const current = await repos.notifications.readLatestById(input.id);
   if (current === null || current.customerId !== input.customerId) {
     throw new NotificationError(
       "NOTIFICATION_NOT_FOUND",
@@ -132,7 +117,7 @@ export async function markNotificationRead(
     status: "READ",
     createdAt: now,
   };
-  await store.insert("notifications", updated);
+  await repos.notifications.insert(updated);
   return updated;
 }
 

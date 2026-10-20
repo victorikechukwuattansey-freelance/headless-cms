@@ -1,5 +1,4 @@
 import type { Outcome, ReconciliationCode } from "../../../src/domain/model.ts";
-import type { JsonlStore } from "../store/jsonl-store.ts";
 import {
   executeMarketplaceTransaction,
   marketplaceTransactionFacts,
@@ -508,14 +507,14 @@ async function buildTransactionRows(
 }
 
 export async function dashboardViewModel(
-  store: JsonlStore,
+  repos: Repositories,
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<DashboardViewModel> {
   const customer = await customerProfile(deps.repos, customerId);
   const wallet = await walletSummary(deps.repos, customerId);
   const rows = await buildTransactionRows(deps);
-  const notifications = (await listNotificationsByCustomer(store, customerId))
+  const notifications = (await listNotificationsByCustomer(repos, customerId))
     .slice(0, 3)
     .map((record) => ({
       id: record.id,
@@ -615,7 +614,7 @@ export async function transactionsViewModel(
 }
 
 export async function transactionDetailViewModel(
-  store: JsonlStore,
+  repos: Repositories,
   deps: MarketplaceTransactionDeps,
   identifier: string,
 ): Promise<TransactionDetailViewModel | null> {
@@ -655,7 +654,7 @@ export async function transactionDetailViewModel(
     `mr_${transaction.id}`,
   );
   const notifications = (
-    await listNotificationsByCustomer(store, transaction.customerId)
+    await listNotificationsByCustomer(repos, transaction.customerId)
   ).filter((record) => record.transactionId === transaction.id);
   const facts = await marketplaceTransactionFacts(deps.repos, transaction.id);
   const ledger = await deps.repos.walletLedger.listByTransaction(
@@ -800,12 +799,12 @@ export async function ensureReceipt(
 }
 
 export async function notificationsViewModel(
-  store: JsonlStore,
+  repos: Repositories,
   deps: MarketplaceTransactionDeps,
   customerId: string,
 ): Promise<NotificationsViewModel> {
   const customer = await customerProfile(deps.repos, customerId);
-  const notifications = await listNotificationsByCustomer(store, customerId);
+  const notifications = await listNotificationsByCustomer(repos, customerId);
   return { customer, notifications };
 }
 

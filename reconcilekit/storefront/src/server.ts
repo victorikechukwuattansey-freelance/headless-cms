@@ -730,7 +730,7 @@ async function routeMarketplace(
   // Customer GET pages
   if (method === "GET") {
     if (path === "/" || path === "/dashboard") {
-      const vm = await dashboardViewModel(store, deps, DEMO_CUSTOMER_ID);
+      const vm = await dashboardViewModel(repos, deps, DEMO_CUSTOMER_ID);
       sendHtml(res, renderDashboardPage(vm));
       return;
     }
@@ -794,7 +794,7 @@ async function routeMarketplace(
     const txnMatch = path.match(/^\/transactions\/([^/]+)$/);
     if (txnMatch) {
       const identifier = decodeURIComponent(txnMatch[1]);
-      const vm = await transactionDetailViewModel(store, deps, identifier);
+      const vm = await transactionDetailViewModel(repos, deps, identifier);
       if (vm === null) {
         throw new HttpError(
           404,
@@ -864,7 +864,7 @@ async function routeMarketplace(
       return;
     }
     if (path === "/notifications") {
-      const vm = await notificationsViewModel(store, deps, DEMO_CUSTOMER_ID);
+      const vm = await notificationsViewModel(repos, deps, DEMO_CUSTOMER_ID);
       sendHtml(res, renderNotificationsPage(vm));
       return;
     }
@@ -899,7 +899,7 @@ async function routeMarketplace(
     const adminTxnMatch = path.match(/^\/admin\/transactions\/([^/]+)$/);
     if (adminTxnMatch) {
       const identifier = decodeURIComponent(adminTxnMatch[1]);
-      const vm = await transactionDetailViewModel(store, deps, identifier);
+      const vm = await transactionDetailViewModel(repos, deps, identifier);
       if (vm === null) {
         throw new HttpError(
           404,

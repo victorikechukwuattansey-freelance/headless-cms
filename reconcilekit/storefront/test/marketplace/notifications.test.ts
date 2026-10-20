@@ -1,9 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { JsonlStore } from "../../src/store/jsonl-store.ts";
+import type { Prisma } from "@prisma/client";
+import { getPrismaClient } from "../../src/db/client.ts";
+import { buildRepositories } from "../../src/db/repositories/index.ts";
+import { withRollback } from "../db/helpers.ts";
+import {
+  seedDemoCustomer,
+  seedOrder,
+  seedTransaction,
+} from "../db/fixtures.ts";
 import { WALLET_FIXED_TIMESTAMP } from "../../src/marketplace/wallet.ts";
 import {
   buildNotificationId,
@@ -20,11 +25,22 @@ import type {
 } from "../../src/marketplace/types.ts";
 
 const NOW = WALLET_FIXED_TIMESTAMP;
+const prisma = getPrismaClient();
 
-function tempStore(t: { after: (fn: () => void) => void }): JsonlStore {
-  const dir = mkdtempSync(join(tmpdir(), "storefront-not-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  return new JsonlStore(dir);
+async function seedNotificationContext(
+  tx: Prisma.TransactionClient,
+  transactionIds: readonly string[],
+): Promise<void> {
+  await seedDemoCustomer(tx);
+  for (const id of transactionIds) {
+    await seedOrder(tx, { id: `ord_${id}`, customerId: "cus_demo" });
+    await seedTransaction(tx, {
+      id,
+      orderId: `ord_${id}`,
+      customerId: "cus_demo",
+      reference: `ref_${id}`,
+    });
+  }
 }
 
 function truthFor(customerStatus: CustomerTransactionStatus) {
@@ -66,85 +82,97 @@ function truthFor(customerStatus: CustomerTransactionStatus) {
   });
 }
 
-test("emitNotification persists and deterministic ids make replay an upsert", async (t) => {
-  const store = tempStore(t);
-  await emitNotification(store, {
-    customerId: "cus_demo",
-    transactionId: "mk_txn_1",
-    kind: "refund_pending",
-    title: "Refund in progress",
-    body: "first text",
-    now: NOW,
-  });
-  await emitNotification(store, {
-    customerId: "cus_demo",
-    transactionId: "mk_txn_1",
-    kind: "refund_pending",
-    title: "Refund in progress",
-    body: "second text",
-    now: "2026-01-01T13:00:00.000Z",
-  });
+test("emitNotification persists and deterministic ids make replay an upsert", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    await seedNotificationContext(tx, ["mk_txn_1"]);
 
-  const notifications = await listNotificationsByCustomer(store, "cus_demo");
-  assert.equal(notifications.length, 1);
-  assert.equal(notifications[0]?.body, "second text");
-  assert.equal(notifications[0]?.status, "UNREAD");
-  assert.equal(notifications[0]?.simulated, true);
-  assert.equal(
-    notifications[0]?.id,
-    buildNotificationId("cus_demo", "refund_pending", "mk_txn_1"),
-  );
+    await emitNotification(repos, {
+      customerId: "cus_demo",
+      transactionId: "mk_txn_1",
+      kind: "refund_pending",
+      title: "Refund in progress",
+      body: "first text",
+      now: NOW,
+    });
+    await emitNotification(repos, {
+      customerId: "cus_demo",
+      transactionId: "mk_txn_1",
+      kind: "refund_pending",
+      title: "Refund in progress",
+      body: "second text",
+      now: "2026-01-01T13:00:00.000Z",
+    });
+
+    const notifications = await listNotificationsByCustomer(repos, "cus_demo");
+    assert.equal(notifications.length, 1);
+    assert.equal(notifications[0]?.body, "second text");
+    assert.equal(notifications[0]?.status, "UNREAD");
+    assert.equal(notifications[0]?.simulated, true);
+    assert.equal(
+      notifications[0]?.id,
+      buildNotificationId("cus_demo", "refund_pending", "mk_txn_1"),
+    );
+  });
 });
 
-test("markNotificationRead flips the status and guards ownership", async (t) => {
-  const store = tempStore(t);
-  const created = await emitNotification(store, {
-    customerId: "cus_demo",
-    transactionId: "mk_txn_1",
-    kind: "needs_attention",
-    title: "Needs attention",
-    body: "your money is at risk",
-    now: NOW,
-  });
-  const read = await markNotificationRead(store, {
-    customerId: "cus_demo",
-    id: created.id,
-  });
-  assert.equal(read.status, "READ");
+test("markNotificationRead flips the status and guards ownership", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    await seedNotificationContext(tx, ["mk_txn_1"]);
 
-  await assert.rejects(
-    markNotificationRead(store, {
-      customerId: "cus_other",
+    const created = await emitNotification(repos, {
+      customerId: "cus_demo",
+      transactionId: "mk_txn_1",
+      kind: "needs_attention",
+      title: "Needs attention",
+      body: "your money is at risk",
+      now: NOW,
+    });
+    const read = await markNotificationRead(repos, {
+      customerId: "cus_demo",
       id: created.id,
-    }),
-    (error: unknown) =>
-      error instanceof NotificationError &&
-      error.code === "NOTIFICATION_NOT_FOUND",
-  );
+    });
+    assert.equal(read.status, "READ");
+
+    await assert.rejects(
+      markNotificationRead(repos, {
+        customerId: "cus_other",
+        id: created.id,
+      }),
+      (error: unknown) =>
+        error instanceof NotificationError &&
+        error.code === "NOTIFICATION_NOT_FOUND",
+    );
+  });
 });
 
-test("listNotificationsByCustomer sorts newest first", async (t) => {
-  const store = tempStore(t);
-  await emitNotification(store, {
-    customerId: "cus_demo",
-    transactionId: "mk_txn_a",
-    kind: "refunded",
-    title: "Refunded",
-    body: "older",
-    now: NOW,
+test("listNotificationsByCustomer sorts newest first", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    await seedNotificationContext(tx, ["mk_txn_a", "mk_txn_b"]);
+
+    await emitNotification(repos, {
+      customerId: "cus_demo",
+      transactionId: "mk_txn_a",
+      kind: "refunded",
+      title: "Refunded",
+      body: "older",
+      now: NOW,
+    });
+    await emitNotification(repos, {
+      customerId: "cus_demo",
+      transactionId: "mk_txn_b",
+      kind: "payment_failed",
+      title: "Failed",
+      body: "newer",
+      now: "2026-01-01T13:00:00.000Z",
+    });
+    const notifications: readonly NotificationRecord[] =
+      await listNotificationsByCustomer(repos, "cus_demo");
+    assert.equal(notifications.length, 2);
+    assert.equal(notifications[0]?.body, "newer");
   });
-  await emitNotification(store, {
-    customerId: "cus_demo",
-    transactionId: "mk_txn_b",
-    kind: "payment_failed",
-    title: "Failed",
-    body: "newer",
-    now: "2026-01-01T13:00:00.000Z",
-  });
-  const notifications: readonly NotificationRecord[] =
-    await listNotificationsByCustomer(store, "cus_demo");
-  assert.equal(notifications.length, 2);
-  assert.equal(notifications[0]?.body, "newer");
 });
 
 test("notificationsForTruth is derived from the truth projection only", () => {
