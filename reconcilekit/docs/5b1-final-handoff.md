@@ -54,12 +54,13 @@ tests added and 28 removed. Green means no regression from these counts.
 
 ## §5 — Current phase (5B.1f)
 
-| Increment | Status   | Scope                                                           |
-| --------- | -------- | --------------------------------------------------------------- |
-| f.1       | Current  | Handoff consolidation and payments-split diagram fix; docs only |
-| f.2       | Pending  | Gate fixes: T5.1, T7.11, T7.13; config and scripts              |
-| f.3       | Pending  | `PHASE_5_OPENING` §7 amendment; docs only                       |
-| f.4       | Optional | Postgres concurrency test decision; test                        |
+| Increment | Status             | Scope                                                                         |
+| --------- | ------------------ | ----------------------------------------------------------------------------- |
+| f.1       | Complete (320fa22) | Handoff consolidation and payments-split diagram fix; docs only               |
+| f.2       | Complete (ee57ee7) | T7.11 `test:clean` + T7.13 BOM helper; config and scripts                     |
+| f.2b      | Deferred           | T5.1 ESLint TS; pre-flight complete; dispatch pending TS-version verification |
+| f.3       | Current            | `PHASE_5_OPENING` §7 amendment + handoff §5 fix; docs only                    |
+| f.4       | Optional           | Postgres concurrency test decision; test                                      |
 
 ## §6 — In-flight
 

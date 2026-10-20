@@ -242,6 +242,32 @@ After every Phase 5 increment:
 The absolute counts are not the target; the invariant is "no test that
 passed before Phase 5 fails after any Phase 5 increment."
 
+### 7.1 Amendment — 5B.1 closure
+
+The original guard above remains the Phase 5 invariant. This amendment
+records the re-baseline queued per scope §3.6 and the delivered surface for
+5B.1.
+
+| Item                              | Scope §3.6 projection      | Delivered                            |
+| --------------------------------- | -------------------------- | ------------------------------------ |
+| Core job                          | core tests only; ~213      | 213 / 213                            |
+| Storefront job                    | storefront tests only; 518 | 606 / 606                            |
+| JSONL layer                       | removed                    | zero references in `src/` or `test/` |
+| Production filesystem persistence | removed                    | zero                                 |
+
+Delivered deviations from the opening projection:
+
+- 5B.1i (catalog) closed with no work. The three catalog repositories had
+  zero production callers and were deleted at 5B.1e.2.
+- 5B.1f split into f.1–f.4 plus f.2b. T5.1 (ESLint TS) is deferred pending
+  TypeScript 7 toolchain verification; f.2b's pre-flight is committed at f.3.
+- 5B.1d executed on a smaller surface than projected. Most fixtures migrated
+  inline during 1a–1k, leaving only two stale `wallet_ledger` reads and two
+  dead `store` parameters.
+
+Final state: storefront **606/606**, core **213/213**, zero JSONL, zero
+filesystem persistence in production.
+
 ## 8. Closure criteria
 
 Phase 5 closes when:
