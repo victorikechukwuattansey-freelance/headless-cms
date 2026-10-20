@@ -248,12 +248,12 @@ The original guard above remains the Phase 5 invariant. This amendment
 records the re-baseline queued per scope §3.6 and the delivered surface for
 5B.1.
 
-| Item                              | Scope §3.6 projection      | Delivered                            |
-| --------------------------------- | -------------------------- | ------------------------------------ |
-| Core job                          | core tests only; ~213      | 213 / 213                            |
-| Storefront job                    | storefront tests only; 518 | 606 / 606                            |
-| JSONL layer                       | removed                    | zero references in `src/` or `test/` |
-| Production filesystem persistence | removed                    | zero                                 |
+| Item                              | Projection                   | Delivered                            |
+| --------------------------------- | ---------------------------- | ------------------------------------ |
+| Core job                          | core tests only; ~213        | 213 / 213                            |
+| Storefront job                    | original §7 guard: 464 / 464 | 606 / 606                            |
+| JSONL layer                       | removed                      | zero references in `src/` or `test/` |
+| Production filesystem persistence | removed                      | zero                                 |
 
 Delivered deviations from the opening projection:
 

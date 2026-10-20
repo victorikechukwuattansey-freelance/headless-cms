@@ -15,18 +15,19 @@ the work that remains in 5B.1f. Every project fact below is sourced from
 
 ## §2 — Phase history
 
-| Phase                | Status   | Representative commit | Delivered                                                                                                   |
-| -------------------- | -------- | --------------------- | ----------------------------------------------------------------------------------------------------------- |
-| 2                    | Complete | `eba3750`             | Core engine and storefront marketplace pilot; 2A–2K accepted in `PHASE_2K_FINAL_VALIDATION_AND_HANDOVER.md` |
-| 3                    | Complete | `1fb6a86`             | 3A–3D accepted; 3E and 3F deferred with reasons in `PHASE_3_CLOSURE.md`                                     |
-| 4                    | Complete | `09226d6`             | CI, core distribution, consumer README, and publishing procedure in `PHASE_4_CLOSURE.md`                    |
-| 5 opening            | Open     | `8c47494`             | 5A–5D defined; sequencing and freeze posture in `PHASE_5_OPENING.md`                                        |
-| 5A                   | Complete | `8cf13fa`             | Authentication and tenancy: identity, sessions, organizations, and route protection                         |
-| 5B.1a                | Complete | `d3c4868`             | Prisma schema, initial migration, and Postgres 17.2 Compose service                                         |
-| 5B.1b                | Complete | `3130b26`             | Repository layer for all 29 live store kinds                                                                |
-| 5B.1c (1a–1k span)   | Complete | `50f2c9b`             | 28 live schema tables migrated; closed at 634 tests                                                         |
-| 5B.1d                | Complete | `1ca4df5`             | Stale wallet reads fixed and dead store parameters narrowed; 634 tests                                      |
-| 5B.1e (e.1–e.4 span) | Complete | `ddc807e`             | JSONL retirement; 634 → 606 tests; payments split and phase closure docs                                    |
+| Phase                | Status   | Representative commit | Delivered                                                                                                                                 |
+| -------------------- | -------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 2                    | Complete | `eba3750`             | Core engine and storefront marketplace pilot; 2A–2K accepted in `PHASE_2K_FINAL_VALIDATION_AND_HANDOVER.md`                               |
+| 3                    | Complete | `1fb6a86`             | 3A–3D accepted; 3E and 3F deferred with reasons in `PHASE_3_CLOSURE.md`                                                                   |
+| 4                    | Complete | `09226d6`             | CI, core distribution, consumer README, and publishing procedure in `PHASE_4_CLOSURE.md`                                                  |
+| 5 opening            | Open     | `8c47494`             | 5A–5D defined; sequencing and freeze posture in `PHASE_5_OPENING.md`                                                                      |
+| 5A                   | Complete | `8cf13fa`             | Authentication and tenancy: identity, sessions, organizations, and route protection                                                       |
+| 5B.1a                | Complete | `d3c4868`             | Prisma schema, initial migration, and Postgres 17.2 Compose service                                                                       |
+| 5B.1b                | Complete | `3130b26`             | Repository layer for all 29 live store kinds                                                                                              |
+| 5B.1c (1a–1k span)   | Complete | `50f2c9b`             | 28 live schema tables migrated; closed at 634 tests                                                                                       |
+| 5B.1d                | Complete | `1ca4df5`             | Stale wallet reads fixed and dead store parameters narrowed; 634 tests                                                                    |
+| 5B.1e (e.1–e.4 span) | Complete | `ddc807e`             | JSONL retirement; 634 → 606 tests; payments split and phase closure docs                                                                  |
+| 5B.1f                | Complete | `eeb7d38`             | Gate helpers (`test:clean`, BOM-safe commit script); PHASE_5_OPENING §7 amendment; f.2b pre-flight (T5.1 ESLint TS deferred on toolchain) |
 
 ## §3 — Frozen boundaries
 
@@ -52,15 +53,15 @@ discipline.
 `docs/5b1e-closure.md` records the trajectory: 632 → 606 across 5B.1, with 2
 tests added and 28 removed. Green means no regression from these counts.
 
-## §5 — Current phase (5B.1f)
+## §5 — 5B.1f — Complete (f.2b deferred on toolchain)
 
-| Increment | Status             | Scope                                                                         |
-| --------- | ------------------ | ----------------------------------------------------------------------------- |
-| f.1       | Complete (320fa22) | Handoff consolidation and payments-split diagram fix; docs only               |
-| f.2       | Complete (ee57ee7) | T7.11 `test:clean` + T7.13 BOM helper; config and scripts                     |
-| f.2b      | Deferred           | T5.1 ESLint TS; pre-flight complete; dispatch pending TS-version verification |
-| f.3       | Current            | `PHASE_5_OPENING` §7 amendment + handoff §5 fix; docs only                    |
-| f.4       | Optional           | Postgres concurrency test decision; test                                      |
+| Increment | Status                | Scope                                                                     |
+| --------- | --------------------- | ------------------------------------------------------------------------- |
+| f.1       | Complete (320fa22)    | Handoff consolidation and payments-split diagram fix; docs only           |
+| f.2       | Complete (ee57ee7)    | T7.11 `test:clean` + T7.13 BOM helper                                     |
+| f.2b      | Deferred              | T5.1 ESLint TS, blocked on `@typescript-eslint` TS 7.0 support            |
+| f.3       | Complete (eeb7d38)    | `PHASE_5_OPENING` §7 + handoff §5 + f.2b pre-flight; docs only            |
+| f.4       | Complete (f.4 commit) | 5B.1f close-out; concurrency tests deferred to a future quality increment |
 
 ## §6 — In-flight
 
@@ -68,19 +69,23 @@ Empty. All 5B.1 increments closed.
 
 ## §7 — State at handoff
 
-- HEAD: the f.1 commit on top of `ddc807e`; confirm the exact hash with
-  `git log -1 --format='%H %s'` (the parent must be `ddc807e`).
+- HEAD: the f.4 commit on top of `eeb7d38`; confirm the exact hash with
+  `git log -1 --format='%H %s'` (the parent must be `eeb7d38`).
 - Storefront 606 / 606.
 - Core 213 / 213.
 - `git status --short -- reconcilekit/` → empty.
-- Local gates green at f.1: typecheck, lint, `format:check`.
-- CI is green only when the workflow run for the f.1 commit is green. Check
+- Local gates green at f.4: typecheck, lint, `format:check`, core tests.
+- CI is green only when the workflow run for the f.4 commit is green. Check
   the run; do not infer CI from the local gates.
+- 5B.1f CLOSED; 5B COMPLETE.
+- Next: Phase 5C or 5D per `PHASE_5_OPENING`; owner decision pending.
 
 ## §8 — Exact next action
 
-If 5B.1f.1–f.4 all closed: 5B is complete; open Phase 5C or 5D per
-`PHASE_5_OPENING`. If 5B.1f is in progress: read §5 for the current increment.
+5B.1 is complete. The next phase (5C webhooks, or 5D second PSP adapter) is
+an owner-scoped decision per `PHASE_5_OPENING.md`. Do not start either without
+an explicit dispatch. If resuming an already-open session, verify §7's HEAD and
+gates before proceeding.
 
 ## §9 — 5B closure summary
 
@@ -133,13 +138,16 @@ Full file list: `git log --stat 8c47494..HEAD` (5B.1 range).
 
 ## §12 — Commits from the current session
 
-Only the f.1 commit exists in this session:
+The 5B.1f session commits:
 
 ```text
-docs(5b1f): post-5B.1 handoff + payments-split diagram fix
+320fa22  docs(5b1f): post-5B.1 handoff + payments-split diagram fix
+ee57ee7  chore(5b1f): add test:clean and BOM-safe commit helper
+eeb7d38  docs(5b1f): PHASE_5_OPENING §7 + handoff §5 + f.2b pre-flight
+f.4      docs(5b1f): close 5B.1f; 5B complete
 ```
 
-Its parent is `ddc807e` (5B.1e.4).
+f.1's parent is `ddc807e` (5B.1e.4).
 
 ## §13 — Repo state
 
@@ -173,8 +181,13 @@ test passes.
 ## §16 — Open questions
 
 - `findByCustomer` tiebreak (open since 1e).
-- Postgres concurrency coverage: accept the retired class, or add 1–2 tests at
-  f.4.
+- **T5.1 ESLint TS coverage** — blocked on `@typescript-eslint` TS 7 support.
+  The 165 violations are latent (no-unused-vars dominant); they will surface
+  when the plugin can run. Not a 5B.1 gap.
+- **Postgres concurrency coverage** — the retired tests
+  (`persistence-concurrency`, `store-kinds`, `store.test`) covered JSONL-specific
+  behavior. Postgres equivalents are a separate quality increment. Accepted as
+  retired for 5B.1.
 - Phase 5C (webhooks) vs 5D (second PSP adapter) priority — owner decision.
 
 ## §17 — What NOT to do next
@@ -312,3 +325,5 @@ lessons are merged with their origins noted; none are dropped.
 5. Run the gates from §14. If green, proceed.
 6. Read §18 (lessons) before writing any task.
 7. Confirm 5B.1f status per §5. Do not start 5C or 5D until 5B.1f closes.
+8. 5B.1 is complete. The next phase (5C or 5D) is owner-dispatched. Do not
+   start a new phase until an explicit brief arrives.
