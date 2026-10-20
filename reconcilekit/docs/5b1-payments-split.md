@@ -15,6 +15,7 @@ No foreign key crosses between them.
 businesses.id  <- products.businessId
 businesses.id  <- orders.businessId
 orders.id      <- payments.orderId
+businesses.id  <- payments.businessId
 ```
 
 All four tables live in the legacy schema set.
