@@ -136,7 +136,7 @@ benefit.
 `verifyPaystackSignature` takes a `string` and hashes its UTF-8 bytes:
 
 ```ts
-createHmac("sha512", secretKey).update(rawBody, "utf8").digest()
+createHmac("sha512", secretKey).update(rawBody, "utf8").digest();
 ```
 
 The correct sequence is therefore:
@@ -286,7 +286,9 @@ async function handleCallback(
 
   const outcome = await verifyOrder(deps.repos, deps.paystack, orderId);
   switch (outcome.kind) {
-    case "verified": { /* 200 HTML with payment heading and order id */ }
+    case "verified": {
+      /* 200 HTML with payment heading and order id */
+    }
     case "order_not_found": /* 404 HTML */
     case "not_initialized": /* 409 HTML */
     case "reference_mismatch": /* 502 HTML */
@@ -372,7 +374,7 @@ async function handleRequest(
   res: ServerResponse,
   config: StorefrontConfig,
   deps: ServerDependencies,
-): Promise<void>
+): Promise<void>;
 ```
 
 `ServerDependencies` is:
@@ -434,7 +436,10 @@ call:
 function buildPaystackGateway(config: StorefrontConfig): PaystackGateway {
   const withSecret =
     <A extends readonly unknown[], R>(
-      fn: (options: { secretKey: string; baseUrl: string }, ...args: A) => Promise<R>,
+      fn: (
+        options: { secretKey: string; baseUrl: string },
+        ...args: A
+      ) => Promise<R>,
     ) =>
     async (...args: A): Promise<R> => {
       const secretKey = config.paystackSecretKey;
@@ -457,10 +462,12 @@ function buildPaystackGateway(config: StorefrontConfig): PaystackGateway {
 
 ```ts
 export interface PaystackGateway {
-  readonly initializeTransaction: (input: InitializeTransactionInput) =>
-    Promise<InitializeTransactionResult>;
-  readonly verifyTransaction: (input: VerifyTransactionInput) =>
-    Promise<PaystackMappedTransaction>;
+  readonly initializeTransaction: (
+    input: InitializeTransactionInput,
+  ) => Promise<InitializeTransactionResult>;
+  readonly verifyTransaction: (
+    input: VerifyTransactionInput,
+  ) => Promise<PaystackMappedTransaction>;
 }
 ```
 
@@ -498,7 +505,7 @@ export async function ingestPaymentEvent(
   repos: Repositories,
   input: PaymentEventInput,
   options: { readonly now?: number } = {},
-): Promise<IngestOutcome>
+): Promise<IngestOutcome>;
 ```
 
 `IngestOutcome` is:
@@ -536,10 +543,7 @@ the event with `id = event_id`, `event_id`, `idempotency_key`, and
 are absent:
 
 ```ts
-if (
-  input.payment_source_reference === null &&
-  input.source_event_id === null
-) {
+if (input.payment_source_reference === null && input.source_event_id === null) {
   throw new PaymentSourceError(
     "PAYMENT_EVENT_NO_SOURCE_IDENTITY",
     `cannot ingest ${input.payment_source} event without a payment_source_reference or source_event_id; refusing to fabricate or collapse identity`,
@@ -569,17 +573,17 @@ For 5C.1 webhook events:
 
 ### 4c. Failure modes
 
-| Failure | Where | HTTP treatment |
-|---|---|---|
-| Missing/invalid signature | `verifyPaystackSignature` returns `false` | `401 INVALID_SIGNATURE`; do not parse or ingest |
-| Empty body / invalid JSON / non-object | raw reader / `JSON.parse` | `400 INVALID_BODY` |
-| Body over 1 MiB | raw reader | `413 BODY_TOO_LARGE` |
-| Unsupported event (`refund.processed`, etc.) | normalizer returns `null` | `200` ignored; do not ingest |
-| Malformed supported event (`data: null`, missing amount/currency/timestamp) | root `PaystackAdapterError` | `400 INVALID_WEBHOOK_PAYLOAD`; no ingest |
-| Invalid amount / unsupported currency | `PaystackAdapterError` | `400 INVALID_WEBHOOK_PAYLOAD`; no ingest |
-| No source identity | `PaymentSourceError("PAYMENT_EVENT_NO_SOURCE_IDENTITY")` | `400 INVALID_WEBHOOK_PAYLOAD`; no ingest |
-| Repository read/write failure | Prisma/DB error | `500 INTERNAL_ERROR`; Paystack may retry |
-| Missing secret | config check | `503 WEBHOOK_NOT_CONFIGURED`; retry after config fix |
+| Failure                                                                     | Where                                                    | HTTP treatment                                       |
+| --------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
+| Missing/invalid signature                                                   | `verifyPaystackSignature` returns `false`                | `401 INVALID_SIGNATURE`; do not parse or ingest      |
+| Empty body / invalid JSON / non-object                                      | raw reader / `JSON.parse`                                | `400 INVALID_BODY`                                   |
+| Body over 1 MiB                                                             | raw reader                                               | `413 BODY_TOO_LARGE`                                 |
+| Unsupported event (`refund.processed`, etc.)                                | normalizer returns `null`                                | `200` ignored; do not ingest                         |
+| Malformed supported event (`data: null`, missing amount/currency/timestamp) | root `PaystackAdapterError`                              | `400 INVALID_WEBHOOK_PAYLOAD`; no ingest             |
+| Invalid amount / unsupported currency                                       | `PaystackAdapterError`                                   | `400 INVALID_WEBHOOK_PAYLOAD`; no ingest             |
+| No source identity                                                          | `PaymentSourceError("PAYMENT_EVENT_NO_SOURCE_IDENTITY")` | `400 INVALID_WEBHOOK_PAYLOAD`; no ingest             |
+| Repository read/write failure                                               | Prisma/DB error                                          | `500 INTERNAL_ERROR`; Paystack may retry             |
+| Missing secret                                                              | config check                                             | `503 WEBHOOK_NOT_CONFIGURED`; retry after config fix |
 
 `paystackWebhookPaymentEvent` itself never writes. It throws
 `PaystackAdapterError` for malformed provider data and returns `null` for
@@ -633,8 +637,8 @@ async function startServer(options?: {
     options?.dataDir ?? mkdtempSync(join(tmpdir(), "storefront-server-"));
 
   const gateway: PaystackGateway = options?.gateway ?? {
-    initializeTransaction: async (input) => ({ /* fake */ }),
-    verifyTransaction: async (input) => ({ /* fake SUCCESS */ }),
+    initializeTransaction: async (input) => ({/* fake */}),
+    verifyTransaction: async (input) => ({/* fake SUCCESS */}),
   };
 
   const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
@@ -642,9 +646,7 @@ async function startServer(options?: {
     repos,
     paystack: gateway,
   });
-  await new Promise<void>((resolve) =>
-    server.listen(0, "127.0.0.1", resolve),
-  );
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   // ...
 }
 ```
@@ -769,19 +771,19 @@ missing secret, oversize body, and marketplace-present route ordering.
 
 ### 6a. Recommended response contract
 
-| Situation | Status | Body | Ingest? |
-|---|---:|---|---|
-| Fresh supported event | `200` | `{ "status": "recorded", "event_id": "pevt_…", "recorded": true, "replay": false }` | yes |
-| Replay of same event | `200` | `{ "status": "replayed", "event_id": "pevt_…", "recorded": false, "replay": true }` | no (already stored) |
-| Unsupported verified event | `200` | `{ "status": "ignored", "event": "refund.processed" }` | no |
-| Missing secret | `503` | `{ "error": { "code": "WEBHOOK_NOT_CONFIGURED", "message": "..." } }` | no |
-| Missing/invalid signature | `401` | `{ "error": { "code": "INVALID_SIGNATURE", "message": "..." } }` | no |
-| Body over 1 MiB | `413` | `{ "error": { "code": "BODY_TOO_LARGE", "message": "..." } }` | no |
-| Empty/invalid JSON/non-object | `400` | `{ "error": { "code": "INVALID_BODY", "message": "..." } }` | no |
-| Wrong content type (if enforced) | `415` | `{ "error": { "code": "UNSUPPORTED_MEDIA_TYPE", "message": "..." } }` | no |
-| Supported event, malformed data | `400` | `{ "error": { "code": "INVALID_WEBHOOK_PAYLOAD", "message": "...", "cause": "PAYSTACK_…" } }` | no |
-| No source identity | `400` | `{ "error": { "code": "INVALID_WEBHOOK_PAYLOAD", "message": "...", "cause": "PAYMENT_EVENT_NO_SOURCE_IDENTITY" } }` | no |
-| Unexpected DB/internal failure | `500` | existing `INTERNAL_ERROR` envelope | no |
+| Situation                        | Status | Body                                                                                                                | Ingest?             |
+| -------------------------------- | -----: | ------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| Fresh supported event            |  `200` | `{ "status": "recorded", "event_id": "pevt_…", "recorded": true, "replay": false }`                                 | yes                 |
+| Replay of same event             |  `200` | `{ "status": "replayed", "event_id": "pevt_…", "recorded": false, "replay": true }`                                 | no (already stored) |
+| Unsupported verified event       |  `200` | `{ "status": "ignored", "event": "refund.processed" }`                                                              | no                  |
+| Missing secret                   |  `503` | `{ "error": { "code": "WEBHOOK_NOT_CONFIGURED", "message": "..." } }`                                               | no                  |
+| Missing/invalid signature        |  `401` | `{ "error": { "code": "INVALID_SIGNATURE", "message": "..." } }`                                                    | no                  |
+| Body over 1 MiB                  |  `413` | `{ "error": { "code": "BODY_TOO_LARGE", "message": "..." } }`                                                       | no                  |
+| Empty/invalid JSON/non-object    |  `400` | `{ "error": { "code": "INVALID_BODY", "message": "..." } }`                                                         | no                  |
+| Wrong content type (if enforced) |  `415` | `{ "error": { "code": "UNSUPPORTED_MEDIA_TYPE", "message": "..." } }`                                               | no                  |
+| Supported event, malformed data  |  `400` | `{ "error": { "code": "INVALID_WEBHOOK_PAYLOAD", "message": "...", "cause": "PAYSTACK_…" } }`                       | no                  |
+| No source identity               |  `400` | `{ "error": { "code": "INVALID_WEBHOOK_PAYLOAD", "message": "...", "cause": "PAYMENT_EVENT_NO_SOURCE_IDENTITY" } }` | no                  |
+| Unexpected DB/internal failure   |  `500` | existing `INTERNAL_ERROR` envelope                                                                                  | no                  |
 
 ### 6b. Rationale
 
@@ -839,12 +841,12 @@ unit-testable without a server and keeps status-code policy in one place.
 
 ### 7b. Expected files and tests
 
-| File | Change | Purpose |
-|---|---|---|
-| `storefront/src/marketplace/payment-sources/webhook-endpoint.ts` | new | signature + normalize + ingest orchestration; returns outcome |
-| `storefront/src/server.ts` | modify | raw body reader, route before marketplace, status mapping |
-| `storefront/test/marketplace/webhook-endpoint.test.ts` | new | ~7 endpoint tests |
-| `storefront/test/server.test.ts` | modify | harness options + ~8 HTTP tests |
+| File                                                             | Change | Purpose                                                       |
+| ---------------------------------------------------------------- | ------ | ------------------------------------------------------------- |
+| `storefront/src/marketplace/payment-sources/webhook-endpoint.ts` | new    | signature + normalize + ingest orchestration; returns outcome |
+| `storefront/src/server.ts`                                       | modify | raw body reader, route before marketplace, status mapping     |
+| `storefront/test/marketplace/webhook-endpoint.test.ts`           | new    | ~7 endpoint tests                                             |
+| `storefront/test/server.test.ts`                                 | modify | harness options + ~8 HTTP tests                               |
 
 **Total: 4 files, ~15 tests.**
 

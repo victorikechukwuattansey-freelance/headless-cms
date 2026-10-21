@@ -8,6 +8,11 @@ import {
 import { verifyPaystackSignature } from "../marketplace/payment-sources/webhook-signature.ts";
 import type { Repositories } from "../db/repositories/index.ts";
 
+// PaystackAdapterOptions.supportedCurrencies is required with no
+// "accept all" sentinel. The webhook is evidence (R4): accept any
+// currency Paystack sends, so this covers every 3-letter uppercase
+// code. Downstream reconciliation filters to its configured set;
+// the webhook does not.
 const ALL_THREE_LETTER_CURRENCY_CODES: readonly string[] = Array.from(
   { length: 26 ** 3 },
   (_, index) => {
