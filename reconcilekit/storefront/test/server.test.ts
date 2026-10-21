@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,8 +19,13 @@ import type {
   PaymentRecord,
   Product,
 } from "../src/domain/types.ts";
+import { buildDemoCatalog } from "../src/marketplace/catalog.ts";
+import { createMockProviderRegistry } from "../src/marketplace/providers/registry.ts";
+import type { MarketplaceTransactionDeps } from "../src/marketplace/transactions.ts";
 
 const repos = buildRepositories(getPrismaClient());
+const TEST_PAYSTACK_SECRET = "sk_test_webhook_secret";
+let webhookSequence = 0;
 
 interface TestContext {
   baseUrl: string;
@@ -29,6 +35,9 @@ interface TestContext {
 async function startServer(options?: {
   gateway?: PaystackGateway;
   dataDir?: string;
+  env?: Readonly<Record<string, string | undefined>>;
+  repos?: Repositories;
+  marketplace?: MarketplaceTransactionDeps;
 }): Promise<TestContext> {
   const dataDir =
     options?.dataDir ?? mkdtempSync(join(tmpdir(), "storefront-server-"));
@@ -51,10 +60,18 @@ async function startServer(options?: {
       source_attributes: { original_status: "success" },
     }),
   };
-  const config = loadConfig({ STOREFRONT_DATA_DIR: dataDir });
+  const config = loadConfig({
+    STOREFRONT_DATA_DIR: dataDir,
+    STOREFRONT_PAYSTACK_SECRET_KEY: TEST_PAYSTACK_SECRET,
+    ...options?.env,
+  });
+  const repositoryHandle = options?.repos ?? repos;
   const server: Server = createStorefrontServer(config, {
-    repos,
+    repos: repositoryHandle,
     paystack: gateway,
+    ...(options?.marketplace === undefined
+      ? {}
+      : { marketplace: options.marketplace }),
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
@@ -83,6 +100,107 @@ async function postJson(
   });
   const json = (await response.json()) as Record<string, unknown>;
   return { status: response.status, json };
+}
+
+function paystackSignature(
+  rawBody: string,
+  secret = TEST_PAYSTACK_SECRET,
+): string {
+  return createHmac("sha512", secret).update(rawBody, "utf8").digest("hex");
+}
+
+async function postWebhook(
+  ctx: TestContext,
+  rawBody: string,
+  options: {
+    signature?: string | null;
+    contentType?: string | null;
+    secret?: string;
+  } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = {};
+  const contentType =
+    options.contentType === undefined
+      ? "application/json"
+      : options.contentType;
+  if (contentType !== null) {
+    headers["content-type"] = contentType;
+  }
+  const signature =
+    options.signature === undefined
+      ? paystackSignature(rawBody, options.secret)
+      : options.signature;
+  if (signature !== null) {
+    headers["x-paystack-signature"] = signature;
+  }
+  return fetch(`${ctx.baseUrl}/webhook/paystack`, {
+    method: "POST",
+    headers,
+    body: rawBody,
+  });
+}
+
+interface WebhookFixture {
+  readonly raw: string;
+  readonly reference: string;
+  readonly data: Record<string, unknown> | null;
+}
+
+function webhookPayload(
+  options: {
+    event?: string;
+    data?: Record<string, unknown> | null;
+  } = {},
+): WebhookFixture {
+  const sequence = 900000000 + ++webhookSequence;
+  const data =
+    options.data === undefined
+      ? {
+          id: sequence,
+          reference: `ps_wh_${sequence}`,
+          amount: 250000,
+          currency: "NGN",
+          status: "success",
+          created_at: "2026-08-04T10:00:00.000Z",
+          paid_at: "2026-08-04T10:00:01.000Z",
+        }
+      : options.data;
+  const reference =
+    data !== null && typeof data.reference === "string" ? data.reference : "";
+  return {
+    raw: JSON.stringify({
+      event: options.event ?? "charge.success",
+      data,
+    }),
+    reference,
+    data,
+  };
+}
+
+async function eventsFor(reference: string) {
+  const events = await repos.paymentEvents.list();
+  return events.filter((event) => event.payment_source_reference === reference);
+}
+
+function withFailingIngest(repositoryHandle: Repositories): Repositories {
+  const paymentEvents = new Proxy(repositoryHandle.paymentEvents, {
+    get(target, property, receiver) {
+      if (property === "insert") {
+        return async () => {
+          throw new Error("forced ingest failure");
+        };
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  return new Proxy(repositoryHandle, {
+    get(target, property, receiver) {
+      if (property === "paymentEvents") {
+        return paymentEvents;
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
 }
 
 async function seedBusinessAndProduct(
@@ -602,4 +720,210 @@ test("GET /callback without an orderId returns 400", async (t) => {
   assert.equal(response.status, 400);
   const html = await response.text();
   assert.ok(html.includes("Missing order"));
+});
+
+test("POST /webhook/paystack rejects an invalid signature", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+  const fixture = webhookPayload();
+
+  const response = await postWebhook(ctx, fixture.raw, {
+    signature: "00".repeat(64),
+  });
+  assert.equal(response.status, 400);
+  const json = (await response.json()) as { error: { code: string } };
+  assert.equal(json.error.code, "INVALID_SIGNATURE");
+  assert.equal((await eventsFor(fixture.reference)).length, 0);
+});
+
+test("POST /webhook/paystack rejects a missing signature", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+  const fixture = webhookPayload();
+
+  const response = await postWebhook(ctx, fixture.raw, { signature: null });
+  assert.equal(response.status, 400);
+  const json = (await response.json()) as { error: { code: string } };
+  assert.equal(json.error.code, "INVALID_SIGNATURE");
+  assert.equal((await eventsFor(fixture.reference)).length, 0);
+});
+
+test("POST /webhook/paystack rejects malformed JSON", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+
+  const response = await postWebhook(ctx, "{not-json");
+  assert.equal(response.status, 400);
+  const json = (await response.json()) as { error: { code: string } };
+  assert.equal(json.error.code, "MALFORMED_PAYLOAD");
+});
+
+test("POST /webhook/paystack rejects a payload missing event", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+  const fixture = webhookPayload();
+
+  const response = await postWebhook(
+    ctx,
+    JSON.stringify({ data: fixture.data }),
+  );
+  assert.equal(response.status, 400);
+  const json = (await response.json()) as { error: { code: string } };
+  assert.equal(json.error.code, "INVALID_PAYLOAD");
+});
+
+test("POST /webhook/paystack rejects a payload missing data", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+
+  const response = await postWebhook(
+    ctx,
+    JSON.stringify({ event: "charge.success" }),
+  );
+  assert.equal(response.status, 400);
+  const json = (await response.json()) as { error: { code: string } };
+  assert.equal(json.error.code, "INVALID_PAYLOAD");
+});
+
+test("POST /webhook/paystack ignores unsupported event types", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+  const fixture = webhookPayload({ event: "refund.processed" });
+
+  const response = await postWebhook(ctx, fixture.raw);
+  assert.equal(response.status, 200);
+  const json = (await response.json()) as {
+    ignored: boolean;
+    reason: string;
+  };
+  assert.equal(json.ignored, true);
+  assert.equal(json.reason, "unsupported_event_type");
+  assert.equal((await eventsFor(fixture.reference)).length, 0);
+});
+
+test("POST /webhook/paystack records a charge.success exactly once", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+  const fixture = webhookPayload();
+
+  const response = await postWebhook(ctx, fixture.raw);
+  assert.equal(response.status, 200);
+  const json = (await response.json()) as {
+    event_id: string;
+    replayed: boolean;
+  };
+  assert.match(json.event_id, /^pevt_/);
+  assert.equal(json.replayed, false);
+
+  const events = await eventsFor(fixture.reference);
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.status, "SUCCESS");
+  assert.equal(events[0]?.payment_source, "PAYSTACK");
+  assert.equal(events[0]?.event_id, json.event_id);
+});
+
+test("POST /webhook/paystack replays the same charge.success without a second write", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+  const fixture = webhookPayload();
+
+  const first = await postWebhook(ctx, fixture.raw);
+  assert.equal(first.status, 200);
+  const firstJson = (await first.json()) as { event_id: string };
+
+  const second = await postWebhook(ctx, fixture.raw);
+  assert.equal(second.status, 200);
+  const secondJson = (await second.json()) as {
+    event_id: string;
+    replayed: boolean;
+  };
+  assert.equal(secondJson.event_id, firstJson.event_id);
+  assert.equal(secondJson.replayed, true);
+  assert.equal((await eventsFor(fixture.reference)).length, 1);
+});
+
+test("POST /webhook/paystack records a charge.failed event", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+  const fixture = webhookPayload({
+    event: "charge.failed",
+    data: {
+      id: 910000001,
+      reference: "ps_wh_failed_1",
+      amount: 250000,
+      currency: "NGN",
+      status: "failed",
+      created_at: "2026-08-04T10:00:00.000Z",
+      paid_at: "2026-08-04T10:00:01.000Z",
+    },
+  });
+
+  const response = await postWebhook(ctx, fixture.raw);
+  assert.equal(response.status, 200);
+  const json = (await response.json()) as { replayed: boolean };
+  assert.equal(json.replayed, false);
+
+  const events = await eventsFor(fixture.reference);
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.status, "FAILED");
+});
+
+test("POST /webhook/paystack rejects a non-JSON content type", async (t) => {
+  const ctx = await startServer();
+  t.after(() => ctx.close());
+  const fixture = webhookPayload();
+
+  const response = await postWebhook(ctx, fixture.raw, {
+    contentType: "text/plain",
+  });
+  assert.equal(response.status, 400);
+  const json = (await response.json()) as { error: { code: string } };
+  assert.equal(json.error.code, "MALFORMED_PAYLOAD");
+  assert.equal((await eventsFor(fixture.reference)).length, 0);
+});
+
+test("POST /webhook/paystack is not registered without a secret", async (t) => {
+  const ctx = await startServer({
+    env: { STOREFRONT_PAYSTACK_SECRET_KEY: "" },
+  });
+  t.after(() => ctx.close());
+  const fixture = webhookPayload();
+
+  const response = await postWebhook(ctx, fixture.raw, {
+    secret: TEST_PAYSTACK_SECRET,
+  });
+  assert.equal(response.status, 404);
+  const json = (await response.json()) as { error: { code: string } };
+  assert.equal(json.error.code, "NOT_FOUND");
+  assert.equal((await eventsFor(fixture.reference)).length, 0);
+});
+
+test("POST /webhook/paystack runs before marketplace routing", async (t) => {
+  const ctx = await startServer({
+    marketplace: {
+      repos,
+      registry: createMockProviderRegistry(),
+      catalog: buildDemoCatalog(),
+    },
+  });
+  t.after(() => ctx.close());
+  const fixture = webhookPayload();
+
+  const response = await postWebhook(ctx, fixture.raw);
+  assert.equal(response.status, 200);
+  const json = (await response.json()) as { replayed: boolean };
+  assert.equal(json.replayed, false);
+  assert.equal((await eventsFor(fixture.reference)).length, 1);
+});
+
+test("POST /webhook/paystack returns 500 when ingest fails", async (t) => {
+  const ctx = await startServer({ repos: withFailingIngest(repos) });
+  t.after(() => ctx.close());
+  const fixture = webhookPayload();
+
+  const response = await postWebhook(ctx, fixture.raw);
+  assert.equal(response.status, 500);
+  const json = (await response.json()) as { error: { code: string } };
+  assert.equal(json.error.code, "INGEST_FAILED");
+  assert.equal((await eventsFor(fixture.reference)).length, 0);
 });

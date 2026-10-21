@@ -15,6 +15,11 @@ import type {
   InitializeTransactionResult,
 } from "./paystack/client.ts";
 import { verifyOrder } from "./application/verify-order.ts";
+import {
+  createPaystackWebhookHandler,
+  PAYSTACK_WEBHOOK_ADAPTER_OPTIONS,
+  type PaystackWebhookHandler,
+} from "./application/paystack-webhook.ts";
 import type { CanonicalPaymentStatus } from "../../src/domain/model.ts";
 import { reconcileRecords } from "../../src/application/reconcile-records.ts";
 import {
@@ -140,15 +145,35 @@ export function createStorefrontServer(
   config: StorefrontConfig,
   deps: ServerDependencies,
 ): Server {
+  const secretKey = config.paystackSecretKey;
+  const paystackWebhook: PaystackWebhookHandler | null =
+    secretKey !== null && secretKey !== ""
+      ? createPaystackWebhookHandler({
+          repos: deps.repos,
+          secretKey,
+          adapterOptions: PAYSTACK_WEBHOOK_ADAPTER_OPTIONS,
+        })
+      : null;
+
+  if (paystackWebhook === null) {
+    console.log(
+      "warning: STOREFRONT_PAYSTACK_SECRET_KEY is not set; POST /webhook/paystack is not registered",
+    );
+  } else {
+    console.log("POST /webhook/paystack is registered");
+  }
+
   return createHttpServer((req, res) => {
-    void handleRequest(req, res, config, deps).catch((error) => {
-      writeJson(res, 500, {
-        error: {
-          code: "INTERNAL_ERROR",
-          message: "unexpected internal failure",
-        },
-      });
-    });
+    void handleRequest(req, res, config, deps, paystackWebhook).catch(
+      (error) => {
+        writeJson(res, 500, {
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "unexpected internal failure",
+          },
+        });
+      },
+    );
   });
 }
 
@@ -157,9 +182,19 @@ async function handleRequest(
   res: import("node:http").ServerResponse,
   config: StorefrontConfig,
   deps: ServerDependencies,
+  paystackWebhook: PaystackWebhookHandler | null,
 ): Promise<void> {
   try {
     const url = new URL(req.url ?? "/", "http://storefront.local");
+
+    if (
+      req.method === "POST" &&
+      url.pathname === "/webhook/paystack" &&
+      paystackWebhook !== null
+    ) {
+      await paystackWebhook(req, res);
+      return;
+    }
 
     // Try marketplace routes first if marketplace deps are available
     if (deps.marketplace !== undefined) {
