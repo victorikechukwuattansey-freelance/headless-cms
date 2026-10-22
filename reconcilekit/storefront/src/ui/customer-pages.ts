@@ -306,7 +306,7 @@ export function renderServiceDetailPage(vm: ServiceDetailViewModel): string {
       <p class="page-sub">${escapeHtml(vm.service.description)}</p>
     </div>
     <div class="actions">
-      <a class="btn primary" href="/checkout?service=${attr(vm.service.id)}">${icon("arrowLeft")} Buy now</a>
+      <a class="btn primary" href="/checkout/${attr(vm.service.id)}">${icon("arrowLeft")} Buy now</a>
     </div>
   </div>
   <div class="card">

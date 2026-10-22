@@ -582,7 +582,7 @@ export async function catalogViewModel(
         complianceStatus: service.complianceStatus,
         availability: service.availability,
         fulfillmentType: service.fulfillmentType,
-        href: `/catalog/${encodeURIComponent(service.id)}`,
+        href: `/services/${encodeURIComponent(service.id)}`,
       })),
     });
   }

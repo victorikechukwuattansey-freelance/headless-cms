@@ -311,6 +311,86 @@ test("unknown marketplace route returns 404 HTML", async () => {
   }
 });
 
+test("catalog cards link to service detail routes", async () => {
+  const app = await startSeededServer();
+  try {
+    const res = await fetch(`${app.baseUrl}/catalog`, withCookie(app.cookie));
+    assert.equal(res.status, 200);
+    const html = await res.text();
+    const serviceHrefs = [
+      ...html.matchAll(/<a class="card service-card" href="([^"]+)"/g),
+    ].map((match) => {
+      const href = match[1];
+      assert.ok(href);
+      return href;
+    });
+
+    assert.equal(serviceHrefs.length, 24);
+    assert.ok(serviceHrefs.includes("/services/svc_airtime_mtn"));
+    for (const href of serviceHrefs) {
+      assert.match(href, /^\/services\/svc_[^/]+$/);
+    }
+    assert.doesNotMatch(html, /href="\/catalog\/svc_/);
+  } finally {
+    await app.close();
+  }
+});
+
+test("service detail CTA links to checkout route", async () => {
+  const app = await startSeededServer();
+  try {
+    const res = await fetch(
+      `${app.baseUrl}/services/svc_airtime_mtn`,
+      withCookie(app.cookie),
+    );
+    assert.equal(res.status, 200);
+    const html = await res.text();
+
+    assert.match(html, /href="\/checkout\/svc_airtime_mtn"/);
+    assert.doesNotMatch(html, /checkout\?service=/);
+  } finally {
+    await app.close();
+  }
+});
+
+test("catalog to service to checkout links are followable", async () => {
+  const app = await startSeededServer();
+  try {
+    const home = await fetch(`${app.baseUrl}/`, withCookie(app.cookie));
+    assert.equal(home.status, 200);
+
+    const catalog = await fetch(
+      `${app.baseUrl}/catalog`,
+      withCookie(app.cookie),
+    );
+    assert.equal(catalog.status, 200);
+    const catalogHtml = await catalog.text();
+    const servicePath = catalogHtml.match(
+      /href="(\/services\/svc_airtime_mtn)"/,
+    )?.[1];
+    assert.ok(servicePath);
+
+    const service = await fetch(
+      `${app.baseUrl}${servicePath}`,
+      withCookie(app.cookie),
+    );
+    assert.equal(service.status, 200);
+    const serviceHtml = await service.text();
+    const checkoutPath = serviceHtml.match(
+      /href="(\/checkout\/svc_airtime_mtn)"/,
+    )?.[1];
+    assert.ok(checkoutPath);
+
+    const checkout = await fetch(
+      `${app.baseUrl}${checkoutPath}`,
+      withCookie(app.cookie),
+    );
+    assert.equal(checkout.status, 200);
+  } finally {
+    await app.close();
+  }
+});
+
 test("POST /checkout creates transaction and redirects", async () => {
   const app = await startSeededServer();
   try {
