@@ -28,6 +28,7 @@ the work that remains in 5B.1f. Every project fact below is sourced from
 | 5B.1d                | Complete | `1ca4df5`             | Stale wallet reads fixed and dead store parameters narrowed; 634 tests                                                                    |
 | 5B.1e (e.1–e.4 span) | Complete | `ddc807e`             | JSONL retirement; 634 → 606 tests; payments split and phase closure docs                                                                  |
 | 5B.1f                | Complete | `eeb7d38`             | Gate helpers (`test:clean`, BOM-safe commit script); PHASE_5_OPENING §7 amendment; f.2b pre-flight (T5.1 ESLint TS deferred on toolchain) |
+| 5C                   | Complete | 54952d6               | Webhooks — HMAC-verified Paystack ingestion (charge.success/failed); refunds deferred                                                     |
 
 ## §3 — Frozen boundaries
 
@@ -53,15 +54,10 @@ discipline.
 `docs/5b1e-closure.md` records the trajectory: 632 → 606 across 5B.1, with 2
 tests added and 28 removed. Green means no regression from these counts.
 
-## §5 — 5B.1f — Complete (f.2b deferred on toolchain)
+## §5 — Current phase
 
-| Increment | Status                | Scope                                                                     |
-| --------- | --------------------- | ------------------------------------------------------------------------- |
-| f.1       | Complete (320fa22)    | Handoff consolidation and payments-split diagram fix; docs only           |
-| f.2       | Complete (ee57ee7)    | T7.11 `test:clean` + T7.13 BOM helper                                     |
-| f.2b      | Deferred              | T5.1 ESLint TS, blocked on `@typescript-eslint` TS 7.0 support            |
-| f.3       | Complete (eeb7d38)    | `PHASE_5_OPENING` §7 + handoff §5 + f.2b pre-flight; docs only            |
-| f.4       | Complete (f.4 commit) | 5B.1f close-out; concurrency tests deferred to a future quality increment |
+None. 5B.1 and 5C are complete. Next phase (5D second PSP adapter,
+or a future track) is owner-dispatched per PHASE_5_OPENING.
 
 ## §6 — In-flight
 
@@ -69,23 +65,18 @@ Empty. All 5B.1 increments closed.
 
 ## §7 — State at handoff
 
-- HEAD: the f.4 commit on top of `eeb7d38`; confirm the exact hash with
-  `git log -1 --format='%H %s'` (the parent must be `eeb7d38`).
-- Storefront 606 / 606.
-- Core 213 / 213.
-- `git status --short -- reconcilekit/` → empty.
-- Local gates green at f.4: typecheck, lint, `format:check`, core tests.
-- CI is green only when the workflow run for the f.4 commit is green. Check
-  the run; do not infer CI from the local gates.
-- 5B.1f CLOSED; 5B COMPLETE.
-- Next: Phase 5C or 5D per `PHASE_5_OPENING`; owner decision pending.
+- HEAD: the 5C closure commit on top of 54952d6
+- Storefront 631 / 631; core 213 / 213
+- `git status --short -- reconcilekit/` → empty
+- All gates green (typecheck, lint, format:check, CI)
+- 5B.1 complete, 5C complete, 5D pending owner dispatch
 
 ## §8 — Exact next action
 
-5B.1 is complete. The next phase (5C webhooks, or 5D second PSP adapter) is
-an owner-scoped decision per `PHASE_5_OPENING.md`. Do not start either without
-an explicit dispatch. If resuming an already-open session, verify §7's HEAD and
-gates before proceeding.
+5C is complete. The next phase is 5D (second PSP adapter) or a
+future track per PHASE_5_OPENING, dispatched by owner. Do not start
+5D without an explicit brief. If resuming an already-open session,
+verify §7's HEAD and gates before proceeding.
 
 ## §9 — 5B closure summary
 
@@ -141,6 +132,12 @@ Full file list: `git log --stat 8c47494..HEAD` (5B.1 range).
 The 5B.1f session commits:
 
 ```text
+54952d6  chore(5c2): format pre-flight + document webhook currency policy
+c5ac43d  feat(5c.2): paystack webhook HTTP endpoint
+2a8f8b2  docs(5c2): commit webhook endpoint pre-flight
+0f6f28a  feat(5c.1): paystack webhook signature + payload normalization
+00dc676  docs(5c): commit webhook ingestion pre-flight
+
 320fa22  docs(5b1f): post-5B.1 handoff + payments-split diagram fix
 ee57ee7  chore(5b1f): add test:clean and BOM-safe commit helper
 eeb7d38  docs(5b1f): PHASE_5_OPENING §7 + handoff §5 + f.2b pre-flight
@@ -189,6 +186,25 @@ test passes.
   behavior. Postgres equivalents are a separate quality increment. Accepted as
   retired for 5B.1.
 - Phase 5C (webhooks) vs 5D (second PSP adapter) priority — owner decision.
+- **`isMarketplacePath` routing** — `tryHandleMarketplace` may
+  over-match non-marketplace paths when marketplace deps are present.
+  Sidestepped by webhook route placement (5C.2 R7). A broader routing
+  refactor is deferred to a future increment.
+- **`PaystackAdapterOptions.supportedCurrencies`** — required with no
+  permissive default. The webhook generates a synthetic allowlist of
+  all 3-letter uppercase currency codes as a workaround. Adding an
+  explicit `acceptAnyCurrency` flag would require touching frozen
+  core; deferred pending owner ruling.
+- **Paystack refund payload semantics** — four facts recorded in
+  `docs/5c-closure.md` for whoever scopes a future refund increment:
+  `refund.processed` uses `data.transaction_reference` (not
+  `data.reference`); refund `amount` is a string; `refund_reference`
+  may be null; `refund.failed` means merchant-account crediting, not
+  payment failure.
+- **Test suite duration** — trending from ~194s (5B.1e) to ~240s
+  (5C.2), with one run timing out at 180s wall-clock before passing.
+  Not blocking; consider file-level parallelization if growth
+  continues.
 
 ## §17 — What NOT to do next
 
