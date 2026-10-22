@@ -16,24 +16,24 @@ The four documents are directionally sound, unusually honest about scope, and st
 
 ### Headline Counts
 
-| Measure | Result |
-| --- | ---: |
-| Documents audited | 4 |
-| Actual / non-empty lines | 214/163, 90/75, 295/235, 419/329 |
-| BillPoint matrix rows | 37 conservative + 6 differentiation |
-| BillPoint evidence rows verified | 0 of 37 |
-| Catalog categories / services | 12 / 24 |
-| Demo scenarios | 16 (15 orderable + 1 wallet-only) |
-| MVP customer surfaces satisfied | 10 of 17; 7 partial |
-| MVP catalog items satisfied | 12 of 15; 2 partial; 1 N/A-future |
-| MVP scenarios satisfied | 14 of 18; 4 partial |
-| Admin requirements satisfied | 15 of 17; 2 partial |
-| Demo requirements satisfied | 6 of 6 |
-| MVP completion criteria | 12 satisfied; 3 partial; 1 drifted |
-| Known gaps | 17 closed; 4 partial; 2 open; 7 unknown |
-| Direct doc-vs-doc contradictions | 0 unresolved |
-| Material doc-vs-code drifts | 12 |
-| Production blockers | 1 satisfied; 4 partial; 9 open |
+| Measure                          |                                  Result |
+| -------------------------------- | --------------------------------------: |
+| Documents audited                |                                       4 |
+| Actual / non-empty lines         |        214/163, 90/75, 295/235, 419/329 |
+| BillPoint matrix rows            |     37 conservative + 6 differentiation |
+| BillPoint evidence rows verified |                                 0 of 37 |
+| Catalog categories / services    |                                 12 / 24 |
+| Demo scenarios                   |       16 (15 orderable + 1 wallet-only) |
+| MVP customer surfaces satisfied  |                     10 of 17; 7 partial |
+| MVP catalog items satisfied      |       12 of 15; 2 partial; 1 N/A-future |
+| MVP scenarios satisfied          |                     14 of 18; 4 partial |
+| Admin requirements satisfied     |                     15 of 17; 2 partial |
+| Demo requirements satisfied      |                                  6 of 6 |
+| MVP completion criteria          |      12 satisfied; 3 partial; 1 drifted |
+| Known gaps                       | 17 closed; 4 partial; 2 open; 7 unknown |
+| Direct doc-vs-doc contradictions |                            0 unresolved |
+| Material doc-vs-code drifts      |                                      12 |
+| Production blockers              |          1 satisfied; 4 partial; 9 open |
 
 ### Verdict
 
@@ -63,79 +63,79 @@ Gap-only vocabulary: `CLOSED-BY-5B1`, `CLOSED-BY-5C`, `NO-LONGER-A-GAP`, `OPEN`,
 
 **10 of 11 remain accurate; 1 is stale.**
 
-| Claim | Verdict | Evidence |
-| --- | --- | --- |
-| TypeScript ReconcileKit package | `SATISFIED` | Root package and `src/` unchanged. |
-| Frozen provider-neutral reconciliation architecture | `SATISFIED` | Root domain/application boundary remains intact. |
-| Domain types for payments, outcomes, statuses, discrepancies | `SATISFIED` | `src/domain/model.ts`. |
-| Exact-reference deterministic reconciliation | `SATISFIED` | `src/domain/reconcile.ts`. |
-| Validation and discrepancy classification | `SATISFIED` | `src/domain/validation.ts`. |
-| Duplicate/conflicting-attribute handling | `SATISFIED` | `src/domain/duplicates.ts`. |
-| CSV adapter | `SATISFIED` | `src/adapters/merchant/csv.ts`. |
-| Paystack adapter and transport | `SATISFIED` | `src/adapters/providers/paystack/*`. |
-| CLI file and live Paystack modes | `SATISFIED` | Root CLI. |
-| Storefront pilot uses JSONL persistence | `SUPERSEDED` | Current storefront is Prisma/Postgres; see §1.3 and `storefront/prisma/schema.prisma`. |
-| Core and storefront tests | `SATISFIED` | Root and `storefront/test/` suites exist. |
+| Claim                                                        | Verdict      | Evidence                                                                               |
+| ------------------------------------------------------------ | ------------ | -------------------------------------------------------------------------------------- |
+| TypeScript ReconcileKit package                              | `SATISFIED`  | Root package and `src/` unchanged.                                                     |
+| Frozen provider-neutral reconciliation architecture          | `SATISFIED`  | Root domain/application boundary remains intact.                                       |
+| Domain types for payments, outcomes, statuses, discrepancies | `SATISFIED`  | `src/domain/model.ts`.                                                                 |
+| Exact-reference deterministic reconciliation                 | `SATISFIED`  | `src/domain/reconcile.ts`.                                                             |
+| Validation and discrepancy classification                    | `SATISFIED`  | `src/domain/validation.ts`.                                                            |
+| Duplicate/conflicting-attribute handling                     | `SATISFIED`  | `src/domain/duplicates.ts`.                                                            |
+| CSV adapter                                                  | `SATISFIED`  | `src/adapters/merchant/csv.ts`.                                                        |
+| Paystack adapter and transport                               | `SATISFIED`  | `src/adapters/providers/paystack/*`.                                                   |
+| CLI file and live Paystack modes                             | `SATISFIED`  | Root CLI.                                                                              |
+| Storefront pilot uses JSONL persistence                      | `SUPERSEDED` | Current storefront is Prisma/Postgres; see §1.3 and `storefront/prisma/schema.prisma`. |
+| Core and storefront tests                                    | `SATISFIED`  | Root and `storefront/test/` suites exist.                                              |
 
 ## 1.2 Existing Constraints
 
 **9 satisfied, 1 partial, 3 superseded.**
 
-| Constraint | Verdict | Evidence |
-| --- | --- | --- |
-| Root toolkit, not ledger/payment processor | `SATISFIED` | Root does not custody or move money. |
-| Provider-neutral core | `SATISFIED` | No marketplace imports in root domain. |
-| Provider mapping in adapters | `SATISFIED` | Provider adapters isolate mapping. |
-| No fuzzy matching | `SATISFIED` | Exact reference only. |
-| No floating-point money comparison | `SATISFIED` | Integer minor units. |
-| No arbitrary duplicate pairing | `SATISFIED` | Duplicate/ambiguity semantics retained. |
-| No production database | `SUPERSEDED` | Postgres/Prisma is now the store. |
-| Storefront has no auth and no production dashboard | `SUPERSEDED` | Session auth, login, roles, and admin dashboard exist. |
-| JSONL is single-process/local-first | `SUPERSEDED` | Persistence moved to Postgres. |
-| Refund lifecycle out of scope for root engine | `SATISFIED` | Refunds remain application-level. |
-| `refundStatus` remains `NONE` | `PARTIALLY-SATISFIED` | Legacy `PaymentRecord` still uses `NONE`; marketplace refunds are separate `Refund` records. |
-| Paystack live mode explicit | `SATISFIED` | Live mode remains opt-in. |
-| Secrets environment-only | `SATISFIED` | No secret logging observed. |
+| Constraint                                         | Verdict               | Evidence                                                                                     |
+| -------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------- |
+| Root toolkit, not ledger/payment processor         | `SATISFIED`           | Root does not custody or move money.                                                         |
+| Provider-neutral core                              | `SATISFIED`           | No marketplace imports in root domain.                                                       |
+| Provider mapping in adapters                       | `SATISFIED`           | Provider adapters isolate mapping.                                                           |
+| No fuzzy matching                                  | `SATISFIED`           | Exact reference only.                                                                        |
+| No floating-point money comparison                 | `SATISFIED`           | Integer minor units.                                                                         |
+| No arbitrary duplicate pairing                     | `SATISFIED`           | Duplicate/ambiguity semantics retained.                                                      |
+| No production database                             | `SUPERSEDED`          | Postgres/Prisma is now the store.                                                            |
+| Storefront has no auth and no production dashboard | `SUPERSEDED`          | Session auth, login, roles, and admin dashboard exist.                                       |
+| JSONL is single-process/local-first                | `SUPERSEDED`          | Persistence moved to Postgres.                                                               |
+| Refund lifecycle out of scope for root engine      | `SATISFIED`           | Refunds remain application-level.                                                            |
+| `refundStatus` remains `NONE`                      | `PARTIALLY-SATISFIED` | Legacy `PaymentRecord` still uses `NONE`; marketplace refunds are separate `Refund` records. |
+| Paystack live mode explicit                        | `SATISFIED`           | Live mode remains opt-in.                                                                    |
+| Secrets environment-only                           | `SATISFIED`           | No secret logging observed.                                                                  |
 
 ## 1.3 MVP Assumptions
 
 **7 satisfied, 1 partial, 2 superseded.**
 
-| Assumption | Verdict | Evidence |
-| --- | --- | --- |
-| `storefront/` is the place to evolve the MVP | `SATISFIED` | Marketplace modules live there. |
-| JSONL is acceptable for the MVP | `SUPERSEDED` | Postgres adopted in Phase 5B.1. |
-| Node built-ins remain preferred | `PARTIALLY-SATISFIED` | Prisma, Argon2, and other dependencies were added with documented justification. |
-| ReconcileKit determines payment truth | `SATISFIED` | `reconcile-bridge.ts` invokes the engine. |
-| Fulfillment state can live outside ReconcileKit | `SATISFIED` | Marketplace owns fulfillment/resolution. |
-| Mock providers are enough | `SATISFIED` | Mock provider registry and contracts. |
-| Auth can be a local shell | `SUPERSEDED` | Real local password/session auth and roles now exist, though not production auth. |
-| Notifications can be in-app | `SATISFIED` | `notifications.ts` and UI. |
-| Admin actions can be simulated | `SATISFIED` | Local resolution transitions. |
-| Refunds/reversals can be application-level | `SATISFIED` | `resolution.ts`. |
+| Assumption                                      | Verdict               | Evidence                                                                          |
+| ----------------------------------------------- | --------------------- | --------------------------------------------------------------------------------- |
+| `storefront/` is the place to evolve the MVP    | `SATISFIED`           | Marketplace modules live there.                                                   |
+| JSONL is acceptable for the MVP                 | `SUPERSEDED`          | Postgres adopted in Phase 5B.1.                                                   |
+| Node built-ins remain preferred                 | `PARTIALLY-SATISFIED` | Prisma, Argon2, and other dependencies were added with documented justification.  |
+| ReconcileKit determines payment truth           | `SATISFIED`           | `reconcile-bridge.ts` invokes the engine.                                         |
+| Fulfillment state can live outside ReconcileKit | `SATISFIED`           | Marketplace owns fulfillment/resolution.                                          |
+| Mock providers are enough                       | `SATISFIED`           | Mock provider registry and contracts.                                             |
+| Auth can be a local shell                       | `SUPERSEDED`          | Real local password/session auth and roles now exist, though not production auth. |
+| Notifications can be in-app                     | `SATISFIED`           | `notifications.ts` and UI.                                                        |
+| Admin actions can be simulated                  | `SATISFIED`           | Local resolution transitions.                                                     |
+| Refunds/reversals can be application-level      | `SATISFIED`           | `resolution.ts`.                                                                  |
 
 ## 1.4 Ambiguities
 
 **4 resolved, 1 partial, 1 unknown.**
 
-| Ambiguity | Resolution | Verdict |
-| --- | --- | --- |
-| Payment truth vs fulfillment truth | ReconcileKit owns payment/provider truth; marketplace owns fulfillment/resolution. | `SATISFIED` |
-| Refund/reversal semantics | Application-level records; root outcomes unchanged. | `SATISFIED` |
-| Settlement mismatch | Wallet/ledger state exists, but no end-to-end demo/UI scenario. | `PARTIALLY-SATISFIED` |
-| BillPoint baseline | Still no verified evidence. | `MISSING` (research unknown) |
-| Provider references across services | Stable marketplace reference is the join key; fulfillment refs are evidence. | `SATISFIED` |
-| Provider timeout | Operational event; no fabricated discrepancy. | `SATISFIED` |
+| Ambiguity                           | Resolution                                                                         | Verdict                      |
+| ----------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------- |
+| Payment truth vs fulfillment truth  | ReconcileKit owns payment/provider truth; marketplace owns fulfillment/resolution. | `SATISFIED`                  |
+| Refund/reversal semantics           | Application-level records; root outcomes unchanged.                                | `SATISFIED`                  |
+| Settlement mismatch                 | Wallet/ledger state exists, but no end-to-end demo/UI scenario.                    | `PARTIALLY-SATISFIED`        |
+| BillPoint baseline                  | Still no verified evidence.                                                        | `MISSING` (research unknown) |
+| Provider references across services | Stable marketplace reference is the join key; fulfillment refs are evidence.       | `SATISFIED`                  |
+| Provider timeout                    | Operational event; no fabricated discrepancy.                                      | `SATISFIED`                  |
 
 ## 1.5 Known Gaps
 
 **17 closed, 4 partial, 2 open, 7 unknown.**
 
-| Gap group | Count | Assessment |
-| --- | ---: | --- |
-| Product/application gaps | 16 | 14 closed; 2 partial: dispute/support (no customer intake UI) and demo seed (environment auto-seed, no dedicated command). |
-| Engineering gaps | 7 | 3 closed: multi-process persistence, durable DB, webhooks. 2 partial: API docs, UI runtime/visual verification. 2 open: production build/deployment, production auth. |
-| Research gaps | 7 | All 7 remain `UNKNOWN`; BillPoint and provider/compliance research were not performed. |
+| Gap group                | Count | Assessment                                                                                                                                                            |
+| ------------------------ | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product/application gaps |    16 | 14 closed; 2 partial: dispute/support (no customer intake UI) and demo seed (environment auto-seed, no dedicated command).                                            |
+| Engineering gaps         |     7 | 3 closed: multi-process persistence, durable DB, webhooks. 2 partial: API docs, UI runtime/visual verification. 2 open: production build/deployment, production auth. |
+| Research gaps            |     7 | All 7 remain `UNKNOWN`; BillPoint and provider/compliance research were not performed.                                                                                |
 
 Notable closed gaps: customer UI, admin UI, catalog, category forms, wallet, provider architecture, gift cards, ticketing, timeline, receipt, evidence view, notifications, refund/reversal workflow, settlement state model.
 
@@ -143,22 +143,22 @@ Notable closed gaps: customer UI, admin UI, catalog, category forms, wallet, pro
 
 **1 satisfied, 4 partial, 9 open.**
 
-| Blocker | Verdict | Evidence |
-| --- | --- | --- |
-| Real authentication and authorization | `PARTIALLY-SATISFIED` | Local sessions, Argon2, roles, organizations; no production identity, MFA, recovery, or registration flow. |
-| Durable database and migrations | `SATISFIED` | Prisma/Postgres schema and migrations. |
-| Webhooks and idempotent ingestion | `PARTIALLY-SATISFIED` | Paystack webhook with signature and idempotent ingestion; no provider-neutral webhook framework. |
-| Provider credential management and rotation | `MISSING` | No credential management surface. |
-| Audit log hardening | `PARTIALLY-SATISFIED` | Audit/event records exist; no tamper-evident/log-integrity controls. |
-| Monitoring, metrics, alerting | `MISSING` | No operational telemetry. |
-| Rate limiting | `MISSING` | No rate limiter. |
-| Backups and recovery | `MISSING` | No backup/recovery design. |
-| Real payment compliance | `MISSING` | Out of scope. |
-| Wallet/custody legal and technical design | `MISSING` | Simulated wallet only. |
-| FX compliance | `MISSING` | No FX execution. |
-| Gift-card provider and fraud controls | `PARTIALLY-SATISFIED` | Mock risk flags and masking; no provider fraud controls. |
-| Ticketing provider contracts | `MISSING` | Mock ticketing only. |
-| Betting/gaming compliance review | `MISSING` | Compliance-gated, not activated. |
+| Blocker                                     | Verdict               | Evidence                                                                                                   |
+| ------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Real authentication and authorization       | `PARTIALLY-SATISFIED` | Local sessions, Argon2, roles, organizations; no production identity, MFA, recovery, or registration flow. |
+| Durable database and migrations             | `SATISFIED`           | Prisma/Postgres schema and migrations.                                                                     |
+| Webhooks and idempotent ingestion           | `PARTIALLY-SATISFIED` | Paystack webhook with signature and idempotent ingestion; no provider-neutral webhook framework.           |
+| Provider credential management and rotation | `MISSING`             | No credential management surface.                                                                          |
+| Audit log hardening                         | `PARTIALLY-SATISFIED` | Audit/event records exist; no tamper-evident/log-integrity controls.                                       |
+| Monitoring, metrics, alerting               | `MISSING`             | No operational telemetry.                                                                                  |
+| Rate limiting                               | `MISSING`             | No rate limiter.                                                                                           |
+| Backups and recovery                        | `MISSING`             | No backup/recovery design.                                                                                 |
+| Real payment compliance                     | `MISSING`             | Out of scope.                                                                                              |
+| Wallet/custody legal and technical design   | `MISSING`             | Simulated wallet only.                                                                                     |
+| FX compliance                               | `MISSING`             | No FX execution.                                                                                           |
+| Gift-card provider and fraud controls       | `PARTIALLY-SATISFIED` | Mock risk flags and masking; no provider fraud controls.                                                   |
+| Ticketing provider contracts                | `MISSING`             | Mock ticketing only.                                                                                       |
+| Betting/gaming compliance review            | `MISSING`             | Compliance-gated, not activated.                                                                           |
 
 ## 1.7 Documentation Gap
 
@@ -178,25 +178,25 @@ Missing: deployment/production-build notes.
 
 **10 satisfied, 7 partial.**
 
-| # | Surface | Verdict | Evidence / Gap |
-| ---: | --- | --- | --- |
-| 1 | Landing/home screen | `PARTIALLY-SATISFIED` | `/` renders the dashboard; `renderHomePage` exists but is never called (`server.ts:765-767`). |
-| 2 | Authentication shell | `SATISFIED` | `/login`, session cookies, Argon2, demo identity. |
-| 3 | User dashboard | `SATISFIED` | `/dashboard` and `/`. |
-| 4 | Wallet view | `SATISFIED` | `/wallet` read-only balance and ledger. |
-| 5 | Catalog | `PARTIALLY-SATISFIED` | `/catalog` renders; service cards link to the wrong path. |
-| 6 | Category pages | `SATISFIED` | `/catalog/:categoryId` works. |
-| 7 | Product/service selection | `PARTIALLY-SATISFIED` | `/services/:serviceId` works directly; catalog cards do not reach it. |
-| 8 | Checkout | `PARTIALLY-SATISFIED` | Direct `/checkout/:serviceId` and POST `/checkout` work; service CTA does not. |
-| 9 | Transaction confirmation | `SATISFIED` | Checkout redirects to transaction detail. |
-| 10 | Transaction details | `SATISFIED` | `/transactions/:id`. |
-| 11 | Transaction timeline | `SATISFIED` | Stored events rendered on detail. |
-| 12 | Receipt | `SATISFIED` | `/transactions/:id/receipt`. |
-| 13 | Evidence view | `SATISFIED` | `/transactions/:id/evidence`. |
-| 14 | Refund/reversal tracker | `PARTIALLY-SATISFIED` | Admin detail shows refund/reversal records; customer detail only shows `resolutionStatus`, not the records (`admin-pages.ts:147-171`; no `vm.refund`/`vm.reversal` in customer pages). |
-| 15 | Dispute/support flow | `PARTIALLY-SATISFIED` | Dispute list and backend exist; no customer create form. The only create form targets `/transactions/:id/dispute` while the route is `/transactions/:id/disputes` (`admin-pages.ts:898`, `server.ts:1063`). |
-| 16 | Notifications | `SATISFIED` | `/notifications`, mark-read. |
-| 17 | Profile/settings | `PARTIALLY-SATISFIED` | `/profile` is read-only; no settings. |
+|   # | Surface                   | Verdict               | Evidence / Gap                                                                                                                                                                                              |
+| --: | ------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   1 | Landing/home screen       | `PARTIALLY-SATISFIED` | `/` renders the dashboard; `renderHomePage` exists but is never called (`server.ts:765-767`).                                                                                                               |
+|   2 | Authentication shell      | `SATISFIED`           | `/login`, session cookies, Argon2, demo identity.                                                                                                                                                           |
+|   3 | User dashboard            | `SATISFIED`           | `/dashboard` and `/`.                                                                                                                                                                                       |
+|   4 | Wallet view               | `SATISFIED`           | `/wallet` read-only balance and ledger.                                                                                                                                                                     |
+|   5 | Catalog                   | `PARTIALLY-SATISFIED` | `/catalog` renders; service cards link to the wrong path.                                                                                                                                                   |
+|   6 | Category pages            | `SATISFIED`           | `/catalog/:categoryId` works.                                                                                                                                                                               |
+|   7 | Product/service selection | `PARTIALLY-SATISFIED` | `/services/:serviceId` works directly; catalog cards do not reach it.                                                                                                                                       |
+|   8 | Checkout                  | `PARTIALLY-SATISFIED` | Direct `/checkout/:serviceId` and POST `/checkout` work; service CTA does not.                                                                                                                              |
+|   9 | Transaction confirmation  | `SATISFIED`           | Checkout redirects to transaction detail.                                                                                                                                                                   |
+|  10 | Transaction details       | `SATISFIED`           | `/transactions/:id`.                                                                                                                                                                                        |
+|  11 | Transaction timeline      | `SATISFIED`           | Stored events rendered on detail.                                                                                                                                                                           |
+|  12 | Receipt                   | `SATISFIED`           | `/transactions/:id/receipt`.                                                                                                                                                                                |
+|  13 | Evidence view             | `SATISFIED`           | `/transactions/:id/evidence`.                                                                                                                                                                               |
+|  14 | Refund/reversal tracker   | `PARTIALLY-SATISFIED` | Admin detail shows refund/reversal records; customer detail only shows `resolutionStatus`, not the records (`admin-pages.ts:147-171`; no `vm.refund`/`vm.reversal` in customer pages).                      |
+|  15 | Dispute/support flow      | `PARTIALLY-SATISFIED` | Dispute list and backend exist; no customer create form. The only create form targets `/transactions/:id/dispute` while the route is `/transactions/:id/disputes` (`admin-pages.ts:898`, `server.ts:1063`). |
+|  16 | Notifications             | `SATISFIED`           | `/notifications`, mark-read.                                                                                                                                                                                |
+|  17 | Profile/settings          | `PARTIALLY-SATISFIED` | `/profile` is read-only; no settings.                                                                                                                                                                       |
 
 ## 2.2 Catalog
 
@@ -214,50 +214,50 @@ Full service-level assessment is in **Part 6**.
 
 **14 satisfied, 4 partial.**
 
-| # | Scenario | Verdict | Evidence / Gap |
-| ---: | --- | --- | --- |
-| 1 | Successful transaction | `SATISFIED` | `successful_airtime`. |
-| 2 | Failed transaction | `SATISFIED` | `failed_data`, provider failure path. |
-| 3 | Delayed provider response | `PARTIALLY-SATISFIED` | Pending path exists; no distinct delay timing/materialization. |
-| 4 | Pending transaction | `SATISFIED` | `pending_electricity`, `airline_booking_pending`. |
-| 5 | Provider timeout | `SATISFIED` | `provider_timeout`. |
-| 6 | Payment succeeded but service failed | `SATISFIED` | `payment_success_service_failure`. |
-| 7 | Service succeeded but provider confirmation delayed | `PARTIALLY-SATISFIED` | Pending state exists; no explicit confirmation-delay scenario. |
-| 8 | Duplicate transaction | `SATISFIED` | Deterministic identity/idempotent replay. |
-| 9 | Duplicate debit | `PARTIALLY-SATISFIED` | `duplicate_debit` is a provider-duplicate response with one debit; a true double debit is only unit-tested when `duplicate: true` is passed (`wallet.test.ts:765`). |
-| 10 | Reversal | `SATISFIED` | `payment_reversal`. |
-| 11 | Refund initiated | `SATISFIED` | Refund workflow and admin action. |
-| 12 | Refund completed | `SATISFIED` | `bus_ticket_refund` / completion action. |
-| 13 | Refund pending | `SATISFIED` | `refund_pending`. |
-| 14 | Mismatched provider reference | `SATISFIED` | `provider_mismatch`. |
-| 15 | Missing provider reference | `SATISFIED` | Pending/timeout paths produce missing provider record. |
-| 16 | Amount discrepancy | `SATISFIED` | Mismatch scenario and tests. |
-| 17 | Settlement mismatch | `PARTIALLY-SATISFIED` | Ledger state and wallet test exist; no order/demo/UI scenario. |
-| 18 | Manual review | `SATISFIED` | `manual_review`, admin queue. |
+|   # | Scenario                                            | Verdict               | Evidence / Gap                                                                                                                                                      |
+| --: | --------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   1 | Successful transaction                              | `SATISFIED`           | `successful_airtime`.                                                                                                                                               |
+|   2 | Failed transaction                                  | `SATISFIED`           | `failed_data`, provider failure path.                                                                                                                               |
+|   3 | Delayed provider response                           | `PARTIALLY-SATISFIED` | Pending path exists; no distinct delay timing/materialization.                                                                                                      |
+|   4 | Pending transaction                                 | `SATISFIED`           | `pending_electricity`, `airline_booking_pending`.                                                                                                                   |
+|   5 | Provider timeout                                    | `SATISFIED`           | `provider_timeout`.                                                                                                                                                 |
+|   6 | Payment succeeded but service failed                | `SATISFIED`           | `payment_success_service_failure`.                                                                                                                                  |
+|   7 | Service succeeded but provider confirmation delayed | `PARTIALLY-SATISFIED` | Pending state exists; no explicit confirmation-delay scenario.                                                                                                      |
+|   8 | Duplicate transaction                               | `SATISFIED`           | Deterministic identity/idempotent replay.                                                                                                                           |
+|   9 | Duplicate debit                                     | `PARTIALLY-SATISFIED` | `duplicate_debit` is a provider-duplicate response with one debit; a true double debit is only unit-tested when `duplicate: true` is passed (`wallet.test.ts:765`). |
+|  10 | Reversal                                            | `SATISFIED`           | `payment_reversal`.                                                                                                                                                 |
+|  11 | Refund initiated                                    | `SATISFIED`           | Refund workflow and admin action.                                                                                                                                   |
+|  12 | Refund completed                                    | `SATISFIED`           | `bus_ticket_refund` / completion action.                                                                                                                            |
+|  13 | Refund pending                                      | `SATISFIED`           | `refund_pending`.                                                                                                                                                   |
+|  14 | Mismatched provider reference                       | `SATISFIED`           | `provider_mismatch`.                                                                                                                                                |
+|  15 | Missing provider reference                          | `SATISFIED`           | Pending/timeout paths produce missing provider record.                                                                                                              |
+|  16 | Amount discrepancy                                  | `SATISFIED`           | Mismatch scenario and tests.                                                                                                                                        |
+|  17 | Settlement mismatch                                 | `PARTIALLY-SATISFIED` | Ledger state and wallet test exist; no order/demo/UI scenario.                                                                                                      |
+|  18 | Manual review                                       | `SATISFIED`           | `manual_review`, admin queue.                                                                                                                                       |
 
 ## 2.4 Admin / Operations
 
 **15 satisfied, 2 partial.**
 
-| # | Requirement | Verdict | Evidence / Gap |
-| ---: | --- | --- | --- |
-| 1 | Transaction volume | `SATISFIED` | Admin dashboard total. |
-| 2 | Transaction state breakdown | `SATISFIED` | Nine status counts. |
-| 3 | Failed transactions | `PARTIALLY-SATISFIED` | No `FAILED` admin status; payment failure maps to `HEALTHY` (`transactions.ts:421-428`). |
-| 4 | Pending transactions | `SATISFIED` | `PENDING_PROVIDER` queue. |
-| 5 | Reconciliation mismatches | `SATISFIED` | `MISMATCH` queue. |
-| 6 | Duplicate detection | `SATISFIED` | `DUPLICATE` queue. |
-| 7 | Provider failures | `SATISFIED` | `PROVIDER_FAILED` queue. |
-| 8 | Provider latency | `PARTIALLY-SATISFIED` | Stored on `ProviderAttempt` (`schema.prisma:191`, `transactions.ts:1963`); shown on customer detail; no admin aggregate/queue (`admin-pages.ts` has no latency). |
-| 9 | Refund queue | `SATISFIED` | `REFUND_QUEUE`. |
-| 10 | Reversal queue | `SATISFIED` | `REVERSAL_QUEUE`. |
-| 11 | Manual-review queue | `SATISFIED` | `MANUAL_REVIEW`. |
-| 12 | Unresolved transactions | `SATISFIED` | `UNRESOLVED`. |
-| 13 | Transaction detail | `SATISFIED` | `/admin/transactions/:id`. |
-| 14 | Evidence | `SATISFIED` | `/admin/transactions/:id/evidence`. |
-| 15 | Audit trail | `SATISFIED` | Stored transaction events. |
-| 16 | Provider response | `SATISFIED` | Provider facts/attempts on detail. |
-| 17 | Internal determination | `SATISFIED` | ReconcileKit outcome and truth block. |
+|   # | Requirement                 | Verdict               | Evidence / Gap                                                                                                                                                   |
+| --: | --------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   1 | Transaction volume          | `SATISFIED`           | Admin dashboard total.                                                                                                                                           |
+|   2 | Transaction state breakdown | `SATISFIED`           | Nine status counts.                                                                                                                                              |
+|   3 | Failed transactions         | `PARTIALLY-SATISFIED` | No `FAILED` admin status; payment failure maps to `HEALTHY` (`transactions.ts:421-428`).                                                                         |
+|   4 | Pending transactions        | `SATISFIED`           | `PENDING_PROVIDER` queue.                                                                                                                                        |
+|   5 | Reconciliation mismatches   | `SATISFIED`           | `MISMATCH` queue.                                                                                                                                                |
+|   6 | Duplicate detection         | `SATISFIED`           | `DUPLICATE` queue.                                                                                                                                               |
+|   7 | Provider failures           | `SATISFIED`           | `PROVIDER_FAILED` queue.                                                                                                                                         |
+|   8 | Provider latency            | `PARTIALLY-SATISFIED` | Stored on `ProviderAttempt` (`schema.prisma:191`, `transactions.ts:1963`); shown on customer detail; no admin aggregate/queue (`admin-pages.ts` has no latency). |
+|   9 | Refund queue                | `SATISFIED`           | `REFUND_QUEUE`.                                                                                                                                                  |
+|  10 | Reversal queue              | `SATISFIED`           | `REVERSAL_QUEUE`.                                                                                                                                                |
+|  11 | Manual-review queue         | `SATISFIED`           | `MANUAL_REVIEW`.                                                                                                                                                 |
+|  12 | Unresolved transactions     | `SATISFIED`           | `UNRESOLVED`.                                                                                                                                                    |
+|  13 | Transaction detail          | `SATISFIED`           | `/admin/transactions/:id`.                                                                                                                                       |
+|  14 | Evidence                    | `SATISFIED`           | `/admin/transactions/:id/evidence`.                                                                                                                              |
+|  15 | Audit trail                 | `SATISFIED`           | Stored transaction events.                                                                                                                                       |
+|  16 | Provider response           | `SATISFIED`           | Provider facts/attempts on detail.                                                                                                                               |
+|  17 | Internal determination      | `SATISFIED`           | ReconcileKit outcome and truth block.                                                                                                                            |
 
 ## 2.5 Demo Mode
 
@@ -279,24 +279,24 @@ Important limitation: tests exercise transaction and page outcomes, but **do not
 
 **12 satisfied, 3 partial, 1 drifted.**
 
-| # | Criterion | Verdict |
-| ---: | --- | --- |
-| 1 | App runs locally | `SATISFIED` |
-| 2 | Reviewer can open without external credentials | `SATISFIED` |
-| 3 | Catalog navigation works | `DRIFTED` — two broken links |
-| 4 | Multiple service types purchasable | `SATISFIED` |
-| 5 | Mock wallet/payment flow | `SATISFIED` |
-| 6 | Mock providers respond by scenario | `SATISFIED` |
-| 7 | Every transaction flows through ReconcileKit | `SATISFIED` — annotated wallet-only exception |
-| 8 | Transaction states meaningful | `SATISFIED` |
-| 9 | Timeline, receipt, evidence exist | `SATISFIED` |
-| 10 | Refund/reversal states visible | `PARTIALLY-SATISFIED` — admin visible; customer tracker missing |
-| 11 | Gift-card flow | `SATISFIED` |
-| 12 | Ticketing flow | `SATISFIED` — mock checkout/issuance works; search UI absent |
-| 13 | Admins can inspect and resolve problems | `PARTIALLY-SATISFIED` — payment-failure and latency gaps |
-| 14 | Seed/demo works | `SATISFIED` |
-| 15 | Critical reconciliation paths tested | `SATISFIED` |
-| 16 | Documentation explains architecture/demo/extensions | `PARTIALLY-SATISFIED` — stale current-state sections |
+|   # | Criterion                                           | Verdict                                                         |
+| --: | --------------------------------------------------- | --------------------------------------------------------------- |
+|   1 | App runs locally                                    | `SATISFIED`                                                     |
+|   2 | Reviewer can open without external credentials      | `SATISFIED`                                                     |
+|   3 | Catalog navigation works                            | `DRIFTED` — two broken links                                    |
+|   4 | Multiple service types purchasable                  | `SATISFIED`                                                     |
+|   5 | Mock wallet/payment flow                            | `SATISFIED`                                                     |
+|   6 | Mock providers respond by scenario                  | `SATISFIED`                                                     |
+|   7 | Every transaction flows through ReconcileKit        | `SATISFIED` — annotated wallet-only exception                   |
+|   8 | Transaction states meaningful                       | `SATISFIED`                                                     |
+|   9 | Timeline, receipt, evidence exist                   | `SATISFIED`                                                     |
+|  10 | Refund/reversal states visible                      | `PARTIALLY-SATISFIED` — admin visible; customer tracker missing |
+|  11 | Gift-card flow                                      | `SATISFIED`                                                     |
+|  12 | Ticketing flow                                      | `SATISFIED` — mock checkout/issuance works; search UI absent    |
+|  13 | Admins can inspect and resolve problems             | `PARTIALLY-SATISFIED` — payment-failure and latency gaps        |
+|  14 | Seed/demo works                                     | `SATISFIED`                                                     |
+|  15 | Critical reconciliation paths tested                | `SATISFIED`                                                     |
+|  16 | Documentation explains architecture/demo/extensions | `PARTIALLY-SATISFIED` — stale current-state sections            |
 
 ## 2.8 Out Of Scope
 
@@ -402,21 +402,21 @@ This is a pass for evidence discipline, not a pass for parity research.
 
 **24 satisfied, 12 partial, 1 N/A-future.**
 
-| Group | Rows | Result |
-| --- | ---: | --- |
-| Service/catalog breadth | 6 | 5 satisfied; education partial (no pins). |
-| Digital goods | 2 | 2 satisfied. |
-| Ticketing | 4 | 4 partial: backend search/availability/reservation/issuance, no search UI; cancellation admin-only. |
-| Wallet | 5 | 3 satisfied; funding and duplicate-debit partial. |
-| Payments | 6 | 4 satisfied; refund tracker and settlement states partial. |
-| Transaction history/details | 2 | 2 satisfied. |
-| Receipts/evidence/timeline | 4 | 4 satisfied. |
-| Support/dispute | 2 | Manual review satisfied; dispute intake partial. |
-| Notifications | 1 | Satisfied. |
-| Account | 2 | Auth shell satisfied; profile/settings partial. |
-| Admin/operations | 1 | Satisfied. |
-| Provider health | 1 | Partial: failure visibility yes, latency no. |
-| Compliance-gated services | 1 | N/A-future, correctly gated. |
+| Group                       | Rows | Result                                                                                              |
+| --------------------------- | ---: | --------------------------------------------------------------------------------------------------- |
+| Service/catalog breadth     |    6 | 5 satisfied; education partial (no pins).                                                           |
+| Digital goods               |    2 | 2 satisfied.                                                                                        |
+| Ticketing                   |    4 | 4 partial: backend search/availability/reservation/issuance, no search UI; cancellation admin-only. |
+| Wallet                      |    5 | 3 satisfied; funding and duplicate-debit partial.                                                   |
+| Payments                    |    6 | 4 satisfied; refund tracker and settlement states partial.                                          |
+| Transaction history/details |    2 | 2 satisfied.                                                                                        |
+| Receipts/evidence/timeline  |    4 | 4 satisfied.                                                                                        |
+| Support/dispute             |    2 | Manual review satisfied; dispute intake partial.                                                    |
+| Notifications               |    1 | Satisfied.                                                                                          |
+| Account                     |    2 | Auth shell satisfied; profile/settings partial.                                                     |
+| Admin/operations            |    1 | Satisfied.                                                                                          |
+| Provider health             |    1 | Partial: failure visibility yes, latency no.                                                        |
+| Compliance-gated services   |    1 | N/A-future, correctly gated.                                                                        |
 
 The matrix is honest about not knowing BillPoint. It is less precise about how much of its own MVP stance is actually exposed to users.
 
@@ -430,32 +430,32 @@ The matrix is honest about not knowing BillPoint. It is less precise about how m
 
 Five apparent conflicts are resolved by scope or annotation:
 
-| Apparent conflict | Resolution |
-| --- | --- |
-| “No production database” vs Postgres | Current-state fact vs target-state architecture; code has moved on. |
-| “No auth” vs authentication shell | Current pilot fact vs MVP target; local auth now exists, production auth does not. |
-| “Every transaction flows through ReconcileKit” vs wallet funding failure | Explicit Phase 2K annotation excludes the wallet-only funding failure. |
-| “Root refund lifecycle out of scope” vs app refunds | Explicit application-level vs root-domain boundary. |
-| “BillPoint unknown” vs parity matrix | Evidence policy permits an MVP stance without a verified comparison. |
+| Apparent conflict                                                        | Resolution                                                                         |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| “No production database” vs Postgres                                     | Current-state fact vs target-state architecture; code has moved on.                |
+| “No auth” vs authentication shell                                        | Current pilot fact vs MVP target; local auth now exists, production auth does not. |
+| “Every transaction flows through ReconcileKit” vs wallet funding failure | Explicit Phase 2K annotation excludes the wallet-only funding failure.             |
+| “Root refund lifecycle out of scope” vs app refunds                      | Explicit application-level vs root-domain boundary.                                |
+| “BillPoint unknown” vs parity matrix                                     | Evidence policy permits an MVP stance without a verified comparison.               |
 
 ## 5.2 Part 5b — Document-vs-Code Contradictions
 
 **12 material drifts.**
 
-| # | Severity | Document claim | Actual code | Verdict |
-| ---: | --- | --- | --- | --- |
-| 1 | P0 | “Catalog navigation works” (`MVP_SCOPE.md:261`). | Catalog cards link to `/catalog/{serviceId}` (`client.ts:585`), but `/catalog/:id` filters categories (`server.ts:786-795`); service IDs 404. | `DRIFTED` |
-| 2 | P0 | Service selection/checkout is usable (`MVP_SCOPE.md:40-41`; `PRODUCT_ARCHITECTURE.md:279-280`). | Service detail “Buy now” points to `/checkout?service=...` (`customer-pages.ts:309`), but GET checkout is only `/checkout/:serviceId` (`server.ts:809-817`); the CTA 404s. | `DRIFTED` |
-| 3 | P1 | Admin “failed transactions” (`MVP_SCOPE.md:97`; `PRODUCT_ARCHITECTURE.md:311`). | Admin status set has no `FAILED`; payment failure maps to `HEALTHY` (`transactions.ts:421-428`), and the dashboard only counts nine statuses (`client.ts:829-839`). | `PARTIALLY-SATISFIED` |
-| 4 | P1 | Admin provider latency (`MVP_SCOPE.md:102`; `PRODUCT_ARCHITECTURE.md:316`). | Latency is stored (`schema.prisma:191`, `transactions.ts:1963`) and shown on customer detail (`customer-pages.ts:431`), but admin pages have no latency view. | `PARTIALLY-SATISFIED` |
-| 5 | P1 | Customer refund/reversal tracker (`MVP_SCOPE.md:47`; `PRODUCT_ARCHITECTURE.md:286`). | Refund/reversal records render only on admin detail (`admin-pages.ts:147-171`); customer detail exposes `resolutionStatus` but not the records. | `PARTIALLY-SATISFIED` |
-| 6 | P1 | Customer dispute/support flow (`MVP_SCOPE.md:48`; `PRODUCT_ARCHITECTURE.md:287`). | No customer create-dispute form; the only form is in admin actions and targets `/dispute` singular (`admin-pages.ts:898`) while the route is `/disputes` plural (`server.ts:1063`). | `PARTIALLY-SATISFIED` |
-| 7 | P1 | Wallet funding simulation (`MVP_SCOPE.md:66`; `PRODUCT_ARCHITECTURE.md:156`). | `fundWallet` and a seeded failure exist (`wallet.ts`, `seed.ts:267`), but there is no funding route, form, or catalog category. | `PARTIALLY-SATISFIED` |
-| 8 | P1 | FX transparency data and UI (`PRODUCT_ARCHITECTURE.md:249-267`). | `FxTransparency` type exists (`types.ts:551-564`); no producer, catalog field, UI, or evidence use. | `MISSING` |
-| 9 | P2 | Settlement mismatch scenario (`MVP_SCOPE.md:90`; `PRODUCT_ARCHITECTURE.md:189`). | Ledger state and wallet test exist (`wallet.ts:631`, `1231`; `wallet.test.ts:796`); no seeded order/demo/UI scenario. | `PARTIALLY-SATISFIED` |
-| 10 | P2 | Explicit duplicate-debit scenario/evidence (`BILLPOINT_PARITY_MATRIX.md:39`; `MVP_SCOPE.md:82`). | `duplicate_debit` dedupes a provider response and does not double-debit (`demo-scenarios.test.ts:199`); true duplicate debit is unit-only via `duplicate: true` (`wallet.test.ts:765`). The MVP annotation correctly explains this, but the scenario name and parity wording overstate it. | `PARTIALLY-SATISFIED` |
-| 11 | P2 | Landing/home and profile/settings (`MVP_SCOPE.md:34,50`; `PRODUCT_ARCHITECTURE.md:289`). | `/` is the dashboard; `renderHomePage` is dead code (`server.ts:765-767`). `/profile` is read-only and has no settings. | `PARTIALLY-SATISFIED` |
-| 12 | P1 | Current state is JSONL/no-auth/no-webhooks (`ASSUMPTIONS_AND_GAPS.md:16,29-31,140`; `PRODUCT_ARCHITECTURE.md:120`). | Prisma/Postgres, session auth/roles, and Paystack webhooks exist. UI copy and README also still say JSONL/no auth (`customer-pages.ts:50,794`; `admin-pages.ts:50`; `storefront/README.md:27,36,128`). | `SUPERSEDED` |
+|   # | Severity | Document claim                                                                                                      | Actual code                                                                                                                                                                                                                                                                                | Verdict               |
+| --: | -------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
+|   1 | P0       | “Catalog navigation works” (`MVP_SCOPE.md:261`).                                                                    | Catalog cards link to `/catalog/{serviceId}` (`client.ts:585`), but `/catalog/:id` filters categories (`server.ts:786-795`); service IDs 404.                                                                                                                                              | `DRIFTED`             |
+|   2 | P0       | Service selection/checkout is usable (`MVP_SCOPE.md:40-41`; `PRODUCT_ARCHITECTURE.md:279-280`).                     | Service detail “Buy now” points to `/checkout?service=...` (`customer-pages.ts:309`), but GET checkout is only `/checkout/:serviceId` (`server.ts:809-817`); the CTA 404s.                                                                                                                 | `DRIFTED`             |
+|   3 | P1       | Admin “failed transactions” (`MVP_SCOPE.md:97`; `PRODUCT_ARCHITECTURE.md:311`).                                     | Admin status set has no `FAILED`; payment failure maps to `HEALTHY` (`transactions.ts:421-428`), and the dashboard only counts nine statuses (`client.ts:829-839`).                                                                                                                        | `PARTIALLY-SATISFIED` |
+|   4 | P1       | Admin provider latency (`MVP_SCOPE.md:102`; `PRODUCT_ARCHITECTURE.md:316`).                                         | Latency is stored (`schema.prisma:191`, `transactions.ts:1963`) and shown on customer detail (`customer-pages.ts:431`), but admin pages have no latency view.                                                                                                                              | `PARTIALLY-SATISFIED` |
+|   5 | P1       | Customer refund/reversal tracker (`MVP_SCOPE.md:47`; `PRODUCT_ARCHITECTURE.md:286`).                                | Refund/reversal records render only on admin detail (`admin-pages.ts:147-171`); customer detail exposes `resolutionStatus` but not the records.                                                                                                                                            | `PARTIALLY-SATISFIED` |
+|   6 | P1       | Customer dispute/support flow (`MVP_SCOPE.md:48`; `PRODUCT_ARCHITECTURE.md:287`).                                   | No customer create-dispute form; the only form is in admin actions and targets `/dispute` singular (`admin-pages.ts:898`) while the route is `/disputes` plural (`server.ts:1063`).                                                                                                        | `PARTIALLY-SATISFIED` |
+|   7 | P1       | Wallet funding simulation (`MVP_SCOPE.md:66`; `PRODUCT_ARCHITECTURE.md:156`).                                       | `fundWallet` and a seeded failure exist (`wallet.ts`, `seed.ts:267`), but there is no funding route, form, or catalog category.                                                                                                                                                            | `PARTIALLY-SATISFIED` |
+|   8 | P1       | FX transparency data and UI (`PRODUCT_ARCHITECTURE.md:249-267`).                                                    | `FxTransparency` type exists (`types.ts:551-564`); no producer, catalog field, UI, or evidence use.                                                                                                                                                                                        | `MISSING`             |
+|   9 | P2       | Settlement mismatch scenario (`MVP_SCOPE.md:90`; `PRODUCT_ARCHITECTURE.md:189`).                                    | Ledger state and wallet test exist (`wallet.ts:631`, `1231`; `wallet.test.ts:796`); no seeded order/demo/UI scenario.                                                                                                                                                                      | `PARTIALLY-SATISFIED` |
+|  10 | P2       | Explicit duplicate-debit scenario/evidence (`BILLPOINT_PARITY_MATRIX.md:39`; `MVP_SCOPE.md:82`).                    | `duplicate_debit` dedupes a provider response and does not double-debit (`demo-scenarios.test.ts:199`); true duplicate debit is unit-only via `duplicate: true` (`wallet.test.ts:765`). The MVP annotation correctly explains this, but the scenario name and parity wording overstate it. | `PARTIALLY-SATISFIED` |
+|  11 | P2       | Landing/home and profile/settings (`MVP_SCOPE.md:34,50`; `PRODUCT_ARCHITECTURE.md:289`).                            | `/` is the dashboard; `renderHomePage` is dead code (`server.ts:765-767`). `/profile` is read-only and has no settings.                                                                                                                                                                    | `PARTIALLY-SATISFIED` |
+|  12 | P1       | Current state is JSONL/no-auth/no-webhooks (`ASSUMPTIONS_AND_GAPS.md:16,29-31,140`; `PRODUCT_ARCHITECTURE.md:120`). | Prisma/Postgres, session auth/roles, and Paystack webhooks exist. UI copy and README also still say JSONL/no auth (`customer-pages.ts:50,794`; `admin-pages.ts:50`; `storefront/README.md:27,36,128`).                                                                                     | `SUPERSEDED`          |
 
 ## 5.3 Part 5c — Notable Non-Contradictions
 
@@ -478,30 +478,30 @@ This table evaluates the **catalog/VTU capability claims**, not just whether a s
 
 **Result: 13 satisfied, 8 partial, 1 N/A-future.**
 
-| # | Capability | Document claim | Actual implementation | Evidence | Verdict |
-| ---: | --- | --- | --- | --- | --- |
-| 1 | Airtime | Core VTU | MTN/Airtel/Glo/9mobile, amount, mock provider, checkout, receipt/evidence. | `catalog.ts` service schemas; `providers/mock-provider.ts` | `SATISFIED` |
-| 2 | Mobile data | Core VTU | Network, recipient, plan, mock fulfillment. | `catalog.ts:148-169` | `SATISFIED` |
-| 3 | Electricity | Core bill payment | Provider, meter number, meter type, amount; prepaid/postpaid. | `catalog.ts:171-188` | `SATISFIED` |
-| 4 | Cable TV / Pay TV | Core bill payment | DStv/GOtv/StarTimes, subscriber, package. | `catalog.ts:190-211` | `SATISFIED` |
-| 5 | Internet subscriptions | Core bill payment | Spectranet/Smile/ipNX, plan, account number. | `catalog.ts:213-233` | `SATISFIED` |
-| 6 | Education payments/pins | “Where appropriate” | JAMB and WAEC payment services exist with application number/amount; no exam-pin product, pin artifact, or pin-delivery flow. | `catalog.ts` education services; no pin fields in `types.ts`/`artifacts.ts` | `PARTIALLY-SATISFIED` |
-| 7 | Gift cards | First-class digital goods | Amazon gift-card service, denomination/quantity, masked code/pin, delivery state, risk flags. | `catalog.ts`; `artifacts.ts`; `providers/mock-provider.ts`; evidence masking tests | `SATISFIED` |
-| 8 | Digital vouchers | Generic digital goods | `svc_voucher_digital` through the gift/digital provider adapter. | `catalog.ts` service list; demo scenario `payment_success_service_failure` | `SATISFIED` |
-| 9 | Cinema tickets | Mock search, availability, reservation, issuance | Ticketing backend supports search/availability/reservation/issuance; seeded cinema checkout works; no customer search UI. | `ticketing.ts`; `demo-scenarios.ts:139-148` | `PARTIALLY-SATISFIED` |
-| 10 | Event tickets | Same ticketing claim | Same ticketing backend; no event search/selection UI. | `ticketing.ts`; catalog | `PARTIALLY-SATISFIED` |
-| 11 | Bus/transport tickets | Routes, passenger info, issuance | Mock route/passenger/seat checkout and issuance; no search UI; cancellation is admin-only. | `ticketing.ts`; `demo-scenarios.ts:151-162` | `PARTIALLY-SATISFIED` |
-| 12 | Airline tickets | Availability and passenger flow | Mock flight/passenger checkout and pending flow; no availability search UI. | `ticketing.ts`; `demo-scenarios.ts:164-175` | `PARTIALLY-SATISFIED` |
-| 13 | Wallet funding | Mock funding | `fundWallet`, funding ledger states, seeded funding failure; no customer funding route/form/category. | `wallet.ts`; `seed.ts:239-288`; `server.ts` has only GET `/wallet` | `PARTIALLY-SATISFIED` |
-| 14 | Wallet balance | Simulated balance only | Derived available/pending balance from ledger. | `wallet.ts`; `/wallet` | `SATISFIED` |
-| 15 | Wallet debit | Simulated ledger event | `debitWallet` posts `DEBIT_SUCCESS`; failure and pending paths exist. | `wallet.ts:817-991`; checkout path `transactions.ts:638` | `SATISFIED` |
-| 16 | Pending debit | Simulated ledger state | Pending lifecycle and ledger states. | `wallet.ts`; `PaymentLifecycleState` | `SATISFIED` |
-| 17 | Duplicate debit | Explicit scenario/evidence | Wallet primitive supports `duplicate: true` and two debit entries; checkout never passes it; demo `duplicate_debit` is provider-duplicate dedupe, not a double debit. | `wallet.ts:315,949-971`; `transactions.ts:638-646`; `demo-scenarios.test.ts:199` | `PARTIALLY-SATISFIED` |
-| 18 | Reversal | Simulated reversal/evidence | Reversal record, ledger reference, admin action, seeded `payment_reversal`. | `resolution.ts`; `admin-pages.ts:161-171`; `demo-scenarios.ts:189-194` | `SATISFIED` |
-| 19 | Refund initiated/pending/completed | Simulated workflow/tracker | Application-level refund records and admin transitions; customer tracker missing. | `resolution.ts`; `server.ts:1102-1117`; `admin-pages.ts:147-156` | `SATISFIED` |
-| 20 | Settlement states | Simulated settlement/mismatch | Ledger `SETTLEMENT_MATCHED`/`SETTLEMENT_MISMATCH`, wallet test; no order/demo/UI settlement-mismatch scenario. | `wallet.ts:631,1231`; `wallet.test.ts:796` | `PARTIALLY-SATISFIED` |
-| 21 | Payment authorization/confirmation/failure | Mock authorization/confirmation/failure | Wallet debit + status lifecycle + provider result + reconciliation; failed payment is visible to customer but not admin failed queue. | `transactions.ts:421-428,638`; `types.ts` lifecycle | `SATISFIED` |
-| 22 | Betting/gaming | Future/compliance-gated only | `svc_betting_examplebet` exists, is excluded from checkout options, and has no provider. | `catalog.ts`; `providers/registry.ts`; checkout filter `client.ts:876-878` | `N/A-FUTURE` |
+|   # | Capability                                 | Document claim                                   | Actual implementation                                                                                                                                                 | Evidence                                                                           | Verdict               |
+| --: | ------------------------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------- |
+|   1 | Airtime                                    | Core VTU                                         | MTN/Airtel/Glo/9mobile, amount, mock provider, checkout, receipt/evidence.                                                                                            | `catalog.ts` service schemas; `providers/mock-provider.ts`                         | `SATISFIED`           |
+|   2 | Mobile data                                | Core VTU                                         | Network, recipient, plan, mock fulfillment.                                                                                                                           | `catalog.ts:148-169`                                                               | `SATISFIED`           |
+|   3 | Electricity                                | Core bill payment                                | Provider, meter number, meter type, amount; prepaid/postpaid.                                                                                                         | `catalog.ts:171-188`                                                               | `SATISFIED`           |
+|   4 | Cable TV / Pay TV                          | Core bill payment                                | DStv/GOtv/StarTimes, subscriber, package.                                                                                                                             | `catalog.ts:190-211`                                                               | `SATISFIED`           |
+|   5 | Internet subscriptions                     | Core bill payment                                | Spectranet/Smile/ipNX, plan, account number.                                                                                                                          | `catalog.ts:213-233`                                                               | `SATISFIED`           |
+|   6 | Education payments/pins                    | “Where appropriate”                              | JAMB and WAEC payment services exist with application number/amount; no exam-pin product, pin artifact, or pin-delivery flow.                                         | `catalog.ts` education services; no pin fields in `types.ts`/`artifacts.ts`        | `PARTIALLY-SATISFIED` |
+|   7 | Gift cards                                 | First-class digital goods                        | Amazon gift-card service, denomination/quantity, masked code/pin, delivery state, risk flags.                                                                         | `catalog.ts`; `artifacts.ts`; `providers/mock-provider.ts`; evidence masking tests | `SATISFIED`           |
+|   8 | Digital vouchers                           | Generic digital goods                            | `svc_voucher_digital` through the gift/digital provider adapter.                                                                                                      | `catalog.ts` service list; demo scenario `payment_success_service_failure`         | `SATISFIED`           |
+|   9 | Cinema tickets                             | Mock search, availability, reservation, issuance | Ticketing backend supports search/availability/reservation/issuance; seeded cinema checkout works; no customer search UI.                                             | `ticketing.ts`; `demo-scenarios.ts:139-148`                                        | `PARTIALLY-SATISFIED` |
+|  10 | Event tickets                              | Same ticketing claim                             | Same ticketing backend; no event search/selection UI.                                                                                                                 | `ticketing.ts`; catalog                                                            | `PARTIALLY-SATISFIED` |
+|  11 | Bus/transport tickets                      | Routes, passenger info, issuance                 | Mock route/passenger/seat checkout and issuance; no search UI; cancellation is admin-only.                                                                            | `ticketing.ts`; `demo-scenarios.ts:151-162`                                        | `PARTIALLY-SATISFIED` |
+|  12 | Airline tickets                            | Availability and passenger flow                  | Mock flight/passenger checkout and pending flow; no availability search UI.                                                                                           | `ticketing.ts`; `demo-scenarios.ts:164-175`                                        | `PARTIALLY-SATISFIED` |
+|  13 | Wallet funding                             | Mock funding                                     | `fundWallet`, funding ledger states, seeded funding failure; no customer funding route/form/category.                                                                 | `wallet.ts`; `seed.ts:239-288`; `server.ts` has only GET `/wallet`                 | `PARTIALLY-SATISFIED` |
+|  14 | Wallet balance                             | Simulated balance only                           | Derived available/pending balance from ledger.                                                                                                                        | `wallet.ts`; `/wallet`                                                             | `SATISFIED`           |
+|  15 | Wallet debit                               | Simulated ledger event                           | `debitWallet` posts `DEBIT_SUCCESS`; failure and pending paths exist.                                                                                                 | `wallet.ts:817-991`; checkout path `transactions.ts:638`                           | `SATISFIED`           |
+|  16 | Pending debit                              | Simulated ledger state                           | Pending lifecycle and ledger states.                                                                                                                                  | `wallet.ts`; `PaymentLifecycleState`                                               | `SATISFIED`           |
+|  17 | Duplicate debit                            | Explicit scenario/evidence                       | Wallet primitive supports `duplicate: true` and two debit entries; checkout never passes it; demo `duplicate_debit` is provider-duplicate dedupe, not a double debit. | `wallet.ts:315,949-971`; `transactions.ts:638-646`; `demo-scenarios.test.ts:199`   | `PARTIALLY-SATISFIED` |
+|  18 | Reversal                                   | Simulated reversal/evidence                      | Reversal record, ledger reference, admin action, seeded `payment_reversal`.                                                                                           | `resolution.ts`; `admin-pages.ts:161-171`; `demo-scenarios.ts:189-194`             | `SATISFIED`           |
+|  19 | Refund initiated/pending/completed         | Simulated workflow/tracker                       | Application-level refund records and admin transitions; customer tracker missing.                                                                                     | `resolution.ts`; `server.ts:1102-1117`; `admin-pages.ts:147-156`                   | `SATISFIED`           |
+|  20 | Settlement states                          | Simulated settlement/mismatch                    | Ledger `SETTLEMENT_MATCHED`/`SETTLEMENT_MISMATCH`, wallet test; no order/demo/UI settlement-mismatch scenario.                                                        | `wallet.ts:631,1231`; `wallet.test.ts:796`                                         | `PARTIALLY-SATISFIED` |
+|  21 | Payment authorization/confirmation/failure | Mock authorization/confirmation/failure          | Wallet debit + status lifecycle + provider result + reconciliation; failed payment is visible to customer but not admin failed queue.                                 | `transactions.ts:421-428,638`; `types.ts` lifecycle                                | `SATISFIED`           |
+|  22 | Betting/gaming                             | Future/compliance-gated only                     | `svc_betting_examplebet` exists, is excluded from checkout options, and has no provider.                                                                              | `catalog.ts`; `providers/registry.ts`; checkout filter `client.ts:876-878`         | `N/A-FUTURE`          |
 
 ---
 
@@ -548,27 +548,27 @@ The single completion criterion that is outright false is **catalog navigation**
 
 ## Evidence Index
 
-| Area | Primary evidence |
-| --- | --- |
-| Routes and auth gate | `storefront/src/server.ts:190,717-759,765-817,1040-1063,1102-1117` |
-| Auth | `storefront/src/auth/{cookies,identity,middleware,passwords,sessions}.ts` |
-| Persistence | `storefront/prisma/schema.prisma`; `storefront/src/db/repositories/index.ts` |
-| Catalog | `storefront/src/marketplace/catalog.ts` |
-| Types/statuses | `storefront/src/marketplace/types.ts` (`AdminTransactionStatus`, `FxTransparency`) |
-| Providers | `storefront/src/marketplace/providers/{registry,mock-provider,payment-provider,contracts}.ts` |
-| Transactions | `storefront/src/marketplace/transactions.ts` |
-| Wallet | `storefront/src/marketplace/wallet.ts` |
-| Ticketing | `storefront/src/marketplace/ticketing.ts` |
-| Resolution | `storefront/src/marketplace/resolution.ts` |
-| Evidence/masking | `storefront/src/marketplace/evidence.ts`; `artifacts.ts` |
-| Receipts | `storefront/src/marketplace/receipts.ts` |
-| Notifications | `storefront/src/marketplace/notifications.ts` |
-| Demo seed/scenarios | `storefront/src/marketplace/{seed,demo-scenarios}.ts` |
-| Customer UI | `storefront/src/ui/customer-pages.ts`, `client.ts` |
-| Admin UI | `storefront/src/ui/admin-pages.ts`, `client.ts` |
-| Tests | `storefront/test/marketplace/{wallet,demo-scenarios,frontend-walkthrough,server-marketplace}.test.ts` |
-| Webhook | `storefront/src/application/paystack-webhook.ts`; `storefront/src/marketplace/payment-sources/*` |
-| Phase closure | `docs/5b1e-closure.md`, `docs/5c-closure.md` |
+| Area                 | Primary evidence                                                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| Routes and auth gate | `storefront/src/server.ts:190,717-759,765-817,1040-1063,1102-1117`                                    |
+| Auth                 | `storefront/src/auth/{cookies,identity,middleware,passwords,sessions}.ts`                             |
+| Persistence          | `storefront/prisma/schema.prisma`; `storefront/src/db/repositories/index.ts`                          |
+| Catalog              | `storefront/src/marketplace/catalog.ts`                                                               |
+| Types/statuses       | `storefront/src/marketplace/types.ts` (`AdminTransactionStatus`, `FxTransparency`)                    |
+| Providers            | `storefront/src/marketplace/providers/{registry,mock-provider,payment-provider,contracts}.ts`         |
+| Transactions         | `storefront/src/marketplace/transactions.ts`                                                          |
+| Wallet               | `storefront/src/marketplace/wallet.ts`                                                                |
+| Ticketing            | `storefront/src/marketplace/ticketing.ts`                                                             |
+| Resolution           | `storefront/src/marketplace/resolution.ts`                                                            |
+| Evidence/masking     | `storefront/src/marketplace/evidence.ts`; `artifacts.ts`                                              |
+| Receipts             | `storefront/src/marketplace/receipts.ts`                                                              |
+| Notifications        | `storefront/src/marketplace/notifications.ts`                                                         |
+| Demo seed/scenarios  | `storefront/src/marketplace/{seed,demo-scenarios}.ts`                                                 |
+| Customer UI          | `storefront/src/ui/customer-pages.ts`, `client.ts`                                                    |
+| Admin UI             | `storefront/src/ui/admin-pages.ts`, `client.ts`                                                       |
+| Tests                | `storefront/test/marketplace/{wallet,demo-scenarios,frontend-walkthrough,server-marketplace}.test.ts` |
+| Webhook              | `storefront/src/application/paystack-webhook.ts`; `storefront/src/marketplace/payment-sources/*`      |
+| Phase closure        | `docs/5b1e-closure.md`, `docs/5c-closure.md`                                                          |
 
 ## Audit Verification
 
