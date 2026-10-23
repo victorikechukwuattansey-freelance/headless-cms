@@ -188,23 +188,39 @@ request_id), not the idempotency key.
 **Status per owner ruling 1.a:** Bug fix, lands alongside §14
 changes but does not itself require §14 approval.
 
-### Change 2 — Unseal `simulated` on four types
+### Change 2 — Unseal `simulated` on four types (DEFERRED to 5D.2.5)
 
-**File:** `storefront/src/marketplace/types.ts:335, 352, 373, 386`
+**Status: DEFERRED.** 5D.2's pre-flight found this is larger than
+originally scoped.
 
-**Before:** `readonly simulated: true;`
-**After:** `readonly simulated: boolean;`
+**Original scope:** Unseal `simulated: true` literal on four types
+(types.ts:335, 352, 373, 386) and fix the hardcoded `simulated: true`
+write in `recordProviderAttempt`.
 
-**Also:** `transactions.ts:1966` currently writes `simulated: true`
-literally. Change to pass the provider result's actual `simulated`
-value through (already `boolean` at `contracts.ts:77`).
+**Why deferred (5D.2 pre-flight finding):** The type unseal is the
+smallest part. The persistence layer does not store `simulated`:
 
-**Rationale:** Mock mode continues to write `true`; real mode writes
-`false`. The type is sealed correctly for the mock era; the phase
-where real providers exist requires it to be a boolean.
+- Prisma schema has no `simulated` column on the four tables.
+- Repositories don't persist it (reads hardcode `true`).
+- `wallet.ts` (frozen) interacts with `simulated` in a way that
+  requires a §14 reopening.
 
-**Status per owner ruling 1.b:** Unseal. No parallel-type
-alternative.
+An honest "real-mode writes `simulated: false` and the persistence
+layer records it" requires: schema migration (4 tables), repository
+updates (4 repos), `wallet.ts` change (§14 reopening — owner ruling
+required separately), and 10+ file changes total.
+
+This scope is larger than 5D.2 can absorb. It moves to **5D.2.5** with
+its own pre-flight that investigates:
+
+- Migration shape (one `simulated` column per table? one
+  `providerMode` column at the transaction level? something else?)
+- Alternative representations (`simulated` in `source_attributes`?
+  derived from `providerId` prefix?)
+- The exact `wallet.ts` code path that requires reopening, and the
+  smallest §14-compliant change.
+
+**None of these are decided here.** 5D.2.5's pre-flight determines.
 
 ### Change 3 — Unseal `scenario` on provider contract
 
@@ -366,6 +382,13 @@ ARCHITECTURE_FREEZE.md`) does not list it in its §9 protected
   - VTPass callback signature verification (spec needed)
   - Full VTPass adapter (`providers/vtpass/*`)
   - Cinema, bus, flight, gift-card adapters (separate tracks)
+
+**Change 2 deferral (5D.2 pre-flight, 2026-10-23):** Change 2's honest
+fix requires a schema migration, repository updates, and a §14
+reopening for `wallet.ts`. It is deferred to 5D.2.5 with its own
+pre-flight. The approved intent (honest recording of non-simulated
+transactions) is unchanged; only the increment scope and sequence
+shift. No re-approval of Changes 1, 3, 4, 5, or 6 is required.
 
 ---
 
