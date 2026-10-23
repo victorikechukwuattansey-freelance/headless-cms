@@ -1,4 +1,4 @@
-import { buildStableSuffix } from "../ids.ts";
+import { stableToken } from "../ids.ts";
 import type { WalletPaymentEvidence } from "./wallet.ts";
 import type {
   GiftCardArtifact,
@@ -53,7 +53,7 @@ export interface TicketArtifactInput {
  * record id, which is the store's latest-wins join key.
  */
 export function giftCardArtifactId(transactionId: string): string {
-  return `gift_${buildStableSuffix(transactionId)}`;
+  return `gift_${stableToken(transactionId)}`;
 }
 
 /**
@@ -61,7 +61,7 @@ export function giftCardArtifactId(transactionId: string): string {
  * and the cancellation-replay path both resolve the same latest record.
  */
 export function ticketArtifactId(transactionId: string): string {
-  return `tkt_${buildStableSuffix(transactionId)}`;
+  return `tkt_${stableToken(transactionId)}`;
 }
 
 /**

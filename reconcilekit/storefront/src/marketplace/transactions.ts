@@ -1927,6 +1927,7 @@ async function resolveWallet(
     readonly now: string;
   },
 ): Promise<string> {
+  // Current customer ids fit within the 24-char suffix; revisit if they grow.
   const walletId =
     input.walletId ??
     `wl_${buildStableSuffix(input.customerId)}_${buildStableSuffix(input.currency)}`;

@@ -133,6 +133,48 @@ test("cinema SUCCESS reserves and issues a ticket with a deterministic evidence 
   });
 });
 
+test("distinct cinema purchases keep distinct ticket artifact ids", async (t) => {
+  await withRollback(prisma, async (tx) => {
+    await seedDemoCustomer(tx);
+    const repos = buildRepositories(tx);
+    const first = await executeMarketplaceTransaction(
+      demoDeps(repos),
+      cinemaInput({
+        inputs: {
+          venue: "Filmhouse IMAX",
+          movie: "Oppenheimer",
+          screening: "2026-02-01T19:00:00.000Z",
+          seats: "A1",
+        },
+      }),
+    );
+    const second = await executeMarketplaceTransaction(
+      demoDeps(repos),
+      cinemaInput({
+        inputs: {
+          venue: "Filmhouse IMAX",
+          movie: "Oppenheimer",
+          screening: "2026-02-01T19:00:00.000Z",
+          seats: "A2",
+        },
+      }),
+    );
+
+    assert.notEqual(first.transaction.id, second.transaction.id);
+    const firstArtifact = (
+      await repos.ticketArtifacts.listByTransaction(first.transaction.id)
+    )[0];
+    const secondArtifact = (
+      await repos.ticketArtifacts.listByTransaction(second.transaction.id)
+    )[0];
+    assert.ok(firstArtifact !== undefined);
+    assert.ok(secondArtifact !== undefined);
+    assert.equal(firstArtifact.id, ticketArtifactId(first.transaction.id));
+    assert.equal(secondArtifact.id, ticketArtifactId(second.transaction.id));
+    assert.notEqual(firstArtifact.id, secondArtifact.id);
+  });
+});
+
 test("cinema PENDING holds a reservation but never issues the ticket", async (t) => {
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);

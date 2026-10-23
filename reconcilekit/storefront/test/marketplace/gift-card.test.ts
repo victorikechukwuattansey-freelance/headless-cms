@@ -107,6 +107,46 @@ test("gift card SUCCESS delivers a masked code and snapshots an evidence facet",
   });
 });
 
+test("distinct gift-card purchases keep distinct artifact ids", async (t) => {
+  await withRollback(prisma, async (tx) => {
+    await seedDemoCustomer(tx);
+    const repos = buildRepositories(tx);
+    const first = await executeMarketplaceTransaction(
+      demoDeps(repos),
+      giftInput({
+        inputs: {
+          brand: "Amazon",
+          region: "US",
+          denomination: "$25",
+          quantity: "1",
+        },
+      }),
+    );
+    const second = await executeMarketplaceTransaction(
+      demoDeps(repos),
+      giftInput({
+        inputs: {
+          brand: "Amazon",
+          region: "US",
+          denomination: "$50",
+          quantity: "1",
+        },
+      }),
+    );
+
+    assert.notEqual(first.transaction.id, second.transaction.id);
+    const firstArtifact = (await artifactsFor(repos, first.transaction.id))[0];
+    const secondArtifact = (
+      await artifactsFor(repos, second.transaction.id)
+    )[0];
+    assert.ok(firstArtifact !== undefined);
+    assert.ok(secondArtifact !== undefined);
+    assert.equal(firstArtifact.id, giftCardArtifactId(first.transaction.id));
+    assert.equal(secondArtifact.id, giftCardArtifactId(second.transaction.id));
+    assert.notEqual(firstArtifact.id, secondArtifact.id);
+  });
+});
+
 test("gift card delivered code material is never written in full", async (t) => {
   await withRollback(prisma, async (tx) => {
     await seedDemoCustomer(tx);
