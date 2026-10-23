@@ -147,6 +147,16 @@ export class MockServiceProvider<
       extraMetadata: serviceRequestMetadata(request),
     });
   }
+
+  async queryStatus(context: ProviderRequestContext): Promise<ProviderResult> {
+    return buildMockStatusResult({
+      context,
+      serviceKind: this.serviceKinds[0] ?? "AIRTIME",
+      providerId: this.providerId,
+      providerName: this.providerName,
+      referencePrefix: this.referencePrefix,
+    });
+  }
 }
 
 export class MockGiftCardProvider implements GiftCardProvider {
@@ -160,6 +170,7 @@ export class MockGiftCardProvider implements GiftCardProvider {
     context: ProviderRequestContext,
     request: GiftCardProviderRequest,
   ): Promise<GiftCardProviderResult> {
+    const scenario = getMockScenario(context);
     const result = buildProviderResult({
       context,
       request: {
@@ -179,15 +190,25 @@ export class MockGiftCardProvider implements GiftCardProvider {
       },
     });
 
-    const deliveryStatus = giftCardDeliveryStatus(context.scenario);
+    const deliveryStatus = giftCardDeliveryStatus(scenario);
     return {
       ...result,
       deliveryStatus,
-      codeStatus: giftCardCodeStatus(context.scenario),
+      codeStatus: giftCardCodeStatus(scenario),
       maskedCodePreview:
         deliveryStatus === "DELIVERED" ? maskedCode(context) : null,
-      riskFlags: context.scenario === "MISMATCH" ? ["AMOUNT_DISCREPANCY"] : [],
+      riskFlags: scenario === "MISMATCH" ? ["AMOUNT_DISCREPANCY"] : [],
     };
+  }
+
+  async queryStatus(context: ProviderRequestContext): Promise<ProviderResult> {
+    return buildMockStatusResult({
+      context,
+      serviceKind: "GIFT_CARD",
+      providerId: this.providerId,
+      providerName: this.providerName,
+      referencePrefix: "gift",
+    });
   }
 }
 
@@ -313,6 +334,7 @@ export class MockTicketingProvider
     request: { readonly amountMinor: number; readonly currency: string },
     metadata: SourceAttributes,
   ): Promise<TicketProviderResult> {
+    const scenario = getMockScenario(context);
     const result = buildProviderResult({
       context,
       request,
@@ -327,15 +349,13 @@ export class MockTicketingProvider
       ...result,
       ticketKind: this.ticketKind,
       reservationReference:
-        context.scenario === "TIMEOUT"
-          ? null
-          : `res_${result.providerReference}`,
+        scenario === "TIMEOUT" ? null : `res_${result.providerReference}`,
       issueReference:
-        context.scenario === "SUCCESS" || context.scenario === "DUPLICATE"
+        scenario === "SUCCESS" || scenario === "DUPLICATE"
           ? `iss_${result.providerReference}`
           : null,
       maskedTicketCode:
-        context.scenario === "SUCCESS" || context.scenario === "DUPLICATE"
+        scenario === "SUCCESS" || scenario === "DUPLICATE"
           ? `TKT-${stableToken(context.transactionId).slice(0, 4)}-****`
           : null,
       cancellationReference: null,
@@ -354,6 +374,7 @@ export class MockPaymentProvider implements PaymentProvider {
     context: ProviderRequestContext,
     request: PaymentProviderRequest,
   ): Promise<PaymentProviderResult> {
+    const scenario = getMockScenario(context);
     const result = buildProviderResult({
       context,
       request,
@@ -372,10 +393,20 @@ export class MockPaymentProvider implements PaymentProvider {
     return {
       ...result,
       paymentReference: request.paymentReference,
-      authorizationState: authorizationState(context.scenario),
+      authorizationState: authorizationState(scenario),
       settlementState:
-        context.scenario === "MISMATCH" ? "MISMATCH" : request.settlementState,
+        scenario === "MISMATCH" ? "MISMATCH" : request.settlementState,
     };
+  }
+
+  async queryStatus(context: ProviderRequestContext): Promise<ProviderResult> {
+    return buildMockStatusResult({
+      context,
+      serviceKind: "WALLET_FUNDING",
+      providerId: this.providerId,
+      providerName: this.providerName,
+      referencePrefix: "pay",
+    });
   }
 }
 
@@ -396,40 +427,40 @@ function buildProviderResult<
   readonly referencePrefix: string;
   readonly extraMetadata: SourceAttributes;
 }): ProviderResult {
+  const scenario = getMockScenario(input.context);
   const amountMinor = resultAmountMinor(input.context, input.request);
   const currency = input.request.currency ?? input.context.currency;
-  const latencyMs = SCENARIO_LATENCY_MS[input.context.scenario];
+  const latencyMs = SCENARIO_LATENCY_MS[scenario];
   const responseTimestamp =
-    input.context.scenario === "TIMEOUT"
+    scenario === "TIMEOUT"
       ? null
       : addMilliseconds(input.context.requestedAt, latencyMs);
   const providerReference =
-    input.context.scenario === "TIMEOUT"
+    scenario === "TIMEOUT"
       ? null
       : deriveProviderReference(input.referencePrefix, input.context);
-  const canonicalPaymentStatus =
-    SCENARIO_CANONICAL_STATUS[input.context.scenario];
+  const canonicalPaymentStatus = SCENARIO_CANONICAL_STATUS[scenario];
   const sourceAttributes = compactAttributes({
     ...input.context.metadata,
     ...input.extraMetadata,
     simulated: "true",
-    scenario: input.context.scenario,
+    scenario,
     provider_id: input.providerId,
     provider_name: input.providerName,
     service_kind: input.serviceKind,
     request_id: input.context.requestId,
     correlation_id: input.context.correlationId,
     attempt_number: String(input.context.attemptNumber),
-    provider_status: SCENARIO_STATUS[input.context.scenario],
-    provider_status_code: providerStatusCode(input.context.scenario),
-    provider_message: providerMessage(input.context.scenario),
+    provider_status: SCENARIO_STATUS[scenario],
+    provider_status_code: providerStatusCode(scenario),
+    provider_message: providerMessage(scenario),
     provider_reference: providerReference,
     requested_at: input.context.requestedAt,
     responded_at: responseTimestamp,
     latency_ms: String(latencyMs),
   });
   const reconciliationFacts =
-    input.context.scenario === "TIMEOUT"
+    scenario === "TIMEOUT"
       ? null
       : {
           providerId: input.providerId,
@@ -445,17 +476,17 @@ function buildProviderResult<
     providerId: input.providerId,
     providerName: input.providerName,
     serviceKind: input.serviceKind,
-    scenario: input.context.scenario,
+    scenario,
     providerReference,
     requestId: input.context.requestId,
     correlationId: input.context.correlationId,
     attemptNumber: input.context.attemptNumber,
     requestTimestamp: input.context.requestedAt,
     responseTimestamp,
-    providerStatus: SCENARIO_STATUS[input.context.scenario],
-    providerStatusCode: providerStatusCode(input.context.scenario),
-    providerMessage: providerMessage(input.context.scenario),
-    attemptStatus: SCENARIO_ATTEMPT_STATUS[input.context.scenario],
+    providerStatus: SCENARIO_STATUS[scenario],
+    providerStatusCode: providerStatusCode(scenario),
+    providerMessage: providerMessage(scenario),
+    attemptStatus: SCENARIO_ATTEMPT_STATUS[scenario],
     canonicalPaymentStatus,
     amountMinor,
     currency,
@@ -464,25 +495,60 @@ function buildProviderResult<
     reconciliationFacts,
     safeMetadata: sourceAttributes,
     duplicateResults:
-      input.context.scenario === "DUPLICATE" && reconciliationFacts !== null
+      scenario === "DUPLICATE" && reconciliationFacts !== null
         ? [reconciliationFacts]
         : [],
     simulated: true,
   };
 }
 
+function buildMockStatusResult(input: {
+  readonly context: ProviderRequestContext;
+  readonly serviceKind: MarketplaceServiceKind;
+  readonly providerId: string;
+  readonly providerName: string;
+  readonly referencePrefix: string;
+}): ProviderResult {
+  return buildProviderResult({
+    context: input.context,
+    request: {
+      amountMinor: input.context.amountMinor,
+      currency: input.context.currency,
+    },
+    serviceKind: input.serviceKind,
+    providerId: input.providerId,
+    providerName: input.providerName,
+    referencePrefix: input.referencePrefix,
+    extraMetadata: {},
+  });
+}
+
+function getMockScenario(
+  context: ProviderRequestContext,
+): MockProviderScenario {
+  if (context.scenario === undefined) {
+    throw new Error(
+      "MockProvider requires context.scenario; got undefined. " +
+        "Mock mode is misconfigured - scenario should be set by " +
+        "buildServiceContext.",
+    );
+  }
+  return context.scenario;
+}
+
 function resultAmountMinor(
   context: ProviderRequestContext,
   request: { readonly amountMinor?: number },
 ): number | null {
-  if (context.scenario === "TIMEOUT") {
+  const scenario = getMockScenario(context);
+  if (scenario === "TIMEOUT") {
     return null;
   }
   const requested = request.amountMinor ?? context.amountMinor;
-  if (context.scenario === "MISMATCH") {
+  if (scenario === "MISMATCH") {
     return requested + 100;
   }
-  if (context.scenario === "PARTIAL_SUCCESS") {
+  if (scenario === "PARTIAL_SUCCESS") {
     return Math.floor(requested / 2);
   }
   return requested;
@@ -492,10 +558,11 @@ function deriveProviderReference(
   prefix: string,
   context: ProviderRequestContext,
 ): string {
+  const scenario = getMockScenario(context);
   const base = stableToken(
     `${context.providerId}_${context.transactionId}_${context.customerReference}_${context.attemptNumber}`,
   );
-  if (context.scenario === "MISMATCH") {
+  if (scenario === "MISMATCH") {
     return `${prefix}_mismatch_${base}`;
   }
   return `${prefix}_${base}`;

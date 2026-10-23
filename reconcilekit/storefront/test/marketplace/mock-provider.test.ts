@@ -73,6 +73,69 @@ test("airtime provider succeeds through the provider interface", async () => {
   assert.equal(result.sourceAttributes.scenario, "SUCCESS");
 });
 
+test("mock providers reject a missing scenario", async () => {
+  const provider: AirtimeProvider = new MockServiceProvider({
+    id: "mock_airtime_adapter",
+    providerId: "mock_vtu_provider",
+    providerName: "Mock VTU Provider",
+    serviceKinds: ["AIRTIME"],
+    referencePrefix: "air",
+  });
+  const missingScenario = { ...context("SUCCESS"), scenario: undefined };
+
+  await assert.rejects(
+    () =>
+      provider.execute(missingScenario, {
+        recipient: "08030000000",
+        network: "MTN",
+        productCode: "AIRTIME_1000",
+        amountMinor: 1_000_00,
+        currency: "NGN",
+      }),
+    /requires context\.scenario/,
+  );
+});
+
+test("mock service queryStatus replays the original scenario", async () => {
+  const provider: AirtimeProvider = new MockServiceProvider({
+    id: "mock_airtime_adapter",
+    providerId: "mock_vtu_provider",
+    providerName: "Mock VTU Provider",
+    serviceKinds: ["AIRTIME"],
+    referencePrefix: "air",
+  });
+
+  const result = await provider.queryStatus(context("SUCCESS"));
+
+  assert.equal(result.providerStatus, "PROVIDER_SUCCESS");
+  assert.equal(result.attemptStatus, "SUCCESS");
+  assert.equal(result.canonicalPaymentStatus, "SUCCESS");
+  assert.equal(result.scenario, "SUCCESS");
+  assert.equal(result.requestId, "req_demo_001");
+});
+
+test("mock gift card queryStatus replays the original scenario", async () => {
+  const provider: GiftCardProvider = new MockGiftCardProvider();
+
+  const result = await provider.queryStatus(context("SUCCESS"));
+
+  assert.equal(result.serviceKind, "GIFT_CARD");
+  assert.equal(result.providerStatus, "PROVIDER_SUCCESS");
+  assert.equal(result.attemptStatus, "SUCCESS");
+  assert.equal(result.scenario, "SUCCESS");
+});
+
+test("mock payment queryStatus replays the original scenario", async () => {
+  const provider: PaymentProvider = new MockPaymentProvider();
+
+  const result = await provider.queryStatus(context("SUCCESS"));
+
+  assert.equal(result.serviceKind, "WALLET_FUNDING");
+  assert.equal(result.providerStatus, "PROVIDER_SUCCESS");
+  assert.equal(result.attemptStatus, "SUCCESS");
+  assert.equal(result.scenario, "SUCCESS");
+});
+
 test("data provider failure keeps provider, marketplace, and canonical statuses distinct", async () => {
   const provider: DataProvider = new MockServiceProvider({
     id: "mock_data_adapter",

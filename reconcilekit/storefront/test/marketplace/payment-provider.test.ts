@@ -10,6 +10,7 @@ import type {
   PaymentProviderRequest,
   PaymentProviderResult,
   ProviderRequestContext,
+  ProviderResult,
 } from "../../src/marketplace/providers/contracts.ts";
 import { MockPaymentProvider } from "../../src/marketplace/providers/mock-provider.ts";
 import {
@@ -259,6 +260,9 @@ test("wallet layer depends on the PaymentProvider interface, not the concrete mo
           authorizationState: "AUTHORIZED",
           settlementState: "SETTLED",
         };
+      },
+      async queryStatus(): Promise<ProviderResult> {
+        throw new Error("queryStatus not implemented in this test fake");
       },
     };
 

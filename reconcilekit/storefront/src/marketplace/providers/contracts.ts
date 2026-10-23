@@ -35,7 +35,7 @@ export interface ProviderRequestContext {
   readonly customerReference: string;
   readonly idempotencyKey: string;
   readonly requestedAt: string;
-  readonly scenario: MockProviderScenario;
+  readonly scenario?: MockProviderScenario;
   readonly amountMinor: number;
   readonly currency: string;
   readonly metadata: SourceAttributes;
@@ -55,7 +55,7 @@ export interface ProviderResult {
   readonly providerId: string;
   readonly providerName: string;
   readonly serviceKind: MarketplaceServiceKind;
-  readonly scenario: MockProviderScenario;
+  readonly scenario?: MockProviderScenario;
   readonly providerReference: string | null;
   readonly requestId: string;
   readonly correlationId: string;
@@ -87,6 +87,7 @@ export interface ProviderAdapter<Request> {
     context: ProviderRequestContext,
     request: Request,
   ): Promise<ProviderResult>;
+  queryStatus(context: ProviderRequestContext): Promise<ProviderResult>;
 }
 
 export interface AmountRequest {
