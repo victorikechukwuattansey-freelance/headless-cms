@@ -24,6 +24,7 @@ import { demoDeps } from "./demo-deps.ts";
 import type {
   ExecuteTransactionInput,
   ExecuteTransactionResult,
+  MarketplaceTransactionDeps,
 } from "../../src/marketplace/transactions.ts";
 import type {
   MarketplaceOrder,
@@ -861,6 +862,76 @@ test("replay is idempotent: no second debit, no new events, no new writes", asyn
       (record) => record.id === first.transaction.id,
     );
     assert.equal(txRecords.length, 1);
+  });
+});
+
+test("airtime idempotency key includes purchase inputs and replay stays deduped", async (t) => {
+  await withRollback(prisma, async (tx) => {
+    await seedDemoCustomer(tx);
+    const repos = buildRepositories(tx);
+    const baseDeps = demoDeps(repos);
+    const keys: string[] = [];
+    const airtime = {
+      ...baseDeps.registry.airtime,
+      execute: async (
+        context: Parameters<typeof baseDeps.registry.airtime.execute>[0],
+        request: Parameters<typeof baseDeps.registry.airtime.execute>[1],
+      ) => {
+        keys.push(context.idempotencyKey);
+        return baseDeps.registry.airtime.execute(context, request);
+      },
+    };
+    const deps: MarketplaceTransactionDeps = {
+      ...baseDeps,
+      registry: {
+        ...baseDeps.registry,
+        airtime,
+        providerForServiceKind(kind) {
+          return kind === "AIRTIME"
+            ? airtime
+            : baseDeps.registry.providerForServiceKind(kind);
+        },
+      },
+    };
+
+    const first = await executeMarketplaceTransaction(
+      deps,
+      input({
+        inputs: {
+          network: "MTN",
+          recipient: "08030000000",
+          amount: "1000",
+        },
+      }),
+    );
+    const second = await executeMarketplaceTransaction(
+      deps,
+      input({
+        inputs: {
+          network: "MTN",
+          recipient: "08030000001",
+          amount: "1000",
+        },
+      }),
+    );
+    const replay = await executeMarketplaceTransaction(
+      deps,
+      input({
+        inputs: {
+          network: "MTN",
+          recipient: "08030000000",
+          amount: "1000",
+        },
+      }),
+    );
+
+    assert.equal(first.transaction.paymentStatus, "SUCCESS");
+    assert.equal(second.transaction.paymentStatus, "SUCCESS");
+    assert.notEqual(first.transaction.id, second.transaction.id);
+    assert.equal(keys.length, 2);
+    assert.notEqual(keys[0], keys[1]);
+    assert.equal(replay.replayed, true);
+    assert.equal(replay.transaction.id, first.transaction.id);
   });
 });
 

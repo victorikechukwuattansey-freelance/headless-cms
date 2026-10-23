@@ -835,6 +835,7 @@ async function runProvider(run: {
     providerId: provider.providerId,
     providerName: provider.providerName,
     scenario,
+    inputs: sourceInput.inputs,
     amountMinor: quote.expectedCheckoutMinor,
     currency: quote.currency,
     now,
@@ -969,6 +970,7 @@ async function runGiftCardFlow(run: {
     providerId: provider.providerId,
     providerName: provider.providerName,
     scenario,
+    inputs: sourceInput.inputs,
     amountMinor: quote.expectedCheckoutMinor,
     currency: quote.currency,
     now,
@@ -1179,6 +1181,7 @@ async function runTicketingFlow(run: {
     providerId: provider.providerId,
     providerName: provider.providerName,
     scenario,
+    inputs: sourceInput.inputs,
     amountMinor: quote.expectedCheckoutMinor,
     currency: quote.currency,
     now,
@@ -1198,6 +1201,7 @@ async function runTicketingFlow(run: {
     providerId: provider.providerId,
     providerName: provider.providerName,
     scenario,
+    inputs: sourceInput.inputs,
     amountMinor: availability?.amountMinor ?? quote.expectedCheckoutMinor,
     currency: availability?.currency ?? quote.currency,
     now,
@@ -1265,6 +1269,7 @@ async function runTicketingFlow(run: {
       providerId: provider.providerId,
       providerName: provider.providerName,
       scenario,
+      inputs: sourceInput.inputs,
       amountMinor: quote.expectedCheckoutMinor,
       currency: quote.currency,
       now,
@@ -1976,6 +1981,7 @@ export function buildServiceContext(input: {
   readonly providerId: string;
   readonly providerName: string;
   readonly scenario: MockProviderScenario;
+  readonly inputs: Readonly<Record<string, string>>;
   readonly amountMinor: number;
   readonly currency: string;
   readonly now: string;
@@ -1988,17 +1994,19 @@ export function buildServiceContext(input: {
     providerId,
     providerName,
     scenario,
+    inputs,
     amountMinor,
     currency,
     now,
     attemptNumber,
   } = input;
+  const inputsKey = buildInputsKey(inputs);
   const transactionRef = buildTransactionReference(
     buildMarketplaceSeed({
       customerId,
       serviceId: service.id,
       scenario,
-      inputsKey: "",
+      inputsKey,
     }),
   );
   return {
@@ -2011,7 +2019,7 @@ export function buildServiceContext(input: {
     correlationId: buildCorrelationId(transactionId),
     attemptNumber,
     customerReference: buildCustomerReference(customerId),
-    idempotencyKey: `idem_${buildStableSuffix(transactionRef)}_${attemptNumber}`,
+    idempotencyKey: `idem_${transactionRef}_${attemptNumber}`,
     requestedAt: now,
     scenario,
     amountMinor,
