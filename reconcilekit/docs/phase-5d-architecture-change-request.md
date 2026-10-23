@@ -145,16 +145,45 @@ independently.
 
 ### Change 1 — Idempotency key derivation fix
 
-**File:** `storefront/src/marketplace/transactions.ts:2001`
+**File:** `storefront/src/marketplace/transactions.ts` (via
+`buildServiceContext`); `storefront/src/marketplace/ticketing.ts`
+(caller updates)
 
-**Before:** `inputsKey: "",`
-**After:** `inputsKey,` (using the value already computed at line 451)
+**The bug (two layers):**
+
+Layer 1 — `buildServiceContext` rebuilt the transaction-identity
+seed with `inputsKey: ""` (transactions.ts:2001 originally), so the
+provider idempotency key was derived from
+`customerId + serviceId + scenario` only, not the purchase inputs.
+
+Layer 2 — even after threading inputs through, the `idem_` key
+derivation used `buildStableSuffix(transactionRef)`. That helper
+truncates to 24 characters, which cuts off the input-dependent
+digest at the tail of `transactionRef`. Two distinct purchases by
+the same customer for the same service produced identical
+`idem_` keys even after Layer 1 was fixed.
+
+**The fix (shipped at 4931aa9):**
+
+1. Thread `inputs` through `buildServiceContext`; derive `inputsKey`
+   from them (7 callers updated: 5 in transactions.ts, 2 in
+   ticketing.ts).
+2. Use full `transactionRef` in the idempotency key, not
+   `buildStableSuffix(transactionRef)`:
+   `idem_${transactionRef}_${attemptNumber}`.
 
 **Rationale:** The provider idempotency key must be unique per
-logical purchase. Including the actual inputs makes it so. This is a
-**bug fix**, not an architectural change: it restores the invariant
-that each transaction has a unique identity, which the current code
-violates.
+logical purchase. Including purchase inputs in the derivation makes
+it so. This is a **bug fix**, not an architectural change: it
+restores the invariant that each transaction has a unique identity,
+which the current code violates.
+
+**Test boundary:** The test observes `context.idempotencyKey` at the
+provider boundary. Do NOT assert against `ProviderAttempt.
+requestReference` — that field stores the outbound `requestId`, not
+the idempotency key. The distinction matters for §Step 5 Change 5
+below, where callback routing uses `requestReference` (VTPass's
+request_id), not the idempotency key.
 
 **Status per owner ruling 1.a:** Bug fix, lands alongside §14
 changes but does not itself require §14 approval.
@@ -307,6 +336,17 @@ Recorded rulings:
   No parallel-type alternative.
 - **1.c** — VTPass callbacks for wallet-paid fulfillment bypass
   `payment_events`. That table is payment-source evidence.
+
+**Delta at implementation (5D.1, 4931aa9):** Change 1's fix was
+larger than the original text described. Both `inputsKey: ""` and
+`buildStableSuffix(transactionRef)` had to be fixed. The
+`buildStableSuffix` truncation (24 chars) cut off the input-dependent
+digest, so threading inputs alone wasn't sufficient. The approved
+intent (restore idempotency uniqueness) is unchanged; the
+implementation added the second fix in service of that intent. The
+test boundary also shifted from `requestReference` to
+`context.idempotencyKey` for correctness. No re-approval required —
+this addendum documents the delta.
 
 Additional approval notes:
 
