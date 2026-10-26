@@ -174,7 +174,7 @@ export interface TicketAvailability {
   readonly availableSeats: readonly string[];
   readonly amountMinor: number;
   readonly currency: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface TicketReservationRequest extends AmountRequest {

@@ -121,7 +121,7 @@ export interface TransactionReconciliationFacts {
       "NONE" | "INITIATED" | "PENDING" | "COMPLETED" | "FAILED_REVIEW";
   };
   readonly flags: readonly ReconciliationCode[];
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface ExecuteTransactionResult {

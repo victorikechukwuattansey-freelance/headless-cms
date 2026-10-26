@@ -85,6 +85,7 @@ interface MarketplacePaymentRow {
   readonly paidAt: Date | null;
   readonly metadata: Prisma.JsonValue;
   readonly recordedAt: Date;
+  readonly simulated: boolean;
 }
 
 function toPrismaPayment(
@@ -124,6 +125,6 @@ function fromPrismaPayment(
     paidAt: row.paidAt === null ? null : row.paidAt.toISOString(),
     metadata: row.metadata as unknown as SourceAttributes,
     recordedAt: row.recordedAt.toISOString(),
-    simulated: true,
+    simulated: row.simulated,
   };
 }

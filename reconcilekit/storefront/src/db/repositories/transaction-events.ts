@@ -61,6 +61,7 @@ interface TransactionEventRow {
   readonly actor: string;
   readonly source: string;
   readonly metadata: Prisma.JsonValue;
+  readonly simulated: boolean;
 }
 
 function toPrismaEvent(
@@ -90,6 +91,6 @@ function fromPrismaEvent(row: TransactionEventRow): TransactionEvent {
     actor: row.actor as TransactionEventActor,
     source: row.source as TransactionEventSource,
     metadata: row.metadata as TransactionEvent["metadata"],
-    simulated: true,
+    simulated: row.simulated,
   };
 }

@@ -179,7 +179,7 @@ export interface MarketplaceCategory {
   readonly description: string;
   readonly complianceStatus: ComplianceStatus;
   readonly displayOrder: number;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface MarketplaceService {
@@ -195,7 +195,7 @@ export interface MarketplaceService {
   readonly fulfillmentType: FulfillmentType;
   readonly availability: AvailabilityStatus;
   readonly inputSchema: readonly ServiceInputDescriptor[];
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface ServiceInputDescriptor {
@@ -247,7 +247,7 @@ export interface CatalogProduct {
   readonly pricing: ProductPricing;
   readonly availability: AvailabilityStatus;
   readonly attributes: Readonly<Record<string, string>>;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface MarketAvailabilityResult {
@@ -258,7 +258,7 @@ export interface MarketAvailabilityResult {
   readonly capacityRemaining: number | null;
   readonly priceMinor: number | null;
   readonly message: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface MarketplaceCatalog {
@@ -268,7 +268,7 @@ export interface MarketplaceCatalog {
   readonly categories: readonly MarketplaceCategory[];
   readonly services: readonly MarketplaceService[];
   readonly products: readonly CatalogProduct[];
-  readonly simulated: true;
+  readonly simulated: boolean;
   readonly createdAt: string;
 }
 
@@ -276,7 +276,7 @@ export interface MarketplaceProvider {
   readonly id: string;
   readonly name: string;
   readonly serviceKinds: readonly MarketplaceServiceKind[];
-  readonly simulated: true;
+  readonly simulated: boolean;
   readonly createdAt: string;
 }
 
@@ -286,7 +286,7 @@ export interface MarketplaceWallet {
   readonly currency: string;
   readonly openingBalanceMinor: number;
   readonly status: WalletStatus;
-  readonly simulated: true;
+  readonly simulated: boolean;
   readonly createdAt: string;
 }
 
@@ -301,7 +301,7 @@ export interface WalletLedgerEntry {
   readonly reference: string;
   readonly occurredAt: string;
   readonly metadata: SourceAttributes;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface MarketplaceOrder {
@@ -315,7 +315,7 @@ export interface MarketplaceOrder {
   readonly status: MarketplaceOrderStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface MarketplacePaymentRecord {
@@ -332,7 +332,7 @@ export interface MarketplacePaymentRecord {
   readonly paidAt: string | null;
   readonly metadata: SourceAttributes;
   readonly recordedAt: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface MarketplaceTransaction {
@@ -349,7 +349,7 @@ export interface MarketplaceTransaction {
   readonly resolutionStatus: ResolutionStatus;
   readonly customerStatus: CustomerTransactionStatus;
   readonly adminStatus: AdminTransactionStatus;
-  readonly simulated: true;
+  readonly simulated: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly demoScenarioName?: string;
@@ -370,7 +370,7 @@ export interface ProviderAttempt {
   readonly latencyMs: number;
   readonly sourceAttributes: SourceAttributes;
   readonly attemptedAt: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface TransactionEvent {
@@ -383,7 +383,7 @@ export interface TransactionEvent {
   readonly actor: TransactionEventActor;
   readonly source: TransactionEventSource;
   readonly metadata: SourceAttributes;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface ReconciliationSnapshot {
@@ -409,7 +409,7 @@ export interface EvidencePack {
   readonly resolutionStatus: ResolutionStatus;
   readonly auditEventIds: readonly string[];
   readonly createdAt: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface ReceiptRecord {
@@ -419,7 +419,7 @@ export interface ReceiptRecord {
   readonly amountMinor: number;
   readonly currency: string;
   readonly issuedAt: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface RefundRecord {
@@ -432,7 +432,7 @@ export interface RefundRecord {
   readonly initiatedAt: string;
   readonly completedAt: string | null;
   readonly ledgerReference: string | null;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface ReversalRecord {
@@ -445,7 +445,7 @@ export interface ReversalRecord {
   readonly initiatedAt: string;
   readonly completedAt: string | null;
   readonly ledgerReference: string | null;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface DisputeRecord {
@@ -458,7 +458,7 @@ export interface DisputeRecord {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly resolutionNote: string | null;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface TicketArtifact {
@@ -475,7 +475,7 @@ export interface TicketArtifact {
   readonly issuedAt: string | null;
   readonly cancellationReference: string | null;
   readonly cancelledAt: string | null;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface GiftCardArtifact {
@@ -490,7 +490,7 @@ export interface GiftCardArtifact {
   readonly redemptionStatus: GiftCardRedemptionStatus;
   readonly maskedCodePreview: string | null;
   readonly riskFlags: readonly string[];
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 /**
@@ -534,7 +534,7 @@ export interface ManualReviewRecord {
   readonly createdAt: string;
   readonly resolvedAt: string | null;
   readonly operatorNote: string | null;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface NotificationRecord {
@@ -545,7 +545,7 @@ export interface NotificationRecord {
   readonly body: string;
   readonly status: NotificationStatus;
   readonly createdAt: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface FxTransparency {
@@ -560,7 +560,7 @@ export interface FxTransparency {
   readonly finalDebitMinor: number;
   readonly settlementStatus: CanonicalPaymentStatus;
   readonly discrepancyStatus: Outcome | null;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface UserRecord {
@@ -570,7 +570,7 @@ export interface UserRecord {
   readonly display_name: string;
   readonly created_at: string;
   readonly updated_at: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface SessionRecord {
@@ -580,14 +580,14 @@ export interface SessionRecord {
   readonly created_at: string;
   readonly expires_at: string;
   readonly revoked_at: string | null;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface OrganizationRecord {
   readonly id: string;
   readonly name: string;
   readonly created_at: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export type MembershipRole = "OWNER" | "OPERATOR" | "VIEWER";
@@ -598,5 +598,5 @@ export interface MembershipRecord {
   readonly org_id: string;
   readonly role: MembershipRole;
   readonly created_at: string;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }

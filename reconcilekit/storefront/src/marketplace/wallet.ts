@@ -268,7 +268,7 @@ export interface WalletPaymentEvidence {
   readonly metadata: SourceAttributes;
   readonly ticket?: TicketEvidenceFacet;
   readonly giftCard?: GiftCardEvidenceFacet;
-  readonly simulated: true;
+  readonly simulated: boolean;
 }
 
 export interface CreateWalletInput {

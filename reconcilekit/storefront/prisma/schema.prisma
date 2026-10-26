@@ -106,12 +106,12 @@ model MarketplaceCustomer {
   isDemo    Boolean  @map("is_demo")
   createdAt DateTime @map("created_at") @db.Timestamptz(6)
 
-  org           Organization             @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  orders        MarketplaceOrder[]
-  transactions  MarketplaceTransaction[]
-  wallets       Wallet[]
-  disputes      Dispute[]
-  notifications Notification[]
+  org                 Organization             @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  orders              MarketplaceOrder[]
+  transactions        MarketplaceTransaction[]
+  wallets             Wallet[]
+  disputes            Dispute[]
+  notifications       Notification[]
   marketplacePayments MarketplacePayment[]
 
   @@index([orgId])
@@ -123,12 +123,12 @@ model MarketplaceOrder {
   customerId        String   @map("customer_id")
   serviceId         String   @map("service_id")
   inputs            Json
-  quotedAmountMinor Int      @map("quoted_amount_minor")   // was: amountMinor @map("amount_minor")
+  quotedAmountMinor Int      @map("quoted_amount_minor") // was: amountMinor @map("amount_minor")
   currency          String
-  customerReference String   @map("customer_reference")    // added
+  customerReference String   @map("customer_reference") // added
   status            String
   createdAt         DateTime @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime @map("updated_at") @db.Timestamptz(6)  // added
+  updatedAt         DateTime @map("updated_at") @db.Timestamptz(6) // added
 
   customer     MarketplaceCustomer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   transactions MarketplaceTransaction[]
@@ -142,8 +142,8 @@ model MarketplaceTransaction {
   orderId           String   @map("order_id")
   customerId        String   @map("customer_id")
   reference         String   @unique
-  serviceId   String @map("service_id")
-  providerId  String @map("provider_id")
+  serviceId         String   @map("service_id")
+  providerId        String   @map("provider_id")
   scenario          String
   paymentStatus     String   @map("payment_status")
   fulfillmentStatus String   @map("fulfillment_status")
@@ -154,20 +154,21 @@ model MarketplaceTransaction {
   demoScenarioName  String?  @map("demo_scenario_name")
   createdAt         DateTime @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime @map("updated_at") @db.Timestamptz(6)
+  simulated         Boolean  @default(true)
 
-  order            MarketplaceOrder             @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  customer         MarketplaceCustomer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  providerAttempts MarketplaceProviderAttempt[]
-  events           TransactionEvent[]
-  evidencePack     EvidencePack?
-  receipts         Receipt[]
-  refunds          Refund[]
-  reversals        Reversal[]
-  disputes         Dispute[]
-  manualReviews    ManualReview[]
-  tickets          TicketArtifact[]
-  giftCards        GiftCardArtifact[]
-  notifications    Notification[]
+  order               MarketplaceOrder             @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  customer            MarketplaceCustomer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  providerAttempts    MarketplaceProviderAttempt[]
+  events              TransactionEvent[]
+  evidencePack        EvidencePack?
+  receipts            Receipt[]
+  refunds             Refund[]
+  reversals           Reversal[]
+  disputes            Dispute[]
+  manualReviews       ManualReview[]
+  tickets             TicketArtifact[]
+  giftCards           GiftCardArtifact[]
+  notifications       Notification[]
   marketplacePayments MarketplacePayment[]
 
   @@index([customerId])
@@ -191,6 +192,7 @@ model MarketplaceProviderAttempt {
   latencyMs         Int      @map("latency_ms")
   sourceAttributes  Json     @map("source_attributes")
   attemptedAt       DateTime @map("attempted_at") @db.Timestamptz(6)
+  simulated         Boolean  @default(true)
 
   transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
 
@@ -212,6 +214,7 @@ model MarketplacePayment {
   paidAt              DateTime? @map("paid_at") @db.Timestamptz(6)
   metadata            Json
   recordedAt          DateTime  @map("recorded_at") @db.Timestamptz(6)
+  simulated           Boolean   @default(true)
 
   transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
   customer    MarketplaceCustomer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -297,6 +300,7 @@ model TransactionEvent {
   actor         String
   source        String
   metadata      Json
+  simulated     Boolean  @default(true)
 
   transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
 
@@ -600,7 +604,7 @@ model Payment {
   businessId        String    @map("business_id")
   expectedAmount    Int       @map("expected_amount")
   currency          String
-  paystackReference String   @map("paystack_reference")
+  paystackReference String    @map("paystack_reference")
   status            String
   paidAt            DateTime? @map("paid_at") @db.Timestamptz(6)
   refundStatus      String    @map("refund_status")

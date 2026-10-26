@@ -73,6 +73,7 @@ interface MarketplaceTransactionRow {
   readonly demoScenarioName: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly simulated: boolean;
 }
 
 function toPrismaTransaction(
@@ -115,7 +116,7 @@ function fromPrismaTransaction(
     resolutionStatus: row.resolutionStatus as ResolutionStatus,
     customerStatus: row.customerStatus as CustomerTransactionStatus,
     adminStatus: row.adminStatus as AdminTransactionStatus,
-    simulated: true,
+    simulated: row.simulated,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

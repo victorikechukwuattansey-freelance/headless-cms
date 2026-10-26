@@ -185,7 +185,7 @@ export interface TransactionDetailViewModel {
   readonly can: CanAct;
   readonly facts: TransactionReconciliationFacts | null;
   readonly ledger: readonly WalletLedgerEntry[];
-  readonly isSimulated: true;
+  readonly isSimulated: boolean;
 }
 
 export interface EvidenceViewModel {

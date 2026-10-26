@@ -83,6 +83,7 @@ interface MarketplaceProviderAttemptRow {
   readonly latencyMs: number;
   readonly sourceAttributes: Prisma.JsonValue;
   readonly attemptedAt: Date;
+  readonly simulated: boolean;
 }
 
 function toPrismaAttempt(
@@ -125,6 +126,6 @@ function fromPrismaAttempt(
     latencyMs: row.latencyMs,
     sourceAttributes: row.sourceAttributes as unknown as SourceAttributes,
     attemptedAt: row.attemptedAt.toISOString(),
-    simulated: true,
+    simulated: row.simulated,
   };
 }
