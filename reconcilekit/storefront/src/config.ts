@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import type { ProviderMode } from "./marketplace/providers/contracts.ts";
 
 export interface StorefrontConfig {
   readonly port: number;
@@ -10,6 +11,7 @@ export interface StorefrontConfig {
   readonly sessionCookieName: string;
   readonly sessionTtlHours: number;
   readonly cookieSecure: boolean;
+  readonly providerMode: ProviderMode;
 }
 
 export class StorefrontConfigError extends Error {
@@ -24,6 +26,7 @@ export const DEFAULT_SESSION_TTL_HOURS = 72;
 export const DEFAULT_PORT = 8787;
 export const DEFAULT_PAYSTACK_BASE_URL = "https://api.paystack.co";
 export const DEFAULT_DATA_DIR = join(import.meta.dirname, "..", "data");
+export const DEFAULT_PROVIDER_MODE: ProviderMode = "MOCK";
 
 export function loadConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
@@ -113,6 +116,22 @@ export function loadConfig(
   const secureRaw = env.STOREFRONT_COOKIE_SECURE?.trim().toLowerCase();
   const cookieSecure =
     secureRaw === "1" || secureRaw === "true" || secureRaw === "yes";
+
+  const providerModeRaw = env.STOREFRONT_PROVIDER_MODE?.trim().toUpperCase();
+  let providerMode: ProviderMode;
+  if (providerModeRaw === "REAL") {
+    providerMode = "REAL";
+  } else if (
+    providerModeRaw === undefined ||
+    providerModeRaw === "" ||
+    providerModeRaw === "MOCK"
+  ) {
+    providerMode = DEFAULT_PROVIDER_MODE;
+  } else {
+    throw new StorefrontConfigError(
+      `STOREFRONT_PROVIDER_MODE must be "MOCK" or "REAL", received ${JSON.stringify(env.STOREFRONT_PROVIDER_MODE)}`,
+    );
+  }
   return {
     port,
     dataDir,
@@ -124,5 +143,6 @@ export function loadConfig(
     sessionCookieName,
     sessionTtlHours,
     cookieSecure,
+    providerMode,
   };
 }

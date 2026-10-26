@@ -7,7 +7,7 @@ import { createStorefrontServer } from "./server.ts";
 import type { PaystackGateway } from "./paystack/gateway.ts";
 import { initializeTransaction, verifyTransaction } from "./paystack/client.ts";
 import type { MarketplaceTransactionDeps } from "./marketplace/transactions.ts";
-import { createMockProviderRegistry } from "./marketplace/providers/registry.ts";
+import { createProviderRegistry } from "./marketplace/providers/registry.ts";
 import { buildDemoCatalog } from "./marketplace/catalog.ts";
 import { seedDemoData } from "./marketplace/seed.ts";
 import { seedDemoUser } from "./auth/identity.ts";
@@ -41,7 +41,7 @@ const repos = buildRepositories(getPrismaClient());
 
 const marketplaceDeps: MarketplaceTransactionDeps = {
   repos,
-  registry: createMockProviderRegistry(),
+  registry: createProviderRegistry(config.providerMode),
   catalog: buildDemoCatalog(),
 };
 

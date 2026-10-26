@@ -17,6 +17,7 @@ import type {
   GiftCardProvider,
   InternetProvider,
   InternetProviderRequest,
+  ProviderMode,
   PaymentProvider,
 } from "./contracts.ts";
 import {
@@ -183,4 +184,23 @@ export function createMockProviderRegistry(): MarketplaceProviderRegistry {
       }
     },
   };
+}
+
+export function createProviderRegistry(
+  mode: ProviderMode,
+): MarketplaceProviderRegistry {
+  switch (mode) {
+    case "MOCK":
+      return createMockProviderRegistry();
+    case "REAL":
+      throw new Error(
+        "REAL provider mode not yet implemented; VTPass adapter lands in 5D.5",
+      );
+    default: {
+      const exhaustive: never = mode;
+      throw new Error(
+        `unreachable: unknown provider mode ${JSON.stringify(exhaustive)}`,
+      );
+    }
+  }
 }
