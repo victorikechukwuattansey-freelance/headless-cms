@@ -50,6 +50,16 @@ export class MarketplaceProviderAttemptRepository {
     return rows.map(fromPrismaAttempt);
   }
 
+  async findByProviderRequestId(
+    requestId: string,
+  ): Promise<ProviderAttempt | null> {
+    const row = await this.client.marketplaceProviderAttempt.findFirst({
+      where: { requestReference: requestId },
+      orderBy: [{ attemptedAt: "desc" }, { id: "desc" }],
+    });
+    return row === null ? null : fromPrismaAttempt(row);
+  }
+
   async list(): Promise<ProviderAttempt[]> {
     const rows = await this.client.marketplaceProviderAttempt.findMany({
       orderBy: [{ attemptedAt: "asc" }, { id: "asc" }],

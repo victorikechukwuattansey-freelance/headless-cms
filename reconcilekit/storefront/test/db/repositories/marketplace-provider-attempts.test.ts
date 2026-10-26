@@ -126,3 +126,70 @@ test("marketplaceProviderAttempts: listByTransaction isolates and orders attempt
     assert.equal(b[0].transactionId, "txn_b");
   });
 });
+
+test("marketplaceProviderAttempts: findByProviderRequestId resolves a known requestReference", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    await seedChain(tx, "txn_test_1");
+    const record = sampleAttempt();
+    await repos.marketplaceProviderAttempts.insert(record);
+
+    const found =
+      await repos.marketplaceProviderAttempts.findByProviderRequestId(
+        record.requestReference,
+      );
+
+    assert.notEqual(found, null);
+    assert.equal(found!.id, record.id);
+    assert.equal(found!.requestReference, record.requestReference);
+    assert.equal(found!.transactionId, record.transactionId);
+    assert.equal(found!.simulated, true);
+  });
+});
+
+test("marketplaceProviderAttempts: findByProviderRequestId returns null for an unknown requestReference", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const found =
+      await repos.marketplaceProviderAttempts.findByProviderRequestId(
+        "req_does_not_exist",
+      );
+    assert.equal(found, null);
+  });
+});
+
+test("marketplaceProviderAttempts: findByProviderRequestId isolates distinct requestReferences", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    await seedChain(tx, "txn_test_1");
+    await seedChain(tx, "txn_test_2");
+
+    await repos.marketplaceProviderAttempts.insert(
+      sampleAttempt({
+        id: "att_txn_test_1_1",
+        transactionId: "txn_test_1",
+        requestReference: "req_iso_a",
+      }),
+    );
+    await repos.marketplaceProviderAttempts.insert(
+      sampleAttempt({
+        id: "att_txn_test_2_1",
+        transactionId: "txn_test_2",
+        requestReference: "req_iso_b",
+      }),
+    );
+
+    const foundA =
+      await repos.marketplaceProviderAttempts.findByProviderRequestId(
+        "req_iso_a",
+      );
+    const foundB =
+      await repos.marketplaceProviderAttempts.findByProviderRequestId(
+        "req_iso_b",
+      );
+
+    assert.equal(foundA!.id, "att_txn_test_1_1");
+    assert.equal(foundB!.id, "att_txn_test_2_1");
+    assert.notEqual(foundA!.id, foundB!.id);
+  });
+});
