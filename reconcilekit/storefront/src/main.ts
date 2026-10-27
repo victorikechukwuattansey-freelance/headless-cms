@@ -8,6 +8,7 @@ import type { PaystackGateway } from "./paystack/gateway.ts";
 import { initializeTransaction, verifyTransaction } from "./paystack/client.ts";
 import type { MarketplaceTransactionDeps } from "./marketplace/transactions.ts";
 import { createProviderRegistry } from "./marketplace/providers/registry.ts";
+import { VtpassClient } from "./vtpass/client.ts";
 import { buildDemoCatalog } from "./marketplace/catalog.ts";
 import { seedDemoData } from "./marketplace/seed.ts";
 import { seedDemoUser } from "./auth/identity.ts";
@@ -39,9 +40,18 @@ const config = loadConfig();
 
 const repos = buildRepositories(getPrismaClient());
 
+const vtpassClient =
+  config.vtpassApiKey !== null && config.vtpassSecretKey !== null
+    ? new VtpassClient({
+        apiKey: config.vtpassApiKey,
+        secretKey: config.vtpassSecretKey,
+        baseUrl: config.vtpassBaseUrl,
+      })
+    : undefined;
+
 const marketplaceDeps: MarketplaceTransactionDeps = {
   repos,
-  registry: createProviderRegistry(config.providerMode),
+  registry: createProviderRegistry(config.providerMode, vtpassClient),
   catalog: buildDemoCatalog(),
 };
 

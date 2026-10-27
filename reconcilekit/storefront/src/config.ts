@@ -12,6 +12,9 @@ export interface StorefrontConfig {
   readonly sessionTtlHours: number;
   readonly cookieSecure: boolean;
   readonly providerMode: ProviderMode;
+  readonly vtpassApiKey: string | null;
+  readonly vtpassSecretKey: string | null;
+  readonly vtpassBaseUrl: string;
 }
 
 export class StorefrontConfigError extends Error {
@@ -27,6 +30,7 @@ export const DEFAULT_PORT = 8787;
 export const DEFAULT_PAYSTACK_BASE_URL = "https://api.paystack.co";
 export const DEFAULT_DATA_DIR = join(import.meta.dirname, "..", "data");
 export const DEFAULT_PROVIDER_MODE: ProviderMode = "MOCK";
+export const DEFAULT_VTPASS_BASE_URL = "https://sandbox.vtpass.com/api";
 
 export function loadConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
@@ -132,6 +136,37 @@ export function loadConfig(
       `STOREFRONT_PROVIDER_MODE must be "MOCK" or "REAL", received ${JSON.stringify(env.STOREFRONT_PROVIDER_MODE)}`,
     );
   }
+  const vtpassApiKeyRaw = env.STOREFRONT_VTPASS_API_KEY?.trim();
+  const vtpassSecretKeyRaw = env.STOREFRONT_VTPASS_SECRET_KEY?.trim();
+  const hasVtpassApiKey =
+    vtpassApiKeyRaw !== undefined && vtpassApiKeyRaw !== "";
+  const hasVtpassSecretKey =
+    vtpassSecretKeyRaw !== undefined && vtpassSecretKeyRaw !== "";
+  if (hasVtpassApiKey !== hasVtpassSecretKey) {
+    throw new StorefrontConfigError(
+      "STOREFRONT_VTPASS_API_KEY and STOREFRONT_VTPASS_SECRET_KEY must both be set or both be absent",
+    );
+  }
+  const vtpassApiKey = hasVtpassApiKey ? vtpassApiKeyRaw : null;
+  const vtpassSecretKey = hasVtpassSecretKey ? vtpassSecretKeyRaw : null;
+
+  let vtpassBaseUrl = env.STOREFRONT_VTPASS_BASE_URL ?? DEFAULT_VTPASS_BASE_URL;
+  if (typeof vtpassBaseUrl !== "string" || vtpassBaseUrl.trim() === "") {
+    vtpassBaseUrl = DEFAULT_VTPASS_BASE_URL;
+  }
+  let parsedVtpassUrl: URL;
+  try {
+    parsedVtpassUrl = new URL(vtpassBaseUrl);
+  } catch {
+    throw new StorefrontConfigError(
+      "STOREFRONT_VTPASS_BASE_URL must be a valid absolute URL",
+    );
+  }
+  if (parsedVtpassUrl.protocol !== "https:") {
+    throw new StorefrontConfigError(
+      "STOREFRONT_VTPASS_BASE_URL must use HTTPS",
+    );
+  }
   return {
     port,
     dataDir,
@@ -144,5 +179,8 @@ export function loadConfig(
     sessionTtlHours,
     cookieSecure,
     providerMode,
+    vtpassApiKey,
+    vtpassSecretKey,
+    vtpassBaseUrl: parsedVtpassUrl.href.replace(/\/$/, ""),
   };
 }

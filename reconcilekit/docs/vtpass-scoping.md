@@ -414,7 +414,7 @@ Documented VTPass response codes and their `ProviderResult` mapping:
 | `000` + `status=initiated` / `pending`          | Pending                      | `PROVIDER_PENDING`   | `PENDING`           |
 | `099`                                           | Processing                   | `PROVIDER_PENDING`   | `PENDING`           |
 | `016`                                           | Failed                       | `PROVIDER_FAILED`    | `FAILED`            |
-| `040`                                           | Reversed                     | `PROVIDER_REVERSED`  | `REVERSED`          |
+| `040`                                           | Reversed                     | `PROVIDER_REVERSED`  | `FAILED`            |
 | `014`                                           | Duplicate request ID         | `PROVIDER_DUPLICATE` | `DUPLICATE`         |
 | `019`                                           | Likely duplicate             | `PROVIDER_DUPLICATE` | `DUPLICATE`         |
 | `015`                                           | Invalid request ID (requery) | `PROVIDER_UNKNOWN`   | `UNKNOWN`           |

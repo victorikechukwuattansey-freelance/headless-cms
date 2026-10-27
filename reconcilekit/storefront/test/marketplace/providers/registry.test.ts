@@ -4,6 +4,7 @@ import {
   createMockProviderRegistry,
   createProviderRegistry,
 } from "../../../src/marketplace/providers/registry.ts";
+import { VtpassClient } from "../../../src/vtpass/client.ts";
 
 test("registry: MOCK mode returns a fully populated provider registry", () => {
   const registry = createProviderRegistry("MOCK");
@@ -19,11 +20,33 @@ test("registry: MOCK mode returns a fully populated provider registry", () => {
   );
 });
 
-test("registry: REAL mode throws with a deferral message", () => {
+test("registry: REAL mode without VtpassClient throws credentials error", () => {
   assert.throws(
     () => createProviderRegistry("REAL"),
-    /REAL provider mode not yet implemented/,
+    /REAL provider mode requires VTPass credentials/,
   );
+});
+
+test("registry: REAL mode with VtpassClient returns VTPass registry", () => {
+  const stubFetch = (async () =>
+    new Response(
+      JSON.stringify({
+        code: "000",
+        content: { transactions: { status: "delivered" } },
+        response_description: "ok",
+        requestId: "r1",
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    )) as unknown as typeof fetch;
+  const client = new VtpassClient({
+    apiKey: "k",
+    secretKey: "s",
+    fetchImpl: stubFetch,
+  });
+  const registry = createProviderRegistry("REAL", client);
+  assert.equal(registry.providerForServiceKind("AIRTIME").providerId, "vtpass");
+  assert.equal(registry.providerForServiceKind("DATA").providerId, "vtpass");
+  assert.throws(() => registry.providerForServiceKind("BETTING"));
 });
 
 test("registry: createMockProviderRegistry remains a working alias for MOCK", () => {

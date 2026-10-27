@@ -26,6 +26,8 @@ import {
   MockPaymentProvider,
   MockTicketingProvider,
 } from "./mock-provider.ts";
+import type { VtpassClient } from "../../vtpass/client.ts";
+import { createVtpassProviderRegistry } from "../../vtpass/vtpass-registry.ts";
 
 export interface MarketplaceProviderRegistry {
   readonly airtime: AirtimeProvider;
@@ -188,14 +190,18 @@ export function createMockProviderRegistry(): MarketplaceProviderRegistry {
 
 export function createProviderRegistry(
   mode: ProviderMode,
+  vtpassClient?: VtpassClient,
 ): MarketplaceProviderRegistry {
   switch (mode) {
     case "MOCK":
       return createMockProviderRegistry();
     case "REAL":
-      throw new Error(
-        "REAL provider mode not yet implemented; VTPass adapter lands in 5D.5",
-      );
+      if (vtpassClient === undefined) {
+        throw new Error(
+          "REAL provider mode requires VTPass credentials; set STOREFRONT_VTPASS_API_KEY and STOREFRONT_VTPASS_SECRET_KEY",
+        );
+      }
+      return createVtpassProviderRegistry(vtpassClient);
     default: {
       const exhaustive: never = mode;
       throw new Error(
