@@ -168,14 +168,18 @@ export function createStorefrontServer(
   }
 
   const vtpassWebhook: VtpassWebhookHandler | null =
-    deps.marketplace !== undefined
+    config.providerMode === "REAL" && deps.marketplace !== undefined
       ? createVtpassWebhookHandler({
           repos: deps.repos,
           catalog: deps.marketplace.catalog,
         })
       : null;
 
-  if (vtpassWebhook !== null) {
+  if (
+    vtpassWebhook !== null &&
+    process.env["NODE_ENV"] !== "test" &&
+    process.env["NODE_TEST_CONTEXT"] === undefined
+  ) {
     console.log("POST /webhook/vtpass is registered");
   }
 

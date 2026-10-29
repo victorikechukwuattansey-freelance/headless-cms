@@ -94,15 +94,18 @@ export function createVtpassProviderRegistry(
     ["AIRLINE_TICKET"],
   ) as unknown as AirlineProvider;
   const payment = new MockPaymentProvider();
+  const internet = unsupported<unknown>(
+    "vtpass_internet_unsupported",
+    "INTERNET",
+    ["INTERNET"],
+  ) as unknown as import("../marketplace/providers/contracts.ts").InternetProvider;
 
   return {
     airtime,
     data,
     electricity,
     cable,
-    internet: unsupported<unknown>("vtpass_internet_unsupported", "INTERNET", [
-      "INTERNET",
-    ]) as unknown as import("../marketplace/providers/contracts.ts").InternetProvider,
+    internet,
     education,
     giftCards,
     cinema,
@@ -121,7 +124,7 @@ export function createVtpassProviderRegistry(
         case "CABLE_TV":
           return cable;
         case "INTERNET":
-          return this.internet;
+          return internet;
         case "EDUCATION":
           return education;
         case "GIFT_CARD":

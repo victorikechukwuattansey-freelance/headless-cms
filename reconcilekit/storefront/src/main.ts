@@ -69,6 +69,7 @@ server.listen(config.port, () => {
   console.log(
     `reconcilekit-storefront listening on http://localhost:${config.port}`,
   );
+  console.log(`provider mode: ${config.providerMode}`);
   console.log(`data directory: ${config.dataDir}`);
   console.log(`callback base url: ${config.callbackBaseUrl}`);
   if (config.seedDemo) {

@@ -90,6 +90,8 @@ Adding assertions that `false` is produced in real-mode is a 5D.4 concern, not 5
 
 ### 5D.2.5b — wallet.ts §14 notification (contingent)
 
+**Status (5D.2.5a close):** 5D.2.5b dissolved — owner ruling #1 confirmed type-only widen acceptable within 5D.2.5a. Not a separate increment.
+
 Only if owner rules that any edit to a frozen file requires §14. Widening `wallet.ts:271` from `true` to `boolean` — zero behavior change. This could ship as part of 5D.2.5a with a one-line owner acknowledgment, or as a separate commit if the owner requires formal reopen.
 
 ### 5D.2.5c — Write-site pass-through (blocked on 5D.4)
