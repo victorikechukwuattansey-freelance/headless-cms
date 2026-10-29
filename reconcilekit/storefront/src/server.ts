@@ -20,6 +20,10 @@ import {
   PAYSTACK_WEBHOOK_ADAPTER_OPTIONS,
   type PaystackWebhookHandler,
 } from "./application/paystack-webhook.ts";
+import {
+  createVtpassWebhookHandler,
+  type VtpassWebhookHandler,
+} from "./application/vtpass-webhook.ts";
 import type { CanonicalPaymentStatus } from "../../src/domain/model.ts";
 import { reconcileRecords } from "../../src/application/reconcile-records.ts";
 import {
@@ -163,17 +167,34 @@ export function createStorefrontServer(
     console.log("POST /webhook/paystack is registered");
   }
 
+  const vtpassWebhook: VtpassWebhookHandler | null =
+    deps.marketplace !== undefined
+      ? createVtpassWebhookHandler({
+          repos: deps.repos,
+          catalog: deps.marketplace.catalog,
+        })
+      : null;
+
+  if (vtpassWebhook !== null) {
+    console.log("POST /webhook/vtpass is registered");
+  }
+
   return createHttpServer((req, res) => {
-    void handleRequest(req, res, config, deps, paystackWebhook).catch(
-      (error) => {
-        writeJson(res, 500, {
-          error: {
-            code: "INTERNAL_ERROR",
-            message: "unexpected internal failure",
-          },
-        });
-      },
-    );
+    void handleRequest(
+      req,
+      res,
+      config,
+      deps,
+      paystackWebhook,
+      vtpassWebhook,
+    ).catch((error) => {
+      writeJson(res, 500, {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "unexpected internal failure",
+        },
+      });
+    });
   });
 }
 
@@ -183,6 +204,7 @@ async function handleRequest(
   config: StorefrontConfig,
   deps: ServerDependencies,
   paystackWebhook: PaystackWebhookHandler | null,
+  vtpassWebhook: VtpassWebhookHandler | null,
 ): Promise<void> {
   try {
     const url = new URL(req.url ?? "/", "http://storefront.local");
@@ -193,6 +215,15 @@ async function handleRequest(
       paystackWebhook !== null
     ) {
       await paystackWebhook(req, res);
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      url.pathname === "/webhook/vtpass" &&
+      vtpassWebhook !== null
+    ) {
+      await vtpassWebhook(req, res);
       return;
     }
 

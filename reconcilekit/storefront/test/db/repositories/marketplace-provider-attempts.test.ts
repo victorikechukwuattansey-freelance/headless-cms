@@ -193,3 +193,46 @@ test("marketplaceProviderAttempts: findByProviderRequestId isolates distinct req
     assert.notEqual(foundA!.id, foundB!.id);
   });
 });
+
+test("marketplaceProviderAttempts: updateStatus changes attempt status and canonicalStatus", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    await seedChain(tx, "txn_test_1");
+    const record = sampleAttempt({
+      id: "att_update_1",
+      status: "PENDING",
+      canonicalStatus: "PENDING",
+    });
+    await repos.marketplaceProviderAttempts.insert(record);
+
+    const updated = await repos.marketplaceProviderAttempts.updateStatus(
+      "att_update_1",
+      { status: "SUCCESS", canonicalStatus: "SUCCESS" },
+    );
+
+    assert.ok(updated !== null);
+    assert.equal(updated.id, "att_update_1");
+    assert.equal(updated.status, "SUCCESS");
+    assert.equal(updated.canonicalStatus, "SUCCESS");
+
+    const reRead =
+      await repos.marketplaceProviderAttempts.findByProviderRequestId(
+        record.requestReference,
+      );
+    assert.ok(reRead !== null);
+    assert.equal(reRead.status, "SUCCESS");
+    assert.equal(reRead.canonicalStatus, "SUCCESS");
+  });
+});
+
+test("marketplaceProviderAttempts: updateStatus returns null for unknown id", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const result = await repos.marketplaceProviderAttempts.updateStatus(
+      "att_does_not_exist",
+      { status: "SUCCESS", canonicalStatus: "SUCCESS" },
+    );
+    assert.equal(result, null);
+    assert.deepEqual(await repos.marketplaceProviderAttempts.list(), []);
+  });
+});

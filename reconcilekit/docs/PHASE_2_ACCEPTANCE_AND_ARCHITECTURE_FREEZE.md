@@ -264,6 +264,35 @@ Test asserts separation explicitly:
 `wallet lifecycle: a failed fulfillment keeps payment/ledger truth separate from
 fulfillment truth` (`wallet-lifecycle.test.ts`).
 
+**Evidence pack regeneration on callback (§14 reopening, 5D.5c, 2026-10-28).**
+Prior invariant: evidence packs were write-once — `reconcileMarketplaceTransaction`
+returned the existing pack unchanged on replay, and the transaction table was the
+only mutable record. This protected the "what happened at execute time" audit trail.
+
+New invariant: evidence packs remain immutable on the execute path. The replay
+gate accepts `forceRegenerate: true` from the VTPass callback handler
+(`application/vtpass-webhook.ts`) only. When set, the pack is regenerated in
+place via the existing `evidencePacks.insert()` upsert, preserving pack id and
+`transactionId`. The regeneration is recorded as a `ProviderResponseReceived`
+transaction event so audit can reconstruct the pack's history from the event log.
+
+Rationale: VTPass delivers fulfillment status asynchronously via callback after
+the initial `execute()` returns pending. Without regeneration, a `delivered`
+callback would leave the evidence pack stuck on the "pending" snapshot — the
+audit record would diverge from the transaction's true terminal state. The
+alternative (evidence-only recording with no regeneration) was rejected because
+it leaves the pack as stale evidence rather than a live reconcile source.
+
+Scope of reopening: `storefront/src/marketplace/reconcile.ts` (frozen, §9) —
+one conditional (`if (existingPack !== null)` → `if (existingPack !== null &&
+input.forceRegenerate !== true)`) plus one optional interface field. No schema
+change (upsert already existed). No change to `wallet.ts`, `types.ts`, or any
+other §9 file.
+
+Enforcement: the flag is not exposed on the execute path (only the callback
+handler passes it). A future contributor adding `forceRegenerate: true` to any
+other call site would need to justify it against this §6 amendment.
+
 ---
 
 ## 7. Wallet / Reconciliation Boundary

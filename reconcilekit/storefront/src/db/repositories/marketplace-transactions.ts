@@ -50,6 +50,43 @@ export class MarketplaceTransactionRepository {
     return row === null ? null : fromPrismaTransaction(row);
   }
 
+  async updateStatuses(
+    id: string,
+    patch: {
+      readonly fulfillmentStatus?: FulfillmentStatus;
+      readonly customerStatus?: CustomerTransactionStatus;
+      readonly adminStatus?: AdminTransactionStatus;
+      readonly updatedAt: string;
+    },
+  ): Promise<MarketplaceTransaction | null> {
+    const data: {
+      fulfillmentStatus?: FulfillmentStatus;
+      customerStatus?: CustomerTransactionStatus;
+      adminStatus?: AdminTransactionStatus;
+      updatedAt: Date;
+    } = { updatedAt: new Date(patch.updatedAt) };
+    if (patch.fulfillmentStatus !== undefined) {
+      data.fulfillmentStatus = patch.fulfillmentStatus;
+    }
+    if (patch.customerStatus !== undefined) {
+      data.customerStatus = patch.customerStatus;
+    }
+    if (patch.adminStatus !== undefined) {
+      data.adminStatus = patch.adminStatus;
+    }
+    const result = await this.client.marketplaceTransaction.updateMany({
+      where: { id },
+      data,
+    });
+    if (result.count === 0) {
+      return null;
+    }
+    const row = await this.client.marketplaceTransaction.findUniqueOrThrow({
+      where: { id },
+    });
+    return fromPrismaTransaction(row);
+  }
+
   async list(): Promise<readonly MarketplaceTransaction[]> {
     const rows = await this.client.marketplaceTransaction.findMany();
     return rows.map((row) => fromPrismaTransaction(row));

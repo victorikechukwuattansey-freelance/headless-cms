@@ -18,7 +18,7 @@ import type {
   VtpassTransactionStatus,
 } from "./contracts.ts";
 
-interface Statuses {
+export interface Statuses {
   readonly ps: ProviderStatus;
   readonly as: ProviderAttemptStatus;
   readonly cs: CanonicalPaymentStatus;
@@ -37,7 +37,7 @@ function s(
 // outcome on those fields; the reversal signal lives on providerStatus
 // (PROVIDER_REVERSED) so downstream code can distinguish reversed from
 // plain failed.
-function mapStatuses(
+export function mapStatuses(
   code: string,
   inner: VtpassTransactionStatus | null,
 ): Statuses {

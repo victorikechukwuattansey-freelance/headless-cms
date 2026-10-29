@@ -38,6 +38,7 @@ export interface MarketplaceReconcileDeps {
 export interface ReconcileTransactionInput {
   readonly transactionId: string;
   readonly now?: string;
+  readonly forceRegenerate?: boolean;
 }
 
 export interface ReconcileTransactionResult {
@@ -144,7 +145,7 @@ export async function reconcileMarketplaceTransaction(
   const existingPack = await deps.repos.evidencePacks.readLatestById(
     evidencePackId(input.transactionId),
   );
-  if (existingPack !== null) {
+  if (existingPack !== null && input.forceRegenerate !== true) {
     const truth = await replayTruth(deps.repos, transaction, existingPack);
     return {
       transactionId: input.transactionId,

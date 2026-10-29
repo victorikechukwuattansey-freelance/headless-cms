@@ -217,14 +217,34 @@ Per change request §Step 5 Change 5 rationale (verbatim):
   `executeMarketplaceTransaction` (line 849 path)
 - Response: 200 with body `{"response": "success"}` per VTPass spec
 
-**Handler pipeline for 5D.5c:**
+**actual shipped pipeline (5D.5c correction):**
 
 1. `content-type` check → 400 on fail
 2. `readRawBody(req)` → JSON parse → 400 on fail
-3. Payload shape guard (must have `data.requestId` and `data.content`)
+3. Payload shape guard (must have `data.requestId` and `data.code`)
 4. `findByProviderRequestId(data.requestId)` → attempt | null
 5. If null → 200 `{"response": "success"}` (VTPass may retry; log)
-6. If found → validate status transition → update attempt → reconcile → 200
+6. Derive `providerStatus` + `attemptStatus` + `canonicalStatus` via
+   `mapStatuses(code, innerStatus)` — reuses T2a's response mapper
+7. Short-circuit if attempt already at derived statuses → 200 (idempotent)
+8. Else:
+   - `marketplaceProviderAttempts.updateStatus(attempt.id, ...)` (new method)
+   - `marketplaceTransactions.updateStatuses(txId, { fulfillmentStatus, updatedAt })`
+     (new method) — **only** fulfillmentStatus is set; reconcile derives
+     customerStatus and adminStatus from its own truth pass
+   - Append `ProviderResponseReceived` transaction event (source=PROVIDER)
+   - `reconcileMarketplaceTransaction(deps, { txId, forceRegenerate: true })`
+     (new flag; bypasses replay gate, upserts pack, re-derives cs/admin)
+9. Respond 200 `{"response": "success"}`
+
+**Correction from original Part 4 design:** the pre-implementation plan
+assumed the handler would set customerStatus and adminStatus directly. That
+is wrong — those are **reconcile-derived**, not handler-controlled. The
+handler owns "what did the provider say" (fulfillmentStatus); reconcile owns
+"how does this look to customer/admin" (customerStatus/adminStatus/
+reconcileOutcome). This separation preserves §6's Payment/Ledger/Fulfillment
+Truth Separation. Setting cs/admin from the callback and then having reconcile
+overwrite them would produce a race with two writers.
 
 ---
 

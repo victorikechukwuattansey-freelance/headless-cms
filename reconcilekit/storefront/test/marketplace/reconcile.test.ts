@@ -283,3 +283,68 @@ test("reconcile: unknown transaction is a typed error", async () => {
       error instanceof ReconcileError && error.code === "TRANSACTION_NOT_FOUND",
   );
 });
+
+test("reconcile: forceRegenerate bypasses the replay gate", async () => {
+  const executed = await executeMarketplaceTransaction(
+    demoDeps(repos),
+    input(),
+  );
+  await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+  });
+  const regenerated = await reconcileMarketplaceTransaction(
+    reconcileDeps(repos),
+    {
+      transactionId: executed.transaction.id,
+      forceRegenerate: true,
+    },
+  );
+  assert.equal(regenerated.replayed, false);
+  assert.ok(regenerated.pack !== null);
+});
+
+test("reconcile: forceRegenerate preserves pack id (regeneration, not new pack)", async () => {
+  const executed = await executeMarketplaceTransaction(
+    demoDeps(repos),
+    input(),
+  );
+  const first = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+  });
+  const regenerated = await reconcileMarketplaceTransaction(
+    reconcileDeps(repos),
+    {
+      transactionId: executed.transaction.id,
+      forceRegenerate: true,
+    },
+  );
+  assert.equal(first.pack.id, regenerated.pack.id);
+});
+
+test("reconcile: forceRegenerate:false (explicit) still replays", async () => {
+  const executed = await executeMarketplaceTransaction(
+    demoDeps(repos),
+    input(),
+  );
+  await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+  });
+  const replays = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    forceRegenerate: false,
+  });
+  assert.equal(replays.replayed, true);
+});
+
+test("reconcile: forceRegenerate:true with no existing pack behaves like fresh reconcile", async () => {
+  const executed = await executeMarketplaceTransaction(
+    demoDeps(repos),
+    input(),
+  );
+  const result = await reconcileMarketplaceTransaction(reconcileDeps(repos), {
+    transactionId: executed.transaction.id,
+    forceRegenerate: true,
+  });
+  assert.equal(result.replayed, false);
+  assert.ok(result.pack.id.startsWith("evp_"));
+});

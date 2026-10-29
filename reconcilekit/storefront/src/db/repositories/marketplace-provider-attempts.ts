@@ -60,6 +60,26 @@ export class MarketplaceProviderAttemptRepository {
     return row === null ? null : fromPrismaAttempt(row);
   }
 
+  async updateStatus(
+    id: string,
+    patch: {
+      readonly status: ProviderAttemptStatus;
+      readonly canonicalStatus: CanonicalPaymentStatus | null;
+    },
+  ): Promise<ProviderAttempt | null> {
+    const result = await this.client.marketplaceProviderAttempt.updateMany({
+      where: { id },
+      data: { status: patch.status, canonicalStatus: patch.canonicalStatus },
+    });
+    if (result.count === 0) {
+      return null;
+    }
+    const row = await this.client.marketplaceProviderAttempt.findUniqueOrThrow({
+      where: { id },
+    });
+    return fromPrismaAttempt(row);
+  }
+
   async list(): Promise<ProviderAttempt[]> {
     const rows = await this.client.marketplaceProviderAttempt.findMany({
       orderBy: [{ attemptedAt: "asc" }, { id: "asc" }],

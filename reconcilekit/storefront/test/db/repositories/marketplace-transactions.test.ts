@@ -121,3 +121,55 @@ test("marketplaceTransactions: optional demoScenarioName round-trips absent and 
     assert.equal(withName.demoScenarioName, "successful_airtime");
   });
 });
+
+test("marketplaceTransactions: updateStatuses patches fulfillmentStatus/customerStatus/adminStatus", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    await seedChain(tx);
+    const record = sampleTransaction({
+      id: "txn_update_1",
+      fulfillmentStatus: "PENDING",
+      customerStatus: "PENDING",
+      adminStatus: "PENDING_PROVIDER",
+    });
+    await repos.marketplaceTransactions.insert(record);
+
+    const updated = await repos.marketplaceTransactions.updateStatuses(
+      "txn_update_1",
+      {
+        fulfillmentStatus: "FULFILLED",
+        customerStatus: "CONFIRMED",
+        adminStatus: "HEALTHY",
+        updatedAt: "2026-01-01T13:00:00.000Z",
+      },
+    );
+
+    assert.ok(updated !== null);
+    assert.equal(updated.id, "txn_update_1");
+    assert.equal(updated.fulfillmentStatus, "FULFILLED");
+    assert.equal(updated.customerStatus, "CONFIRMED");
+    assert.equal(updated.adminStatus, "HEALTHY");
+    assert.equal(updated.updatedAt, "2026-01-01T13:00:00.000Z");
+
+    const reRead =
+      await repos.marketplaceTransactions.readLatestById("txn_update_1");
+    assert.ok(reRead !== null);
+    assert.equal(reRead.fulfillmentStatus, "FULFILLED");
+    assert.equal(reRead.customerStatus, "CONFIRMED");
+    assert.equal(reRead.adminStatus, "HEALTHY");
+  });
+});
+
+test("marketplaceTransactions: updateStatuses returns null for unknown id", async () => {
+  await withRollback(prisma, async (tx) => {
+    const repos = buildRepositories(tx);
+    const result = await repos.marketplaceTransactions.updateStatuses(
+      "txn_does_not_exist",
+      {
+        fulfillmentStatus: "FULFILLED",
+        updatedAt: "2026-01-01T13:00:00.000Z",
+      },
+    );
+    assert.equal(result, null);
+  });
+});
