@@ -78,3 +78,34 @@ test("service-map resolves 11 services, returns null for unsupported", () => {
   assert.equal(resolveVtpassServiceId("svc_cinema_filmhouse"), null);
   assert.equal(resolveVtpassServiceId("svc_giftcard_amazon"), null);
 });
+
+test("VtpassClient sends Basic auth header when email and password are configured", async () => {
+  let capturedAuth = "";
+  const stubFetch = (async (_url: string, init?: RequestInit) => {
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    capturedAuth = headers["authorization"] ?? "";
+    return new Response(JSON.stringify({ code: "000" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown as typeof fetch;
+
+  const client = new VtpassClient({
+    apiKey: "k",
+    secretKey: "s",
+    email: "e@test.com",
+    password: "pwd",
+    fetchImpl: stubFetch,
+  });
+  await client.pay({
+    request_id: "r1",
+    serviceID: "mtn",
+    billersCode: "080",
+    amount: 100,
+  });
+
+  assert.equal(
+    capturedAuth,
+    "Basic " + Buffer.from("e@test.com:pwd").toString("base64"),
+  );
+});

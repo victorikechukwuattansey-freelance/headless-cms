@@ -9,6 +9,8 @@ import { VtpassClientError } from "./errors.ts";
 export interface VtpassClientOptions {
   readonly apiKey: string;
   readonly secretKey: string;
+  readonly email?: string;
+  readonly password?: string;
   readonly baseUrl?: string;
   readonly fetchImpl?: typeof fetch;
 }
@@ -18,12 +20,16 @@ const DEFAULT_BASE_URL = "https://sandbox.vtpass.com/api";
 export class VtpassClient {
   private readonly apiKey: string;
   private readonly secretKey: string;
+  private readonly email?: string;
+  private readonly password?: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: VtpassClientOptions) {
     this.apiKey = options.apiKey;
     this.secretKey = options.secretKey;
+    this.email = options.email;
+    this.password = options.password;
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
@@ -53,6 +59,11 @@ export class VtpassClient {
           "content-type": "application/json",
           "api-key": this.apiKey,
           "secret-key": this.secretKey,
+          ...(this.email && this.password
+            ? {
+                authorization: `Basic ${Buffer.from(`${this.email}:${this.password}`).toString("base64")}`,
+              }
+            : {}),
         },
         body: JSON.stringify(body),
       });

@@ -45,6 +45,8 @@ const vtpassClient =
     ? new VtpassClient({
         apiKey: config.vtpassApiKey,
         secretKey: config.vtpassSecretKey,
+        email: config.vtpassEmail ?? undefined,
+        password: config.vtpassPassword ?? undefined,
         baseUrl: config.vtpassBaseUrl,
       })
     : undefined;

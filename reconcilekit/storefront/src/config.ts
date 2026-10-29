@@ -15,6 +15,8 @@ export interface StorefrontConfig {
   readonly vtpassApiKey: string | null;
   readonly vtpassSecretKey: string | null;
   readonly vtpassBaseUrl: string;
+  readonly vtpassEmail: string | null;
+  readonly vtpassPassword: string | null;
 }
 
 export class StorefrontConfigError extends Error {
@@ -138,17 +140,32 @@ export function loadConfig(
   }
   const vtpassApiKeyRaw = env.STOREFRONT_VTPASS_API_KEY?.trim();
   const vtpassSecretKeyRaw = env.STOREFRONT_VTPASS_SECRET_KEY?.trim();
+  const vtpassEmailRaw = env.STOREFRONT_VTPASS_EMAIL?.trim();
+  const vtpassPasswordRaw = env.STOREFRONT_VTPASS_PASSWORD?.trim();
   const hasVtpassApiKey =
     vtpassApiKeyRaw !== undefined && vtpassApiKeyRaw !== "";
   const hasVtpassSecretKey =
     vtpassSecretKeyRaw !== undefined && vtpassSecretKeyRaw !== "";
-  if (hasVtpassApiKey !== hasVtpassSecretKey) {
+  const hasVtpassEmail = vtpassEmailRaw !== undefined && vtpassEmailRaw !== "";
+  const hasVtpassPassword =
+    vtpassPasswordRaw !== undefined && vtpassPasswordRaw !== "";
+
+  const count = [
+    hasVtpassApiKey,
+    hasVtpassSecretKey,
+    hasVtpassEmail,
+    hasVtpassPassword,
+  ].filter(Boolean).length;
+  if (count > 0 && count < 4) {
     throw new StorefrontConfigError(
-      "STOREFRONT_VTPASS_API_KEY and STOREFRONT_VTPASS_SECRET_KEY must both be set or both be absent",
+      "STOREFRONT_VTPASS_API_KEY, STOREFRONT_VTPASS_SECRET_KEY, STOREFRONT_VTPASS_EMAIL, and STOREFRONT_VTPASS_PASSWORD must all be set or all be absent",
     );
   }
+
   const vtpassApiKey = hasVtpassApiKey ? vtpassApiKeyRaw : null;
   const vtpassSecretKey = hasVtpassSecretKey ? vtpassSecretKeyRaw : null;
+  const vtpassEmail = hasVtpassEmail ? vtpassEmailRaw : null;
+  const vtpassPassword = hasVtpassPassword ? vtpassPasswordRaw : null;
 
   let vtpassBaseUrl = env.STOREFRONT_VTPASS_BASE_URL ?? DEFAULT_VTPASS_BASE_URL;
   if (typeof vtpassBaseUrl !== "string" || vtpassBaseUrl.trim() === "") {
@@ -182,5 +199,7 @@ export function loadConfig(
     vtpassApiKey,
     vtpassSecretKey,
     vtpassBaseUrl: parsedVtpassUrl.href.replace(/\/$/, ""),
+    vtpassEmail,
+    vtpassPassword,
   };
 }

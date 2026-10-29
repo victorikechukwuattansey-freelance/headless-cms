@@ -846,7 +846,36 @@ async function runProvider(run: {
     readonly currency?: string;
   }>;
   const request = buildServiceRequest(kind, service, quote, sourceInput.inputs);
-  const result = await executor.execute(context, request);
+  let result: ProviderResult;
+  try {
+    result = await executor.execute(context, request);
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    result = {
+      providerId: provider.providerId,
+      providerName: provider.providerName,
+      serviceKind: kind,
+      providerReference: null,
+      requestId: context.requestId,
+      correlationId: context.correlationId,
+      attemptNumber: context.attemptNumber,
+      requestTimestamp: context.requestedAt,
+      responseTimestamp: new Date().toISOString(),
+      providerStatus: "PROVIDER_FAILED",
+      providerStatusCode: "PROVIDER_ERROR",
+      providerMessage: errorMessage,
+      attemptStatus: "FAILED",
+      canonicalPaymentStatus: "FAILED",
+      amountMinor: quote.expectedCheckoutMinor,
+      currency: quote.currency,
+      latencyMs: 0,
+      sourceAttributes: { error: errorMessage },
+      reconciliationFacts: null,
+      safeMetadata: {},
+      duplicateResults: [],
+      simulated: false,
+    };
+  }
   const attempt = await recordProviderAttempt(run.deps.repos, {
     transactionId,
     providerId: provider.providerId,
