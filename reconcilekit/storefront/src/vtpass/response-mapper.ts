@@ -68,10 +68,10 @@ export function mapVtpassResponseToProviderResult(
       ? Math.round(response.amount * 100)
       : null;
   const responseTimestamp = new Date().toISOString();
-  const latencyMs = Math.max(
-    0,
-    Date.now() - new Date(context.requestedAt).getTime(),
-  );
+  const rawLatency = Date.now() - new Date(context.requestedAt).getTime();
+  const latencyMs = isNaN(rawLatency)
+    ? 0
+    : Math.min(2147483647, Math.max(0, rawLatency));
   const sourceAttributes: SourceAttributes = {
     vtpass_code: response.code,
     vtpass_response_description: response.response_description,
