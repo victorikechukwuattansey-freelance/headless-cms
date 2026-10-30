@@ -1998,7 +1998,7 @@ async function recordProviderAttempt(
     latencyMs: input.result.latencyMs,
     sourceAttributes: input.result.sourceAttributes,
     attemptedAt: input.result.requestTimestamp,
-    simulated: true,
+    simulated: input.result.simulated,
   };
   await repos.marketplaceProviderAttempts.insert(attempt);
   return attempt;
