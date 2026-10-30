@@ -50,15 +50,23 @@ export function createVtpassWebhookHandler(
   deps: VtpassWebhookDeps,
 ): VtpassWebhookHandler {
   return async (req, res) => {
-    const contentType = req.headers["content-type"];
+    const contentTypeHeader = req.headers["content-type"];
+    const contentType =
+      typeof contentTypeHeader === "string"
+        ? contentTypeHeader.toLowerCase()
+        : "";
+
     if (
-      typeof contentType !== "string" ||
-      contentType.split(";")[0]?.trim().toLowerCase() !== "application/json"
+      !contentType.includes("application/json") &&
+      !contentType.includes("application/x-www-form-urlencoded")
     ) {
       respondJson(
         res,
         400,
-        errorBody("MALFORMED_PAYLOAD", "content-type must be application/json"),
+        errorBody(
+          "MALFORMED_PAYLOAD",
+          "content-type must be application/json or application/x-www-form-urlencoded",
+        ),
       );
       return;
     }
@@ -79,12 +87,30 @@ export function createVtpassWebhookHandler(
     try {
       parsed = JSON.parse(rawBody);
     } catch {
-      respondJson(
-        res,
-        400,
-        errorBody("MALFORMED_PAYLOAD", "request body must be valid JSON"),
-      );
-      return;
+      // VTPass dashboard "Trigger Callback" sends form data.
+      // Often the JSON is nested in a single key, or we must parse the params.
+      const params = new URLSearchParams(rawBody);
+      // If the form has a single "payload" key, try to parse that as JSON
+      const payloadStr = params.get("payload");
+      if (payloadStr) {
+        try {
+          parsed = JSON.parse(payloadStr);
+        } catch {
+          respondJson(
+            res,
+            400,
+            errorBody("MALFORMED_PAYLOAD", "invalid JSON in payload field"),
+          );
+          return;
+        }
+      } else {
+        // Fallback: construct object from URLSearchParams
+        const obj: Record<string, string> = {};
+        for (const [key, value] of params.entries()) {
+          obj[key] = value;
+        }
+        parsed = obj;
+      }
     }
 
     if (!isVtpassCallbackPayload(parsed)) {

@@ -12,7 +12,10 @@ import { mapVtpassResponseToProviderResult } from "./response-mapper.ts";
 export interface VtpassServiceStrategy<Request> {
   readonly kind: MarketplaceServiceKind;
   extractBillersCode(request: Request): string;
-  extractVariationCode?(request: Request): string | undefined;
+  extractVariationCode?(
+    request: Request,
+    context: ProviderRequestContext,
+  ): string | undefined;
   extractPhone?(request: Request): string | undefined;
 }
 
@@ -46,13 +49,31 @@ export class VtpassServiceAdapter<
         context.serviceId,
       );
     }
+    console.log(
+      "[VTPASS DEBUG] Sending payload:",
+      JSON.stringify({
+        request_id: context.requestId,
+        serviceID,
+        billersCode: this.strategy.extractBillersCode(request),
+        variation_code: this.strategy.extractVariationCode?.(request, context),
+        amount: request.amountMinor / 100,
+        phone: this.strategy.extractPhone?.(request),
+        callback_url: process.env.STOREFRONT_CALLBACK_BASE_URL
+          ? `${process.env.STOREFRONT_CALLBACK_BASE_URL}/webhook/vtpass`
+          : undefined,
+      }),
+    );
+
     const response = await this.client.pay({
       request_id: context.requestId,
       serviceID,
       billersCode: this.strategy.extractBillersCode(request),
-      variation_code: this.strategy.extractVariationCode?.(request),
+      variation_code: this.strategy.extractVariationCode?.(request, context),
       amount: request.amountMinor / 100,
       phone: this.strategy.extractPhone?.(request),
+      callback_url: process.env.STOREFRONT_CALLBACK_BASE_URL
+        ? `${process.env.STOREFRONT_CALLBACK_BASE_URL}/webhook/vtpass`
+        : undefined,
     });
     return mapVtpassResponseToProviderResult(
       response,

@@ -24,3 +24,22 @@ export function resolveVtpassServiceId(
 ): string | null {
   return VTPASS_SERVICE_ID_MAP[catalogServiceId] ?? null;
 }
+
+/**
+ * Maps catalog plan names to VTPass variation codes.
+ * The catalog uses human-readable plans (1GB, 2GB), while VTPass
+ * requires specific SKUs (mtn-10mb-100, mtn-100mb-1000).
+ */
+export const VTPASS_VARIATION_MAP: Readonly<Record<string, string>> = {
+  "svc_data_mtn:1GB": "mtn-10mb-100",
+  "svc_data_mtn:2GB": "mtn-100mb-1000",
+  "svc_data_mtn:5GB": "mtn-3gb-1500",
+  "svc_data_mtn:10GB": "mtn-3gb-2500",
+};
+
+export function resolveVtpassVariationCode(
+  serviceId: string,
+  catalogPlan: string,
+): string {
+  return VTPASS_VARIATION_MAP[`${serviceId}:${catalogPlan}`] ?? catalogPlan;
+}

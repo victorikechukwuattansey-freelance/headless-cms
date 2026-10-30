@@ -19,6 +19,7 @@ import type {
 import type { VtpassClient } from "./client.ts";
 import { VtpassUnsupportedServiceError } from "./errors.ts";
 import { VtpassServiceAdapter } from "./adapter.ts";
+import { resolveVtpassVariationCode } from "./service-map.ts";
 import { MockPaymentProvider } from "../marketplace/providers/mock-provider.ts";
 
 function unsupported<Req>(
@@ -54,7 +55,8 @@ export function createVtpassProviderRegistry(
   const data: DataProvider = new VtpassServiceAdapter(client, {
     kind: "DATA" as const,
     extractBillersCode: (r) => r.recipient,
-    extractVariationCode: (r) => r.bundleId,
+    extractVariationCode: (r, ctx) =>
+      resolveVtpassVariationCode(ctx.serviceId, r.bundleId),
     extractPhone: (r) => r.recipient,
   });
   const electricity: ElectricityProvider = new VtpassServiceAdapter(client, {

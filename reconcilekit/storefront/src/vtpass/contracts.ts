@@ -11,6 +11,7 @@ export interface VtpassPayRequest {
   readonly variation_code?: string;
   readonly amount: number;
   readonly phone?: string;
+  readonly callback_url?: string;
 }
 
 export interface VtpassRequeryRequest {
