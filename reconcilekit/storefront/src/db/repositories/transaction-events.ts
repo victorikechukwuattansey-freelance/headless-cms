@@ -74,6 +74,7 @@ function toPrismaEvent(
     label: record.label,
     description: record.description,
     occurredAt: new Date(record.occurredAt),
+    simulated: record.simulated,
     actor: record.actor,
     source: record.source,
     metadata: record.metadata,

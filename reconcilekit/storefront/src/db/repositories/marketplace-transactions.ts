@@ -133,6 +133,7 @@ function toPrismaTransaction(
     demoScenarioName: record.demoScenarioName ?? null,
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt),
+    simulated: record.simulated,
   };
 }
 

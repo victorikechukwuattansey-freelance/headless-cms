@@ -105,6 +105,7 @@ function toPrismaPayment(
     paidAt: record.paidAt === null ? null : new Date(record.paidAt),
     metadata: record.metadata as unknown as Prisma.InputJsonValue,
     recordedAt: new Date(record.recordedAt),
+    simulated: record.simulated,
   };
 }
 

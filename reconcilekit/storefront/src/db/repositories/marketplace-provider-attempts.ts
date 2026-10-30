@@ -125,6 +125,7 @@ function toPrismaAttempt(
     sourceAttributes:
       record.sourceAttributes as unknown as Prisma.InputJsonValue,
     attemptedAt: new Date(record.attemptedAt),
+    simulated: record.simulated,
   };
 }
 
