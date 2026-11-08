@@ -60,6 +60,7 @@ interface MarketplaceOrderRow {
   readonly status: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly simulated: boolean;
 }
 
 function toPrismaOrder(
@@ -76,6 +77,7 @@ function toPrismaOrder(
     status: record.status,
     createdAt: new Date(record.createdAt),
     updatedAt: new Date(record.updatedAt),
+    simulated: record.simulated,
   };
 }
 
@@ -91,6 +93,6 @@ function fromPrismaOrder(row: MarketplaceOrderRow): MarketplaceOrder {
     status: row.status as MarketplaceOrderStatus,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    simulated: true,
+    simulated: row.simulated,
   };
 }

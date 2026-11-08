@@ -129,6 +129,7 @@ model MarketplaceOrder {
   status            String
   createdAt         DateTime @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime @map("updated_at") @db.Timestamptz(6) // added
+  simulated         Boolean  @default(true)
 
   customer     MarketplaceCustomer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   transactions MarketplaceTransaction[]
