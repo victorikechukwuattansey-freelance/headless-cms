@@ -827,7 +827,7 @@ function buildProducts(): readonly CatalogProduct[] {
       serviceId: "svc_data_mtn",
       name: "MTN 1GB",
       description: "1GB data bundle.",
-      pricing: { catalogPriceMinor: 500, currency: "NGN" },
+      pricing: { catalogPriceMinor: 10000, currency: "NGN" },
       availability: "AVAILABLE",
       attributes: { plan: "1GB", network: "MTN" },
     },
