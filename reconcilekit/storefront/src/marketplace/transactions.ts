@@ -466,6 +466,8 @@ export async function executeMarketplaceTransaction(
   }
 
   const quote = quoteService(deps.catalog, service);
+  const simulated =
+    deps.registry.providerForServiceKind(service.kind).mode === "MOCK";
   const customerReference = buildCustomerReference(input.customerId);
   const createdOrder = await insertOrder(deps.repos, {
     id: orderId,
@@ -476,6 +478,7 @@ export async function executeMarketplaceTransaction(
     currency: quote.currency,
     customerReference,
     now,
+    simulated,
   });
 
   const initial = buildTransactionRecord({
@@ -492,6 +495,7 @@ export async function executeMarketplaceTransaction(
     adminStatus: "PENDING_PROVIDER",
     orderStatus: "CREATED",
     now,
+    simulated,
   });
   await deps.repos.marketplaceTransactions.insert(initial);
 
@@ -614,6 +618,8 @@ async function runPaymentAndFulfillment(input: {
     seed,
     walletId,
   } = input;
+  const simulated =
+    deps.registry.providerForServiceKind(service.kind).mode === "MOCK";
   const events = [...queued];
 
   const paymentScenario = paymentScenarioForService(sourceInput.scenario);
@@ -691,6 +697,7 @@ async function runPaymentAndFulfillment(input: {
       scenario: sourceInput.scenario,
       state,
       now,
+      simulated,
     });
     await persistOrderStatus(deps.repos, orderId, state.orderStatus, now);
     return finishResult({
@@ -710,6 +717,7 @@ async function runPaymentAndFulfillment(input: {
       providerReference: null,
       providerResult: null,
       replayed: false,
+      simulated,
     });
   }
 
@@ -820,6 +828,7 @@ async function runProvider(run: {
   } = run;
   const scenario = sourceInput.scenario;
   const kind = service.kind;
+  const simulated = provider.mode === "MOCK";
 
   if (isTicketingKind(kind)) {
     return runTicketingFlow(run);
@@ -937,6 +946,7 @@ async function runProvider(run: {
     attempts: [attempt],
     artifacts: withResolution.artifacts,
     now,
+    simulated,
   });
 
   return finishResult({
@@ -956,6 +966,7 @@ async function runProvider(run: {
     providerReference: result.providerReference,
     providerResult: result,
     replayed: false,
+    simulated,
   });
 }
 
@@ -992,6 +1003,7 @@ async function runGiftCardFlow(run: {
     paymentRecord,
   } = run;
   const scenario = sourceInput.scenario;
+  const simulated = provider.mode === "MOCK";
   const context = buildServiceContext({
     transactionId,
     customerId: sourceInput.customerId,
@@ -1135,6 +1147,7 @@ async function runGiftCardFlow(run: {
         ? withResolution.artifacts
         : [artifact],
     now,
+    simulated,
   });
 
   return finishResult({
@@ -1154,6 +1167,7 @@ async function runGiftCardFlow(run: {
     providerReference: result.providerReference,
     providerResult: result,
     replayed: false,
+    simulated,
   });
 }
 
@@ -1199,6 +1213,7 @@ async function runTicketingFlow(run: {
     paymentRecord,
   } = run;
   const scenario = sourceInput.scenario;
+  const simulated = provider.mode === "MOCK";
   const ticketProvider = provider as unknown as TicketingProviderLike;
   const ticketKind = ticketKindFor(service.kind);
   const search = buildTicketSearch(service.kind, sourceInput.inputs);
@@ -1406,6 +1421,7 @@ async function runTicketingFlow(run: {
       : [reserveAttempt],
     artifacts: [...withResolution.artifacts, artifact],
     now,
+    simulated,
   });
 
   return finishResult({
@@ -1428,6 +1444,7 @@ async function runTicketingFlow(run: {
       null,
     providerResult: issuedResult ?? reserveResult,
     replayed: false,
+    simulated,
   });
 }
 
@@ -1727,6 +1744,7 @@ async function finalizeTransaction(
     readonly attempts: readonly ProviderAttempt[];
     readonly artifacts: readonly (TicketArtifact | GiftCardArtifact)[];
     readonly now: string;
+    readonly simulated: boolean;
   },
 ): Promise<{
   readonly transaction: MarketplaceTransaction;
@@ -1774,6 +1792,7 @@ async function finalizeTransaction(
     scenario,
     state,
     now,
+    simulated: input.simulated,
   });
   await persistOrderStatus(repos, orderId, state.orderStatus, now);
   return { transaction: tx, attempts, artifacts, events };
@@ -1851,6 +1870,7 @@ function buildTransactionRecord(input: {
   readonly adminStatus: AdminTransactionStatus;
   readonly orderStatus: MarketplaceOrderStatus;
   readonly now: string;
+  readonly simulated: boolean;
 }): MarketplaceTransaction {
   return {
     id: input.transactionId,
@@ -1866,7 +1886,7 @@ function buildTransactionRecord(input: {
     resolutionStatus: input.resolutionStatus,
     customerStatus: input.customerStatus,
     adminStatus: input.adminStatus,
-    simulated: true,
+    simulated: input.simulated,
     createdAt: input.now,
     updatedAt: input.now,
     demoScenarioName: input.scenario,
@@ -1884,6 +1904,7 @@ async function persistTransaction(
     readonly scenario: MockProviderScenario;
     readonly state: DerivedState;
     readonly now: string;
+    readonly simulated: boolean;
   },
 ): Promise<MarketplaceTransaction> {
   const record = buildTransactionRecord({
@@ -1927,6 +1948,7 @@ async function insertOrder(
     readonly currency: string;
     readonly customerReference: string;
     readonly now: string;
+    readonly simulated: boolean;
   },
 ): Promise<MarketplaceOrder> {
   const order: MarketplaceOrder = {
@@ -1940,7 +1962,7 @@ async function insertOrder(
     status: "CREATED",
     createdAt: input.now,
     updatedAt: input.now,
-    simulated: true,
+    simulated: input.simulated,
   };
   await repos.marketplaceOrders.insert(order);
   return order;
@@ -2326,6 +2348,7 @@ async function finishResult(input: {
   readonly providerReference: string | null;
   readonly providerResult: ProviderResult | null;
   readonly replayed: boolean;
+  readonly simulated: boolean;
 }): Promise<ExecuteTransactionResult> {
   const facts: TransactionReconciliationFacts = {
     transactionId: input.transaction.id,
@@ -2366,7 +2389,7 @@ async function finishResult(input: {
             : "NONE",
     },
     flags: factFlags(input.scenario),
-    simulated: true,
+    simulated: input.simulated,
   };
   return {
     transaction: input.transaction,
@@ -2454,7 +2477,7 @@ export async function marketplaceTransactionFacts(
             : "NONE",
     },
     flags: factFlags(transaction.scenario),
-    simulated: true,
+    simulated: transaction.simulated,
   };
 }
 
