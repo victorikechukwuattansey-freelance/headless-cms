@@ -1,0 +1,67 @@
+name: via-saas CI
+
+# M1.9 — CI for the VIA SaaS workspace only.
+# Runs type checks, Prisma schema validation, and the Vitest suite against a
+# fresh disposable Postgres database. No production credentials are used.
+on:
+  push:
+    paths:
+      - "via-saas/**"
+      - ".github/workflows/via-saas-ci.yml"
+  pull_request:
+    paths:
+      - "via-saas/**"
+      - ".github/workflows/via-saas-ci.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: via-saas
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: via_saas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Disposable test database (the service container above). Tests never
+      # touch development data; tests/global-setup.ts applies migrations to it.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/via_saas_test?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: via-saas/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: via-saas/packages/database
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+        working-directory: via-saas/packages/database
+
+      - name: Type-check all workspaces
+        run: npm run type-check
+
+      - name: Run tests against fresh migrated database
+        run: npm test
