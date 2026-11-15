@@ -57,8 +57,13 @@ jobs:
         working-directory: via-saas/packages/database
 
       - name: Validate Prisma schema
+        # prisma validate resolves env("DATABASE_URL") in the schema; CI has no
+        # .env file (gitignored), so the disposable service DB URL is supplied
+        # here. Validation only reads the schema — no connection is required.
         run: npx prisma validate
         working-directory: via-saas/packages/database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/via_saas_test?schema=public
 
       - name: Type-check all workspaces
         run: npm run type-check
