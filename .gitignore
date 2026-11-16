@@ -63,3 +63,7 @@ sa-*.json
 !.env.example
 # Inner-repo backup during consolidation â€” safe to delete once Cloudflare is re-pointed
 n8n-lead-recovery/.git.backup/
+/generated/prisma
+
+# Nested git repo — must never be tracked
+local-crawler/
